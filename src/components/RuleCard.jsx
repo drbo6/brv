@@ -65,14 +65,14 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
           {rule.status === 'rejected' && <span className="tag t-muted">Rejected</span>}
           {!active && <span className="tag t-muted">Inactive</span>}
           {!open && (
-            <span className="rule-hints" aria-hidden="true">
+            <span className="rule-hints">
               {shown && shown.label !== 'Rulebook' && <span className={`hint-label l-${LABEL_CLASS[shown.label] || 'other'}`}>{shown.label}</span>}
-              {vs.length > 1 && <span>{vs.length} versions</span>}
-              {rule.commentCount > 0 && (
-                <span>
-                  <Icon name="message" size={12} /> {rule.commentCount}
-                </span>
-              )}
+              <span className={`hint-count ${vs.length > 1 ? 'has' : ''}`} title={`${vs.length} version${vs.length === 1 ? '' : 's'}`} aria-label={`${vs.length} versions`}>
+                <Icon name="layers" size={13} /> {vs.length}
+              </span>
+              <span className={`hint-count ${rule.commentCount ? 'has' : ''}`} title={`${rule.commentCount || 0} comment${rule.commentCount === 1 ? '' : 's'}`} aria-label={`${rule.commentCount || 0} comments`}>
+                <Icon name="message" size={13} /> {rule.commentCount || 0}
+              </span>
             </span>
           )}
         </header>

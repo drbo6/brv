@@ -1436,6 +1436,17 @@ h4.section-heading {
   gap: 3px;
 }
 
+/* Counts read faintly when there is nothing beyond the printed text, brighter when there is. */
+.hint-count {
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint-count.has {
+  opacity: 1;
+  color: var(--text-2);
+}
+
 .hint-label {
   font-weight: 700;
   background: none !important;
@@ -3458,9 +3469,6 @@ select.is-unsaved {
     padding: 10px 8px;
   }
 
-  .rule-hints {
-    margin-left: 0;
-  }
 
   .rule-actions {
     margin-left: 0;

@@ -65,7 +65,7 @@ export const AVATAR_GLYPHS = [
 ].flatMap(graphemes);
 
 /** `n` random glyphs nobody else uses (topping up with used ones only if the pool runs out). */
-export function glyphChoices(used, keep, n = 24) {
+export function glyphChoices(used, keep, n = 30) {
   const shuffle = (list) => {
     const a = [...list];
     for (let i = a.length - 1; i > 0; i--) {
