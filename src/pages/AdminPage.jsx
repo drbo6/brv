@@ -10,6 +10,8 @@ import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
+import FollowButton from '../components/FollowButton.jsx';
+import { cardTarget, notify, ruleTarget, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
 const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
@@ -153,6 +155,7 @@ function AdminChat() {
 // ---------------------------------------------------------------- rules
 
 function RulesAdmin() {
+  const { user } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
@@ -161,12 +164,30 @@ function RulesAdmin() {
   const ruleById = useMemo(() => new Map((rules.data || []).map((r) => [r.id, r])), [rules.data]);
 
   const suggestedRules = (rules.data || []).filter((r) => r.status === 'suggested');
+
+  // Adopting a suggestion tells everyone following that rule or card, including its author.
+  const relabelRuleVersion = (v, label) =>
+    attempt(() => updateVersion(v.id, { label }), `Labeled ${label}`).then((ok) => {
+      const r = ruleById.get(v.ruleId);
+      if (!ok || !r) return;
+      const t = ruleTarget(r);
+      notify(t.key, user, { type: 'adopted', title: `${user.displayName || 'An admin'} marked a suggestion for ${t.label} as ${label}`, text: v.text, link: t.link });
+    });
+  const relabelCardVersion = (v, label) =>
+    attempt(() => updateCardVersion(v.id, { label }), `Labeled ${label}`).then((ok) => {
+      if (!ok) return;
+      const t = cardTarget({ id: v.componentId, typeId: v.typeId }, v.data?.title || v.componentId.split('__').pop());
+      notify(t.key, user, { type: 'adopted', title: `${user.displayName || 'An admin'} marked a suggestion for ${t.label} as ${label}`, text: `Changes: ${Object.keys(v.data || {}).join(', ')}`, link: t.link });
+    });
   const queue = [...(suggestions.data || [])].sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
 
   return (
     <div className="admin-grid">
       <section className="panel">
-        <h2>Suggestions queue</h2>
+        <div className="panel-head">
+          <h2>Suggestions queue</h2>
+          <FollowButton target={SUGGESTIONS} what="new suggestions from the community" className="small" />
+        </div>
         <p className="small muted">New rules and versions suggested by the community. Relabel a version to adopt it, or open the rule to discuss.</p>
         {suggestions.loading ? (
           <Spinner />
@@ -193,10 +214,10 @@ function RulesAdmin() {
                     by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
                   </p>
                   <div className="row gap wrap">
-                    <button className="small" onClick={() => attempt(() => updateVersion(v.id, { label: 'Community' }), 'Labeled Community')}>
+                    <button className="small" onClick={() => relabelRuleVersion(v, 'Community')}>
                       Mark Community
                     </button>
-                    <button className="small" onClick={() => attempt(() => updateVersion(v.id, { label: 'Official Ruling' }), 'Labeled Official Ruling')}>
+                    <button className="small" onClick={() => relabelRuleVersion(v, 'Official Ruling')}>
                       Mark Official Ruling
                     </button>
                     <button className="small danger" onClick={async () => (await confirmDialog({ title: 'Delete suggestion', message: 'Delete this suggested version?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'versions', v.id)), 'Suggestion deleted')}>
@@ -233,10 +254,10 @@ function RulesAdmin() {
                       {v.note && ` · “${v.note}”`}
                     </p>
                     <div className="row gap wrap">
-                      <button className="small" onClick={() => attempt(() => updateCardVersion(v.id, { label: 'Community' }), 'Labeled Community')}>
+                      <button className="small" onClick={() => relabelCardVersion(v, 'Community')}>
                         Mark Community
                       </button>
-                      <button className="small" onClick={() => attempt(() => updateCardVersion(v.id, { label: 'Official Ruling' }), 'Labeled Official Ruling')}>
+                      <button className="small" onClick={() => relabelCardVersion(v, 'Official Ruling')}>
                         Mark Official Ruling
                       </button>
                       <button
@@ -494,7 +515,7 @@ function SectionsEditor({ tree, rules, loading }) {
 // ---------------------------------------------------------------- rulesets
 
 function RulesetsAdmin() {
-  const { site } = useSession();
+  const { site, user } = useSession();
   const sets = useLive(() => collection(db, 'rulesets'), []);
   const list = [...(sets.data || [])].sort((a, b) => (a.visibility === 'public' ? 0 : 1) - (b.visibility === 'public' ? 0 : 1) || millis(b.updatedAt) - millis(a.updatedAt));
   const setDefault = (id) => attempt(() => setDoc(doc(db, 'config', 'site'), { defaultRulesetId: id }, { merge: true }), 'Default ruleset updated');
@@ -564,7 +585,11 @@ function RulesetsAdmin() {
                       checked={s.visibility === 'public'}
                       onChange={(e) => {
                         if (!e.target.checked && site.defaultRulesetId === s.id) return alertDialog({ title: 'This is the default', message: 'Choose another default ruleset before making this one private.' });
-                        attempt(() => updateRuleset(s.id, { visibility: e.target.checked ? 'public' : 'private' }), e.target.checked ? 'Ruleset made public' : 'Ruleset made private');
+                        const pub = e.target.checked;
+                        attempt(() => updateRuleset(s.id, { visibility: pub ? 'public' : 'private' }), pub ? 'Ruleset made public' : 'Ruleset made private').then((ok) => {
+                          const t = rulesetTarget(s);
+                          if (ok) notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'An admin'} made the ruleset “${s.name}” ${pub ? 'public: everyone can now pick it' : 'private'}`, text: '', link: t.link });
+                        });
                       }}
                     />
                     <span className="switch-track" aria-hidden="true" />

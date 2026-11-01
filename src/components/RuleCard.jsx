@@ -6,6 +6,8 @@ import Discussion from './Discussion.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
 import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
+import FollowButton from './FollowButton.jsx';
+import { notify, ruleTarget } from '../lib/inbox.js';
 
 /**
  * One rule. Reads like running text; clicking it opens the tools: versions, reactions, discussion,
@@ -33,7 +35,11 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
   const approve = () => {
     const section = tree.byId.get(rule.sectionId);
     const code = nextCode(section?.code || 'GEN', rules);
-    return attempt(() => updateRule(rule.id, { status: 'active', code }), `Approved as ${code}`);
+    return attempt(() => updateRule(rule.id, { status: 'active', code }), `Approved as ${code}`).then((ok) => {
+      if (!ok) return;
+      const t = ruleTarget({ ...rule, code });
+      notify(t.key, user, { type: 'approved', title: `${user.displayName || 'An admin'} approved the suggested rule “${rule.title}” as ${code}`, text: '', link: t.link });
+    });
   };
 
   const kind = kindInfo(kinds, rule.kind);
@@ -150,6 +156,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 <Icon name="bulb" />
                 <span className="hide-sm">{isAdmin ? 'Add version' : 'Suggest change'}</span>
               </button>
+              <FollowButton target={ruleTarget(rule)} what={`${rule.code} (its discussion and versions)`} />
               <button className="chip" onClick={copyLink} title="Copy link" aria-label={`Copy link to ${rule.code}`}>
                 <Icon name="link" />
               </button>

@@ -187,6 +187,33 @@ service cloud.firestore {
         && resource.data.reactions.keys().hasOnly([request.auth.uid]));
     }
 
+    // Who follows a rule, card, ruleset or feed. Anyone signed in may read it (to send notices),
+    // but each person can only add or remove themselves.
+    match /subscribers/{key} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uids', 'label', 'link'])
+        && request.resource.data.uids.keys().hasOnly([request.auth.uid]);
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uids', 'label', 'link'])
+        && request.resource.data.get('uids', {}).diff(resource.data.get('uids', {})).affectedKeys().hasOnly([request.auth.uid]);
+      allow delete: if isAdmin();
+    }
+
+    // Personal notices. Only the owner reads, marks or deletes them; anyone signed in may deliver
+    // one, in their own name, to someone else.
+    match /inbox/{uid}/items/{id} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid && onlyChanged(['read']);
+      allow create: if signedIn()
+        && request.auth.uid != uid
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.read == false
+        && request.resource.data.keys().hasOnly(['type', 'key', 'title', 'text', 'link', 'actorUid', 'actorName', 'read', 'createdAt'])
+        && shortText('title', 300)
+        && shortText('text', 400);
+    }
+
     match /adminChat/{id} {
       allow read: if isAdmin();
       allow create: if isAdmin() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);

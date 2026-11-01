@@ -13,6 +13,8 @@ import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx
 import { RuleDialog, SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { attempt, copyText, Empty, Icon, Spinner, toast, UserName } from '../components/ui.jsx';
 import { confirmDialog } from '../components/dialogs.jsx';
+import FollowButton from '../components/FollowButton.jsx';
+import { autoFollow, notify, rulesetTarget } from '../lib/inbox.js';
 
 export default function RulesPage({ route }) {
   const { user, isAdmin, shorthands, requireUser, kinds } = useSession();
@@ -97,6 +99,34 @@ export default function RulesPage({ route }) {
     navigate('rules', route.parts, {}, { replace: true });
   };
 
+  // ----- pinned top area (ruleset + search), pinned by default -----
+  const [pinned, setPinned] = useLocalStorage('brv-pin-rules-top', true);
+  const [stuck, setStuck] = useState(false);
+  const topRef = useRef(null);
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    // "Stuck" once the page scrolled past the top of the area: it then compacts.
+    const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { rootMargin: `-${header + 1}px 0px 0px 0px` });
+    if (sentinelRef.current) io.observe(sentinelRef.current);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    // Jumps to a rule or section leave room for the pinned area.
+    const root = document.documentElement;
+    const el = topRef.current;
+    if (!pinned || !el) {
+      root.style.setProperty('--rules-top-h', '0px');
+      return undefined;
+    }
+    const ro = new ResizeObserver(() => root.style.setProperty('--rules-top-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty('--rules-top-h', '0px');
+    };
+  }, [pinned]);
+
   // ----- filters -----
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim().toLowerCase(), 150);
@@ -179,7 +209,12 @@ export default function RulesPage({ route }) {
         if (draft.entries[k] !== baseEntries[k]) patch[`entries.${k}`] = draft.entries[k] ?? deleteField();
       }
       const ok = await attempt(() => updateRuleset(selectedSet.id, patch), 'Ruleset saved');
-      if (ok) endDraft(null);
+      if (ok) {
+        endDraft(null);
+        const t = rulesetTarget(selectedSet);
+        const n = Object.keys(patch).length;
+        notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'Someone'} updated the ruleset “${t.label}”`, text: `${n} rule${n === 1 ? '' : 's'} changed.`, link: t.link });
+      }
     });
 
   const saveAsNew = async ({ name, description }) =>
@@ -188,6 +223,8 @@ export default function RulesPage({ route }) {
       if (id) {
         endDraft(null);
         setStoredSetId(id);
+        // You follow your own rulesets, to hear when admins publish them or others change them.
+        autoFollow(rulesetTarget({ id, name }).key, u.uid, rulesetTarget({ id, name }));
         navigate('rules', [], {}, { replace: true });
       }
       return id;
@@ -248,6 +285,8 @@ export default function RulesPage({ route }) {
       </aside>
 
       <div className="rules-main">
+        <div ref={sentinelRef} className="rules-top-sentinel" aria-hidden="true" />
+        <div ref={topRef} className={`rules-top ${pinned ? 'pinned' : ''} ${pinned && stuck ? 'stuck' : ''}`}>
         <section className="ruleset-bar" aria-label="Ruleset">
           <div className="ruleset-pick">
             <label htmlFor="ruleset-select">Ruleset</label>
@@ -304,6 +343,7 @@ export default function RulesPage({ route }) {
                 Customize
               </button>
             ) : null}
+            {!selectedSet.builtIn && <FollowButton target={rulesetTarget(selectedSet)} what={`the ruleset “${selectedSet.name}”`} className="small" />}
             {!selectedSet.builtIn && (
               <button
                 className="icon-btn"
@@ -355,8 +395,18 @@ export default function RulesPage({ route }) {
               <Icon name="plus" />
               {isAdmin ? 'Add rule' : 'Suggest rule'}
             </button>
+            <button
+              className={`icon-btn pin-btn ${pinned ? 'on' : ''}`}
+              onClick={() => setPinned(!pinned)}
+              aria-pressed={pinned}
+              title={pinned ? 'Unpin: let the ruleset and search scroll away with the page' : 'Pin the ruleset and search to the top while you scroll'}
+              aria-label={pinned ? 'Unpin the ruleset and search bar' : 'Pin the ruleset and search bar'}
+            >
+              <Icon name={pinned ? 'pin' : 'pinOff'} />
+            </button>
           </div>
         </section>
+        </div>
 
         {anyError ? (
           <Empty title="Could not load the rules">

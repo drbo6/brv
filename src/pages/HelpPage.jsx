@@ -291,6 +291,26 @@ const TOPICS = [
     ),
   },
   {
+    id: 'inbox',
+    title: 'Inbox and following',
+    icon: 'bell',
+    body: (
+      <ul>
+        <li>
+          <b>Follow</b> a rule (in its tools), a card (in its details) or a ruleset (next to the ruleset picker). You then get a notice in your <b>Inbox</b> when someone comments,
+          adds or changes a version, or updates the ruleset.
+        </li>
+        <li>Commenting on something or suggesting a change to it follows it automatically, so you hear about replies and whether your suggestion was adopted.</li>
+        <li>
+          The bell in the header shows how many notices are unread. In the Inbox you can open a notice, mark notices read or unread, and clear old ones. The <b>Following</b> tab
+          lists everything you follow, with an Unfollow button.
+        </li>
+        <li>Admins can follow the suggestion feed (Admin → Rules) to hear about every new suggestion.</li>
+        <li>On the Rules page, the ruleset and search bars stay pinned at the top while you scroll. The pin button at the end of the search bar turns that off.</li>
+      </ul>
+    ),
+  },
+  {
     id: 'view-as',
     title: 'View as',
     icon: 'eye',

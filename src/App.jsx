@@ -10,6 +10,8 @@ import { DialogHost } from './components/dialogs.jsx';
 import ProfileDialog from './components/ProfileDialog.jsx';
 import Tooltips from './components/Tooltips.jsx';
 import { useTheme } from './lib/theme.js';
+import { useLive } from './lib/hooks.js';
+import { unreadQuery } from './lib/inbox.js';
 import SetupNeeded from './components/SetupNeeded.jsx';
 import RulesPage from './pages/RulesPage.jsx';
 
@@ -18,6 +20,7 @@ const ComponentsPage = lazy(() => import('./pages/ComponentsPage.jsx'));
 const AccountPage = lazy(() => import('./pages/AccountPage.jsx'));
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
 const HelpPage = lazy(() => import('./pages/HelpPage.jsx'));
+const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
 
 export default function App() {
   if (!configured) return <SetupNeeded />;
@@ -38,10 +41,12 @@ function Shell() {
   const [welcomeSeen, setWelcomeSeen] = useLocalStorage('brv-welcome-seen', false);
   const [showWelcome, setShowWelcome] = useState(!welcomeSeen);
 
+  const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
-    const titles = { rules: 'Rules', components: 'Components', account: 'Account', admin: 'Admin', help: 'Help' };
-    document.title = `${titles[route.page] || 'Rules'} · Blood Rage Valhalla: Unofficial Living Rulebook`;
-  }, [route.page]);
+    const titles = { rules: 'Rules', components: 'Components', account: 'Account', admin: 'Admin', help: 'Help', inbox: 'Inbox' };
+    // The unread count shows in the browser tab too.
+    document.title = `${unreadCount ? `(${unreadCount}) ` : ''}${titles[route.page] || 'Rules'} · Blood Rage Valhalla: Unofficial Living Rulebook`;
+  }, [route.page, unreadCount]);
 
   const closeWelcome = () => {
     setWelcomeSeen(true);
@@ -97,9 +102,10 @@ function Shell() {
               )}
             </div>
           )}
+          {user && <InboxLink uid={user.uid} active={route.page === 'inbox'} onCount={setUnreadCount} />}
           {lowerRoles.length > 1 && <ViewAsMenu roles={lowerRoles} role={role} realRole={realRole} previewing={previewing} setViewAs={setViewAs} />}
           <button
-            className="icon-btn"
+            className="icon-btn theme-btn"
             onClick={theme.toggle}
             title={`Switch to ${theme.theme === 'light' ? 'dark' : 'light'} mode${theme.following ? ' (now following your system setting)' : ''}`}
             aria-label={`Switch to ${theme.theme === 'light' ? 'dark' : 'light'} mode`}
@@ -142,6 +148,8 @@ function Shell() {
             <AdminPage route={route} />
           ) : route.page === 'help' ? (
             <HelpPage route={route} />
+          ) : route.page === 'inbox' ? (
+            <InboxPage route={route} />
           ) : (
             <RulesPage route={route} />
           )}
@@ -214,6 +222,22 @@ function ViewAsMenu({ roles, role, realRole, previewing, setViewAs }) {
         ))}
       </div>
     </details>
+  );
+}
+
+/** Header bell with the number of unread notices. */
+function InboxLink({ uid, active, onCount }) {
+  const unread = useLive(() => unreadQuery(uid), [uid]);
+  const n = unread.data?.length || 0;
+  useEffect(() => {
+    onCount(n);
+    return () => onCount(0);
+  }, [n, onCount]);
+  return (
+    <a className={`icon-btn inbox-link ${active ? 'active' : ''}`} href={href('inbox')} title={n ? `Inbox: ${n} unread notice${n === 1 ? '' : 's'}` : 'Inbox: nothing new'} aria-label={n ? `Inbox, ${n} unread` : 'Inbox'}>
+      <Icon name={n ? 'bellRing' : 'bell'} size={18} />
+      {n > 0 && <span className="badge">{n > 99 ? '99+' : n}</span>}
+    </a>
   );
 }
 

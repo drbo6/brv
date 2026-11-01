@@ -7,6 +7,7 @@ A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rag
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Admins define component types and their fields, arrange them on a simple card layout, import and export spreadsheets, and define `[shorthand]` icons.
 - **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
 - **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
+- **Inbox and following.** Signed-in users follow rules, cards, rulesets (and admins the suggestion feed) and get inbox notices about new comments, versions and changes. Commenting or suggesting follows automatically. A bell in the header shows unread notices.
 - **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
 - **Working together.** Everything updates live. Changes are written per field where possible, and editors warn you when someone else saved the thing you are editing.
 - **Light and dark mode**, following the system setting until you pick one.
@@ -163,6 +164,8 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `config/componentsMeta` | `version` (cache counter) |
 | `admins/{uid}` | Admin flag |
 | `users/{uid}` | Public profile: chosen `name` and `avatar` ({glyph, color} or {photo}). Never an email address |
+| `subscribers/{key}` | `uids` {uid: true} following `rule_<id>`, `component_<id>`, `ruleset_<id>` or `suggestions`, plus a `label` and `link` |
+| `inbox/{uid}/items` | A user's notices: `type`, `title`, `text`, `link`, `actorUid`, `read`. Delivered by whoever caused the event (there is no server) |
 | `usernames/{name}` | `uid` holding each (lowercased) username, so names are unique |
 | `adminChat` | Admin messages |
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 // 'light' or 'dark' when the reader picked one; otherwise the system setting decides.
 const KEY = 'brv-theme';
@@ -18,27 +18,42 @@ export function applyTheme(choice = stored()) {
   document.documentElement.dataset.theme = resolvedTheme(choice);
 }
 
+// One shared choice, so every toggle (header, Account page) stays in sync.
+let choice = stored();
+const subs = new Set();
+const setChoice = (value) => {
+  choice = value;
+  try {
+    if (value) localStorage.setItem(KEY, value);
+    else localStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+  applyTheme(value);
+  subs.forEach((s) => s());
+};
+const subscribe = (fn) => {
+  subs.add(fn);
+  return () => subs.delete(fn);
+};
+
 export function useTheme() {
-  const [choice, setChoice] = useState(stored);
+  const current = useSyncExternalStore(subscribe, () => choice);
   useEffect(() => {
-    applyTheme(choice);
-    if (choice) return undefined;
+    if (current) return undefined;
+    // Following the system: switch along with it.
     const m = media();
-    const follow = () => applyTheme(null);
+    const follow = () => {
+      applyTheme(null);
+      subs.forEach((s) => s());
+    };
     m.addEventListener('change', follow);
     return () => m.removeEventListener('change', follow);
-  }, [choice]);
+  }, [current]);
   const toggle = () => {
-    const next = resolvedTheme(choice) === 'light' ? 'dark' : 'light';
+    const next = resolvedTheme(current) === 'light' ? 'dark' : 'light';
     // Picking the system's own theme goes back to following the system.
-    const value = next === (media().matches ? 'light' : 'dark') ? null : next;
-    try {
-      if (value) localStorage.setItem(KEY, value);
-      else localStorage.removeItem(KEY);
-    } catch {
-      /* ignore */
-    }
-    setChoice(value);
+    setChoice(next === (media().matches ? 'light' : 'dark') ? null : next);
   };
-  return { theme: resolvedTheme(choice), following: !choice, toggle };
+  return { theme: resolvedTheme(current), following: !current, toggle };
 }

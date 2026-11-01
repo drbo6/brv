@@ -4,6 +4,7 @@ import { createRule, createVersion, LABELS, nextCode, updateRule, updateVersion 
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 import { confirmDialog, promptDialog } from './dialogs.jsx';
+import { autoFollow, notify, ruleTarget, SUGGESTIONS } from '../lib/inbox.js';
 
 /** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
 function insertAtCursor(el, before, after = '', placeholder = '') {
@@ -197,7 +198,19 @@ export function VersionDialog({ rule, version, onClose }) {
       ? await attempt(() => updateVersion(version.id, isAdmin ? data : { text: data.text, note: data.note }), 'Version saved')
       : await attempt(() => createVersion({ ruleId: rule.id, ...data }, user), isAdmin ? 'Version added' : 'Thanks! Your suggestion was added.');
     setBusy(false);
-    if (ok !== undefined) onClose();
+    if (ok === undefined) return;
+    onClose();
+    const t = ruleTarget(rule);
+    const who = user.displayName || 'Someone';
+    if (editing) {
+      notify(t.key, user, { type: 'version', title: `${who} edited the ${data.label} version of ${t.label}`, text: data.text, link: t.link });
+    } else {
+      // Suggesting follows the rule, so the author hears about reactions to it in the discussion.
+      autoFollow(t.key, user.uid, t);
+      const title = isAdmin ? `${who} added a ${data.label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+      notify(t.key, user, { type: 'version', title, text: data.text, link: t.link });
+      if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: data.text, link: t.link });
+    }
   };
 
   return (
@@ -293,7 +306,12 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
         : { code: `SUG-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
       const version = { label: isAdmin ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
       ok = await attempt(() => createRule(meta, version, user), isAdmin ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
-      if (ok) onCreated?.(meta.code);
+      if (ok) {
+        onCreated?.(meta.code);
+        const t = ruleTarget({ id: ok, code: meta.code, title: meta.title });
+        autoFollow(t.key, user.uid, t);
+        if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
+      }
     }
     setBusy(false);
     if (ok !== undefined) onClose();

@@ -4,11 +4,13 @@ import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { deleteRuleset, millis, updateRuleset } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
+import { useTheme } from '../lib/theme.js';
 import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../components/ui.jsx';
 import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 export default function AccountPage() {
   const { user, authLoading, isAdmin, signIn, signOut, editProfile } = useSession();
+  const theme = useTheme();
   const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
 
   if (authLoading) return <Spinner />;
@@ -49,6 +51,10 @@ export default function AccountPage() {
           </p>
         </div>
         <div className="row gap wrap">
+          <button onClick={theme.toggle} title="Switch between light and dark mode">
+            <Icon name={theme.theme === 'light' ? 'moon' : 'sun'} />
+            {theme.theme === 'light' ? 'Dark mode' : 'Light mode'}
+          </button>
           <button onClick={editProfile} title="Change your username and avatar">
             <Icon name="edit" />
             Edit profile

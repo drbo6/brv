@@ -18,6 +18,7 @@ export const COLLECTIONS = [
   { id: 'admins', label: 'Admins' },
   { id: 'users', label: 'User profiles' },
   { id: 'usernames', label: 'Username claims' },
+  { id: 'subscribers', label: 'Who follows what' },
   { id: 'adminChat', label: 'Admin chat' },
 ];
 

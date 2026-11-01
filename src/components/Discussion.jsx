@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { collection, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
+import { autoFollow, notify, ruleTarget } from '../lib/inbox.js';
 import { addComment, deleteComment, editComment, millis, react } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
@@ -12,9 +13,10 @@ import { confirmDialog } from './dialogs.jsx';
  * Comment thread for a rule, or for a component (`target={{ field: 'componentId', id, name }}`).
  * Each comment remembers which version the author was looking at.
  */
-export default function Discussion({ rule, target: given, versions, shownVersion }) {
+export default function Discussion({ rule, target: given, follow: givenFollow, versions, shownVersion }) {
   const { user, isAdmin, requireUser, signIn } = useSession();
   const target = given || { field: 'ruleId', id: rule.id, name: rule.code };
+  const follow = givenFollow || ruleTarget(rule);
   const comments = useLive(() => query(collection(db, 'comments'), where(target.field, '==', target.id)), [target.field, target.id]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +34,14 @@ export default function Discussion({ rule, target: given, versions, shownVersion
     const body = text.trim();
     if (!body) return;
     setBusy(true);
-    await requireUser((u) => attempt(() => addComment({ [target.field]: target.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment').then(() => setText('')));
+    await requireUser(async (u) => {
+      const ok = await attempt(() => addComment({ [target.field]: target.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment');
+      if (!ok) return;
+      setText('');
+      // Commenting follows the discussion, and tells everyone else who follows it.
+      autoFollow(follow.key, u.uid, follow);
+      notify(follow.key, u, { type: 'comment', title: `${u.displayName} commented on ${follow.label}`, text: body, link: follow.link });
+    });
     setBusy(false);
   };
 

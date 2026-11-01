@@ -8,6 +8,8 @@ import ComponentCard from './ComponentCard.jsx';
 import Discussion from './Discussion.jsx';
 import { alertDialog, confirmDialog } from './dialogs.jsx';
 import { attempt, copyText, Icon, Modal, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
+import FollowButton from './FollowButton.jsx';
+import { autoFollow, cardTarget, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
 /**
  * A component in detail: its card, all its data, alternate states, and its versions with
@@ -42,6 +44,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const ownsShown = !shown.printed && user && shown.createdBy === user.uid && shown.label === 'Suggestion';
   const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(data[f.key], type));
   const name = displayTitle(type, { ...current, data });
+  const follow = cardTarget(current, displayTitle(type, current));
 
   const step = (d) => setShownId(vs[(idx + d + vs.length) % vs.length].id);
 
@@ -145,11 +148,17 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 {isAdmin ? 'Add version' : 'Suggest change'}
               </button>
               {canChoose && shown.id !== active.id && (
-                <button className="chip ok" onClick={() => attempt(() => setCardVersionIn(selectedSet.id, current.id, shown.id), `${selectedSet.name} now uses the ${shown.label} version`)} title={`Use this version of the card in your ruleset “${selectedSet.name}”`}>
+                <button className="chip ok" onClick={() =>
+                    attempt(() => setCardVersionIn(selectedSet.id, current.id, shown.id), `${selectedSet.name} now uses the ${shown.label} version`).then((ok) => {
+                      const t = rulesetTarget(selectedSet);
+                      if (ok) notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'Someone'} changed “${t.label}”: ${follow.label} now uses the ${shown.label} version`, text: '', link: t.link });
+                    })
+                  } title={`Use this version of the card in your ruleset “${selectedSet.name}”`}>
                   <Icon name="check" />
                   Use in {selectedSet.name}
                 </button>
               )}
+              <FollowButton target={follow} what={`${follow.label} (its discussion and versions)`} />
               <button
                 className="chip"
                 onClick={async () => {
@@ -194,7 +203,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
             </div>
           )}
 
-          {discuss && <Discussion target={{ field: 'componentId', id: current.id, name }} versions={vs} shownVersion={shown} />}
+          {discuss && <Discussion target={{ field: 'componentId', id: current.id, name }} follow={follow} versions={vs} shownVersion={shown} />}
         </div>
       </div>
       {dialog && (
@@ -231,6 +240,16 @@ function CardVersionDialog({ type, comp, version, startData, onClose, onSaved })
     setBusy(false);
     if (id !== undefined) {
       onSaved(version ? version.id : id);
+      const t = cardTarget(comp, comp.data[type.fields.find((f) => f.kind === 'title')?.key] || comp.id);
+      const who = user.displayName || 'Someone';
+      const changes = Object.keys(data).join(', ');
+      if (version) notify(t.key, user, { type: 'version', title: `${who} edited a version of ${t.label}`, text: `Changes: ${changes}`, link: t.link });
+      else {
+        autoFollow(t.key, user.uid, t);
+        const title = isAdmin ? `${who} added a ${label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+        notify(t.key, user, { type: 'version', title, text: `Changes: ${changes}`, link: t.link });
+        if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: `Changes: ${changes}`, link: t.link });
+      }
       onClose();
     }
   };

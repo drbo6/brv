@@ -74,14 +74,23 @@ export function getFirestore() {
 
 const autoId = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]).join('');
 
-export function collection(_db, path) {
-  return { kind: 'collection', path };
+// Paths may be nested (inbox/{uid}/items): a collection is stored under its full path.
+export function collection(_db, ...segments) {
+  return { kind: 'collection', path: segments.join('/') };
 }
 
-export function doc(parent, path, id) {
-  const ref = parent.kind === 'collection' ? { kind: 'doc', col: parent.path, id: path ?? autoId() } : { kind: 'doc', col: path, id };
-  ref.path = `${ref.col}/${ref.id}`;
-  return ref;
+export function doc(parent, ...segments) {
+  let col;
+  let id;
+  if (parent.kind === 'collection') {
+    col = parent.path;
+    id = segments[0] ?? autoId();
+  } else {
+    const parts = segments.join('/').split('/');
+    id = parts.pop();
+    col = parts.join('/');
+  }
+  return { kind: 'doc', col, id, path: `${col}/${id}` };
 }
 
 export const where = (field, op, value) => ({ type: 'where', field, op, value });

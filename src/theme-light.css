@@ -320,3 +320,11 @@
 :root[data-theme='light'] .rule.has-kind:not(.open):hover {
   background: color-mix(in srgb, var(--kind) 14%, transparent);
 }
+
+:root[data-theme='light'] .rules-top.stuck .ruleset-bar {
+  background: none;
+}
+
+:root[data-theme='light'] .rules-top.stuck {
+  box-shadow: 0 14px 24px -16px rgba(60, 40, 20, 0.35);
+}
