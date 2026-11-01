@@ -27,14 +27,15 @@ export function useRulesetChoice(linkedSetId) {
 }
 
 /** Dropdown of the rulesets a reader can pick. */
-export default function RulesetSelect({ choice, onChange, id = 'ruleset-select', unsaved = false }) {
+export default function RulesetSelect({ choice, onChange, id = 'ruleset-select', unsaved = false, differs = false }) {
   const { user, site } = useSession();
   const { selectedSet, publicSets, mySets, linkedSet } = choice;
   const privateMine = mySets.filter((s) => s.visibility !== 'public');
   // The selected set's name says when it has unsaved changes.
-  const isDefault = (sid) => (unsaved && sid === selectedSet.id ? ' — unsaved changes' : site.defaultRulesetId === sid ? ' — default' : '');
+  const status = unsaved ? ' — unsaved changes' : differs ? ' — other versions shown' : '';
+  const isDefault = (sid) => (status && sid === selectedSet.id ? status : site.defaultRulesetId === sid ? ' — default' : '');
   return (
-    <select id={id} className={unsaved ? 'is-unsaved' : ''} value={selectedSet.id} onChange={(e) => onChange(e.target.value)} title="Which rules and card versions you see">
+    <select id={id} className={unsaved || differs ? 'is-unsaved' : ''} value={selectedSet.id} onChange={(e) => onChange(e.target.value)} title="Which rules and card versions you see">
       <option value={RULEBOOK_SET.id}>
         {RULEBOOK_SET.name}
         {isDefault(RULEBOOK_SET.id)}

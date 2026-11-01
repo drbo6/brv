@@ -206,7 +206,7 @@ const TOPICS = [
           </li>
           <li>
             You don't need Customize for a quick change: in an open rule, <b>Use this version</b>, <b>Add to ruleset</b> and <b>Make inactive</b> change the ruleset
-            directly. The ruleset picker then says <i>unsaved changes</i> until you save or discard.
+            directly. The ruleset picker then says <i>unsaved changes</i> until you save or discard. Just stepping to another version of a rule also shows a note under the picker, because the page no longer shows the ruleset as it is; from there you can jump to those rules, use those versions, or go back to the ruleset's versions.
           </li>
           <li>
             <b>Save</b> updates a ruleset you own; <b>Save as new…</b> makes a copy.

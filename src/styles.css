@@ -3207,6 +3207,36 @@ span.field-place {
   background: none;
 }
 
+/* The page no longer shows the selected ruleset exactly as saved. */
+.ruleset-status {
+  grid-column: 1 / -1;
+  order: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.ruleset-status > span:first-of-type {
+  flex: 1 1 260px;
+}
+
+.ruleset-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ruleset-status-actions:empty {
+  display: none;
+}
+
 /* A ruleset with unsaved changes. */
 select.is-unsaved {
   border-color: var(--warn);

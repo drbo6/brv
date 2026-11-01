@@ -79,6 +79,15 @@ export default function RulesPage({ route }) {
   );
   const onUseVersion = useCallback((ruleId, vid) => editDraft((e) => ({ ...e, [ruleId]: vid })), [editDraft]);
   const unsaved = Boolean(draft) && changeCount > 0;
+  // Rules of the set that the reader stepped to another version of: the page no longer shows the set as it is.
+  const browsed = useMemo(() => Object.keys(viewVersion).filter((rid) => entries[rid] && viewVersion[rid] !== entries[rid]), [viewVersion, entries]);
+  const showBrowsed = () => {
+    const first = allRules.find((r) => r.id === browsed[0]);
+    if (first) {
+      setOpenId(first.id);
+      document.getElementById(`rule-${first.code}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   const selectSet = async (id) => {
     if (draft && changeCount && !(await confirmDialog({ title: 'Discard changes', message: 'Discard your unsaved ruleset changes?', confirmLabel: 'Discard', danger: true }))) return;
@@ -197,7 +206,7 @@ export default function RulesPage({ route }) {
         html: it.shown?.text || '',
       })),
     }));
-    const name = draft ? `${selectedSet.name} (edited)` : selectedSet.name;
+    const name = `${selectedSet.name}${unsaved ? ' (unsaved changes)' : ''}${browsed.length ? `, ${browsed.length} rule${browsed.length === 1 ? '' : 's'} in other versions` : ''}`;
     const filters = [q && `search "${q}"`, labelFilter && `label ${labelFilter}`, kindFilter && kindInfo(kinds, kindFilter).label, showInactive && 'including inactive rules'].filter(Boolean).join(', ');
     return attempt(() =>
       exportRulesPdf({
@@ -242,13 +251,45 @@ export default function RulesPage({ route }) {
         <section className="ruleset-bar" aria-label="Ruleset">
           <div className="ruleset-pick">
             <label htmlFor="ruleset-select">Ruleset</label>
-            <RulesetSelect choice={choice} onChange={selectSet} unsaved={unsaved} />
+            <RulesetSelect choice={choice} onChange={selectSet} unsaved={unsaved} differs={browsed.length > 0} />
             {unsaved && (
               <span className="tag t-warn unsaved-tag" title="You changed which rules or versions this ruleset uses. Save or discard below.">
                 Unsaved changes
               </span>
             )}
           </div>
+          {(unsaved || browsed.length > 0) && (
+            <div className="ruleset-status" role="status">
+              <Icon name="info" />
+              <span>
+                {unsaved && (
+                  <>
+                    You changed {changeCount} rule{changeCount === 1 ? '' : 's'} in “{selectedSet.name}”: the page shows your unsaved version of the ruleset.{' '}
+                  </>
+                )}
+                {browsed.length > 0 && (
+                  <>
+                    {browsed.length === 1 ? 'One rule is' : `${browsed.length} rules are`} shown in a version that “{selectedSet.name}”{unsaved ? ' (with your changes)' : ''} doesn't use.{' '}
+                  </>
+                )}
+              </span>
+              <span className="ruleset-status-actions">
+                {browsed.length > 0 && (
+                  <>
+                    <button className="small" onClick={showBrowsed} title="Scroll to the first rule shown in another version">
+                      Show {browsed.length === 1 ? 'it' : 'them'}
+                    </button>
+                    <button className="small" onClick={() => editDraft((e) => ({ ...e, ...Object.fromEntries(browsed.map((rid) => [rid, viewVersion[rid]])) }))} title="Make the ruleset use the versions you are looking at (as unsaved changes)">
+                      Use {browsed.length === 1 ? 'this version' : 'these versions'}
+                    </button>
+                    <button className="small" onClick={() => setViewVersion({})} title={`Show every rule in the version “${selectedSet.name}” uses`}>
+                      Back to the ruleset's versions
+                    </button>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
           <p className="ruleset-desc">
             {selectedSet.description || (selectedSet.builtIn ? '' : `A ruleset by ${selectedSet.ownerName || 'a community member'}.`)}
             {!selectedSet.builtIn && <span className="muted"> · {Object.keys(selectedSet.entries || {}).length} rules</span>}
