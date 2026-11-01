@@ -1,0 +1,203 @@
+import { useEffect, useRef } from 'react';
+import { richHtml } from '../lib/html.js';
+import { reactionCounts } from '../lib/rules.js';
+import { useSession } from '../lib/session.jsx';
+
+const ICONS = {
+  up: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+  down: '<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>',
+  q: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  left: '<path d="m15 18-6-6 6-6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
+  chevronUp: '<path d="m18 15-6-6-6 6"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  edit: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/>',
+  bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  arrowUp: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  arrowDown: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  flip: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  layers: '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+};
+
+export function Icon({ name, size = 16, className = '' }) {
+  return (
+    <svg
+      className={`icon ${className}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: ICONS[name] || '' }}
+    />
+  );
+}
+
+export function Modal({ title, onClose, children, footer, wide = false, className = '' }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    document.addEventListener('keydown', onKey);
+    document.body.classList.add('modal-open');
+    ref.current?.querySelector('input, textarea, select, button.primary')?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.classList.remove('modal-open');
+    };
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div ref={ref} className={`modal ${wide ? 'wide' : ''} ${className}`} role="dialog" aria-modal="true" aria-label={title}>
+        {title && (
+          <header className="modal-head">
+            <h2>{title}</h2>
+            {onClose && (
+              <button className="icon-btn" onClick={onClose} aria-label="Close">
+                <Icon name="x" size={18} />
+              </button>
+            )}
+          </header>
+        )}
+        <div className="modal-body">{children}</div>
+        {footer && <footer className="modal-foot">{footer}</footer>}
+      </div>
+    </div>
+  );
+}
+
+export function RichText({ html, className = '', as: Tag = 'div' }) {
+  const { shorthands } = useSession();
+  return <Tag className={`rich ${className}`} dangerouslySetInnerHTML={{ __html: richHtml(html, shorthands) }} />;
+}
+
+export function Avatar({ name, photo, size = 28 }) {
+  if (photo) return <img className="avatar" src={photo} alt="" width={size} height={size} referrerPolicy="no-referrer" />;
+  const initials = (name || '?')
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <span className="avatar avatar-fallback" style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden="true">
+      {initials}
+    </span>
+  );
+}
+
+const REACTIONS = [
+  { type: 'up', label: 'Agree' },
+  { type: 'down', label: 'Disagree' },
+  { type: 'q', label: 'Unclear / has questions' },
+];
+
+/** Thumbs up / thumbs down / question reactions. `onReact(type)` toggles. */
+export function Reactions({ reactions, onReact, compact = false }) {
+  const { user } = useSession();
+  const counts = reactionCounts(reactions);
+  const mine = user ? reactions?.[user.uid] : null;
+  return (
+    <div className={`reactions ${compact ? 'compact' : ''}`} role="group" aria-label="Reactions">
+      {REACTIONS.map(({ type, label }) => (
+        <button key={type} className={`reaction r-${type} ${mine === type ? 'mine' : ''}`} onClick={() => onReact(type)} title={label} aria-pressed={mine === type}>
+          <Icon name={type} size={compact ? 13 : 15} />
+          <span>{counts[type]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Spinner({ label = 'Loading…' }) {
+  return (
+    <div className="spinner-wrap" role="status">
+      <span className="spinner" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+export function Empty({ title, children }) {
+  return (
+    <div className="empty">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+export function timeAgo(ts) {
+  const ms = ts?.toMillis ? ts.toMillis() : typeof ts === 'number' ? ts : null;
+  if (!ms) return 'just now';
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+export async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    window.prompt('Copy this:', text);
+    return false;
+  }
+}
+
+/** Small transient status message at the bottom of the screen. */
+export function toast(message, kind = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  el.setAttribute('role', 'status');
+  el.textContent = message;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 2600);
+}
+
+/**
+ * Wrap an async action: shows errors as toasts instead of failing silently.
+ * Resolves to the action's result (or `true`) on success, `undefined` on failure.
+ */
+export async function attempt(fn, success) {
+  try {
+    const r = await fn();
+    if (success) toast(success, 'ok');
+    return r === undefined ? true : r;
+  } catch (e) {
+    console.error(e);
+    toast(e?.code === 'permission-denied' ? 'You do not have permission to do that.' : `Something went wrong: ${e.message}`, 'error');
+    return undefined;
+  }
+}

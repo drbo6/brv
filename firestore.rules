@@ -1,0 +1,137 @@
+rules_version = '2';
+
+// Everyone can read. Signed-in users can react, comment, suggest and save their own rulesets.
+// Admins (a document at /admins/{uid}) can change everything else.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // A user may only add, change or remove their own entry in a `reactions` map.
+    function ownReactionOnly() {
+      let before = resource.data.get('reactions', {});
+      let after = request.resource.data.get('reactions', {});
+      return signedIn()
+        && onlyChanged(['reactions'])
+        && after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in after) || after[request.auth.uid] in ['up', 'down', 'q']);
+    }
+
+    function noReactions() {
+      return request.resource.data.get('reactions', {}).size() == 0;
+    }
+
+    function shortText(field, max) {
+      return request.resource.data[field] is string && request.resource.data[field].size() <= max;
+    }
+
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if true;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'lastSeen'])
+        && shortText('name', 200);
+      allow delete: if isAdmin();
+    }
+
+    match /sections/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /rules/{id} {
+      allow read: if true;
+      // Users may suggest new rules.
+      allow create: if isAdmin() || (signedIn()
+        && request.resource.data.status == 'suggested'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.get('commentCount', 0) == 0
+        && shortText('title', 200));
+      // Posting or deleting a comment adjusts the comment counter by one.
+      allow update: if isAdmin() || (signedIn()
+        && onlyChanged(['commentCount'])
+        && (request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1
+          || request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1));
+      allow delete: if isAdmin();
+    }
+
+    match /versions/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (signedIn()
+        && request.resource.data.label == 'Suggestion'
+        && request.resource.data.createdBy == request.auth.uid
+        && noReactions()
+        && shortText('text', 20000));
+      allow update: if isAdmin()
+        || ownReactionOnly()
+        || (signedIn()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.label == 'Suggestion'
+          && onlyChanged(['text', 'note', 'updatedAt'])
+          && shortText('text', 20000));
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
+    }
+
+    match /comments/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && noReactions()
+        && shortText('text', 5000);
+      allow update: if ownReactionOnly()
+        || (signedIn() && resource.data.uid == request.auth.uid && onlyChanged(['text', 'editedAt']) && shortText('text', 5000));
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    match /rulesets/{id} {
+      // Readable by anyone with the link, so rulesets can be shared.
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.visibility == 'private'
+        && shortText('name', 200);
+      // Owners edit their own sets; only admins can change visibility (make a set public).
+      allow update: if isAdmin() || (signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.visibility == resource.data.visibility);
+      allow delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /componentTypes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /components/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /adminChat/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);
+      allow update: if false;
+      allow delete: if isAdmin() && resource.data.uid == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+Materials/
+node_modules/
+dist/
+dist-demo/
+.firebase/
+*.log
+.env.local
