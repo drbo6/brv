@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { escapeHtml } from '../lib/html.js';
-import { createRule, createVersion, KINDS, LABELS, nextCode, updateRule, updateVersion } from '../lib/rules.js';
+import { createRule, createVersion, LABELS, nextCode, updateRule, updateVersion } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
+import { confirmDialog, promptDialog } from './dialogs.jsx';
 
 /** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
 function insertAtCursor(el, before, after = '', placeholder = '') {
@@ -81,9 +82,13 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
   const [imageForm, setImageForm] = useState(false);
   const ref = useRef(null);
   const wrap = (before, after, placeholder) => ref.current && insertAtCursor(ref.current, before, after, placeholder);
-  const addLink = () => {
-    const url = prompt('Link address (https://…)');
-    if (url && /^https?:\/\//i.test(url.trim())) wrap(`<a href="${escapeHtml(url.trim())}">`, '</a>', 'link text');
+  const addLink = async () => {
+    const el = ref.current;
+    const sel = el ? [el.selectionStart, el.selectionEnd] : null;
+    const url = await promptDialog({ title: 'Insert link', label: 'Link address', placeholder: 'https://…', confirmLabel: 'Insert link', validate: (v) => (/^https?:\/\/\S+$/i.test(v.trim()) ? '' : 'Enter an address starting with https://') });
+    if (!url || !el) return;
+    el.setSelectionRange(...sel);
+    wrap(`<a href="${escapeHtml(url.trim())}">`, '</a>', 'link text');
   };
   return (
     <div className="field">
@@ -171,9 +176,21 @@ export function VersionDialog({ rule, version, onClose }) {
   const [text, setText] = useState(version?.text || '');
   const [note, setNote] = useState(version?.note || '');
   const [busy, setBusy] = useState(false);
+  // Versions update live: notice when someone else saves this one while it is open here.
+  const [openedWith, setOpenedWith] = useState(() => (version ? version.text + version.note : ''));
+  const changedElsewhere = editing && version.text + version.note !== openedWith;
 
   const submit = async (e) => {
     e.preventDefault();
+    if (changedElsewhere) {
+      const ok = await confirmDialog({
+        title: 'Someone else changed this version',
+        message: 'This version was saved by someone else while you were editing. Saving replaces their wording with yours.',
+        confirmLabel: 'Save mine anyway',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     const data = { label: isAdmin ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
     const ok = editing
@@ -185,6 +202,23 @@ export function VersionDialog({ rule, version, onClose }) {
 
   return (
     <Modal title={editing ? `Edit version of ${rule.code}` : isAdmin ? `New version of ${rule.code}` : `Suggest a change to ${rule.code}`} onClose={onClose} wide>
+      {changedElsewhere && (
+        <div className="conflict-bar" role="alert">
+          <Icon name="info" />
+          <span>Someone else saved this version while you were editing it.</span>
+          <button
+            type="button"
+            className="small"
+            onClick={() => {
+              setText(version.text);
+              setNote(version.note || '');
+              setOpenedWith(version.text + version.note);
+            }}
+          >
+            Load their version
+          </button>
+        </div>
+      )}
       <form onSubmit={submit} className="form">
         {!editing && !isAdmin && <p className="muted">Propose new wording or a clarification. It will appear as a “Suggestion” version that others can react to and discuss.</p>}
         {isAdmin && (
@@ -219,7 +253,7 @@ export function VersionDialog({ rule, version, onClose }) {
 
 /** Create a new rule (users: as a suggestion) or edit an existing rule's details (admins). */
 export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCreated }) {
-  const { isAdmin, user } = useSession();
+  const { isAdmin, user, kinds } = useSession();
   const editing = Boolean(rule);
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(rule?.sectionId || firstSection);
@@ -309,11 +343,12 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
             <div className="field">
               <label htmlFor="r-kind">Kind</label>
               <select id="r-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-                {Object.entries(KINDS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
+                {kinds.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.label}
                   </option>
                 ))}
+                {!kinds.some((k) => k.id === kind) && <option value={kind}>{kind} (removed kind)</option>}
               </select>
             </div>
             <div className="field">

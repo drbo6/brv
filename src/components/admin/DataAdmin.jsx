@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { COLLECTIONS, downloadJson, exportDatabase, importDatabase, inspectBackup } from '../../lib/backup.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon } from '../ui.jsx';
+import { confirmDialog } from '../dialogs.jsx';
 
 // People data is opt-in on import: restoring it is rarely what you want.
 const SENSITIVE = new Set(['admins', 'users', 'adminChat']);
@@ -46,7 +47,7 @@ export default function DataAdmin() {
       mode === 'replace'
         ? `Replace ${importNames.length} collection(s) with the file's ${total} documents? Documents that are not in the file will be deleted.`
         : `Write ${total} documents from the file? Existing documents with the same IDs will be overwritten.`;
-    if (!confirm(`${warning}\n\nYou can undo this afterwards.`)) return;
+    if (!(await confirmDialog({ title: mode === 'replace' ? 'Replace data' : 'Import data', message: `${warning} You can undo this afterwards.`, confirmLabel: 'Import', danger: mode === 'replace' }))) return;
     setBusy(true);
     const r = await attempt(
       () => importDatabase(file.data, { names: importNames, mode, protect: [`admins/${user.uid}`] }),

@@ -5,6 +5,7 @@ import { href } from '../lib/router.js';
 import { deleteRuleset, millis, updateRuleset } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../components/ui.jsx';
+import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 export default function AccountPage() {
   const { user, authLoading, isAdmin, signIn, signOut } = useSession();
@@ -76,9 +77,9 @@ export default function AccountPage() {
                     className="icon-btn"
                     title="Rename"
                     aria-label={`Rename ${s.name}`}
-                    onClick={() => {
-                      const name = prompt('New name', s.name);
-                      if (name?.trim()) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Renamed');
+                    onClick={async () => {
+                      const name = await promptDialog({ title: 'Rename ruleset', label: 'Name', initial: s.name, confirmLabel: 'Rename' });
+                      if (name?.trim() && name.trim() !== s.name) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Ruleset renamed');
                     }}
                   >
                     <Icon name="edit" />
@@ -94,7 +95,7 @@ export default function AccountPage() {
                   >
                     <Icon name="link" />
                   </button>
-                  <button className="icon-btn danger" title="Delete" aria-label={`Delete ${s.name}`} onClick={() => confirm(`Delete “${s.name}”?`) && attempt(() => deleteRuleset(s.id), 'Deleted')}>
+                  <button className="icon-btn danger" title="Delete" aria-label={`Delete ${s.name}`} onClick={async () => (await confirmDialog({ title: 'Delete ruleset', message: `Delete “${s.name}”? People with its link will no longer be able to open it.`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteRuleset(s.id), 'Ruleset deleted')}>
                     <Icon name="trash" />
                   </button>
                 </div>

@@ -4,10 +4,13 @@ A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rag
 
 - **Rules.** Every rule from the rulebook is a separate entry with a stable ID such as `SUM.1`. The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
-- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Admins define component types and their fields, arrange them on a simple card layout, import spreadsheets, and define `[shorthand]` icons.
+- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Admins define component types and their fields, arrange them on a simple card layout, import and export spreadsheets, and define `[shorthand]` icons.
 - **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
 - **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
 - **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
+- **Working together.** Everything updates live. Changes are written per field where possible, and editors warn you when someone else saved the thing you are editing.
+- **Light and dark mode**, following the system setting until you pick one.
+- **Help.** The Help page (`#/help`) explains every feature for readers, members and admins.
 
 This is an unofficial fan project and is not affiliated with the game's publishers.
 
@@ -92,6 +95,18 @@ Suggested rules from the community get a temporary `SUG-XXXX` ID until an admin 
 - If you browse to a version that isn't the one your ruleset uses, it is marked **Not in *ruleset***.
 - The *Rulebook* ruleset is computed on the fly, so it always includes newly added rulebook text.
 
+### Rule kinds
+
+Kinds (Rule, Note, Tip, Changed from Blood Rage…) are a category badge and a filter. Admins manage the list, with a name and a color each, under **Admin → Rules → Rule kinds**, and set a rule's kind in its **Rule details** dialog. Rules store the kind's id, so renaming a kind updates every rule that uses it.
+
+### Card versions
+
+The component document is the printed card. Other versions store only the fields they change, and are shown merged over the printed data. A ruleset's `cards` map picks a version per card. The owner of a ruleset (or an admin) chooses it with **Use in …** in the card's details.
+
+### Working together
+
+All rule data, card versions, reactions and comments are live Firestore subscriptions. Components are cached, but every admin change bumps `config/componentsMeta`, which every open page watches and reloads on. Writes touch only what changed: ruleset saves update individual `entries.<ruleId>` keys, reactions update one user's key. Editors for component types, components and rule versions notice when someone else saved the same item and offer to load their version. Saving anyway asks first.
+
 ### Components at scale
 
 - Each component is its own document, which keeps editing simple.
@@ -137,11 +152,13 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `sections` | `code`, `title`, `parent`, `order` |
 | `rules` | `code`, `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
 | `versions` | `ruleId`, `label`, `text` (HTML), `note`, `reactions` {uid: `up` / `down` / `q`} |
-| `comments` | `ruleId`, `versionId`, `text`, author, `reactions` |
-| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `ownerUid`, `visibility` |
+| `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions` |
+| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId}, `ownerUid`, `visibility` |
 | `componentTypes` | Field definitions, layout and colors |
-| `components` | `typeId` and `data` {fieldKey: value} |
-| `config/site` | `defaultRulesetId` |
+| `components` | `typeId` and `data` {fieldKey: value}: the printed card |
+| `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions` |
+| `componentMeta` | `reactions` on a card's printed version |
+| `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}] |
 | `config/shorthands` | `items` {keyword: {type, value}} |
 | `config/componentsMeta` | `version` (cache counter) |
 | `admins/{uid}` | Admin flag |

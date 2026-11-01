@@ -1,10 +1,11 @@
 import { memo, useState } from 'react';
 import { absoluteLink, href } from '../lib/router.js';
-import { deleteRule, deleteVersion, KINDS, LABEL_CLASS, nextCode, react, updateRule } from '../lib/rules.js';
+import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, nextCode, react, updateRule } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
 import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast } from './ui.jsx';
+import { confirmDialog } from './dialogs.jsx';
 
 /**
  * One rule. Reads like running text; clicking it opens the tools: versions, reactions, discussion,
@@ -12,7 +13,7 @@ import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast } from './
  * the reader browsed to.
  */
 function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersion, onSetActive, onUseVersion, onMove, canMoveUp, canMoveDown, tree, rules }) {
-  const { isAdmin, requireUser, user } = useSession();
+  const { isAdmin, requireUser, user, kinds } = useSession();
   const { rule, vs, active, activeVersion, shown } = item;
   const [discussOpen, setDiscussOpen] = useState(focused);
   const [dialog, setDialog] = useState(null);
@@ -35,7 +36,9 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
     return attempt(() => updateRule(rule.id, { status: 'active', code }), `Approved as ${code}`);
   };
 
-  const classes = ['rule', `kind-${rule.kind || 'rule'}`, active ? 'active' : 'inactive', open ? 'open' : '', focused ? 'focused' : '', rule.status === 'suggested' ? 'is-suggested' : '', rule.status === 'rejected' ? 'is-rejected' : ''];
+  const kind = kindInfo(kinds, rule.kind);
+  const hasKind = rule.kind && rule.kind !== 'rule';
+  const classes = ['rule', `kind-${rule.kind || 'rule'}`, hasKind ? 'has-kind' : '', active ? 'active' : 'inactive', open ? 'open' : '', focused ? 'focused' : '', rule.status === 'suggested' ? 'is-suggested' : '', rule.status === 'rejected' ? 'is-rejected' : ''];
 
   // Clicking anywhere in the text opens the rule's tools, unless the reader is selecting text or following a link.
   const onBodyClick = (e) => {
@@ -44,7 +47,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
   };
 
   return (
-    <article id={`rule-${rule.code}`} className={classes.join(' ')} aria-label={`${rule.code} ${rule.title}`}>
+    <article id={`rule-${rule.code}`} className={classes.join(' ')} aria-label={`${rule.code} ${rule.title}`} style={hasKind && kind.color ? { '--kind': kind.color } : undefined}>
       <div className="rule-read" onClick={onBodyClick}>
         <header className="rule-head">
           <span className="rule-code">{rule.code}</span>
@@ -53,7 +56,11 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
               {rule.title}
             </button>
           </h3>
-          {rule.kind && rule.kind !== 'rule' && <span className={`kind-tag kt-${rule.kind}`}>{KINDS[rule.kind] || rule.kind}</span>}
+          {hasKind && (
+            <span className="kind-tag" title={`Kind: ${kind.label}. Filter by kind in the toolbar.`}>
+              {kind.label}
+            </span>
+          )}
           {rule.status === 'suggested' && <span className="tag t-suggestion">Suggested rule</span>}
           {rule.status === 'rejected' && <span className="tag t-muted">Rejected</span>}
           {!active && <span className="tag t-muted">Inactive</span>}
@@ -153,7 +160,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 </button>
               )}
               {shown && vs.length > 1 && (
-                <button className="chip danger" onClick={() => confirm(`Delete this ${shown.label} version of ${rule.code}?`) && attempt(() => deleteVersion(shown.id), 'Version deleted')}>
+                <button className="chip danger" onClick={async () => (await confirmDialog({ title: 'Delete version', message: `Delete this ${shown.label} version of ${rule.code}?`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteVersion(shown.id), 'Version deleted')}>
                   <Icon name="trash" />
                   Delete version
                 </button>
@@ -174,7 +181,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                   Approve rule
                 </button>
               )}
-              <button className="chip danger" onClick={() => confirm(`Delete ${rule.code} with all its versions and comments?`) && attempt(() => deleteRule(rule.id), 'Rule deleted')}>
+              <button className="chip danger" onClick={async () => (await confirmDialog({ title: `Delete ${rule.code}`, message: `Delete “${rule.title}” with all its versions and comments? You can undo this.`, confirmLabel: 'Delete rule', danger: true })) && attempt(() => deleteRule(rule.id), `${rule.code} deleted`)}>
                 <Icon name="trash" />
                 Delete rule
               </button>

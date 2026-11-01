@@ -12,6 +12,8 @@ export const COLLECTIONS = [
   { id: 'rulesets', label: 'Rulesets' },
   { id: 'componentTypes', label: 'Component types' },
   { id: 'components', label: 'Components' },
+  { id: 'componentVersions', label: 'Component versions' },
+  { id: 'componentMeta', label: 'Component reactions' },
   { id: 'config', label: 'Site settings & shorthands' },
   { id: 'admins', label: 'Admins' },
   { id: 'users', label: 'User profiles' },

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { richHtml } from '../lib/html.js';
 import { reactionCounts } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
@@ -39,6 +40,9 @@ const ICONS = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
@@ -66,19 +70,35 @@ export function Icon({ name, size = 16, className = '' }) {
   );
 }
 
+// Open modals, innermost last: Escape only closes the top one, and focus returns where it was.
+const modalStack = [];
+
 export function Modal({ title, onClose, children, footer, wide = false, className = '' }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    const me = {};
+    modalStack.push(me);
+    const opener = document.activeElement;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === me) {
+        e.stopPropagation();
+        closeRef.current?.();
+      }
+    };
     document.addEventListener('keydown', onKey);
     document.body.classList.add('modal-open');
-    ref.current?.querySelector('input, textarea, select, button.primary')?.focus();
+    if (!ref.current?.contains(document.activeElement)) ref.current?.querySelector('[autofocus], input, textarea, select, button.primary')?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.classList.remove('modal-open');
+      modalStack.splice(modalStack.indexOf(me), 1);
+      if (!modalStack.length) document.body.classList.remove('modal-open');
+      if (opener && document.contains(opener)) opener.focus?.();
     };
-  }, [onClose]);
-  return (
+  }, []);
+  // Rendered at the end of <body>, so a dialog opened from inside another modal sits on top of it.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div ref={ref} className={`modal ${wide ? 'wide' : ''} ${className}`} role="dialog" aria-modal="true" aria-label={title}>
         {title && (
@@ -94,7 +114,8 @@ export function Modal({ title, onClose, children, footer, wide = false, classNam
         <div className="modal-body">{children}</div>
         {footer && <footer className="modal-foot">{footer}</footer>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

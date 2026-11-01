@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ALIGNS, cardLayout, DEFAULT_CELL, DEFAULT_ROW, deleteType, FIELD_KINDS, isEmptyValue, newField, saveType, SIZES } from '../../lib/components.js';
+import { ALIGNS, cardLayout, currentTypeRev, DEFAULT_CELL, DEFAULT_ROW, deleteType, FIELD_KINDS, isEmptyValue, newField, saveType, SIZES } from '../../lib/components.js';
 import { useDraftHistory, useUndoScope } from '../../lib/history.js';
 import { navigate } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
 import ComponentCard from '../ComponentCard.jsx';
-import { attempt, Icon } from '../ui.jsx';
+import { attempt, Icon, Modal } from '../ui.jsx';
+import { alertDialog, confirmDialog } from '../dialogs.jsx';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 // The editor always works on an explicit layout, even for types that still use the automatic one.
@@ -56,8 +57,12 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
 
   // When the saved type changes underneath us (save, undo, redo) and there are no local edits, follow it.
   const prevBase = useRef(base);
+  const [conflict, setConflict] = useState(false);
   useEffect(() => {
-    if (prevBase.current !== base && JSON.stringify(draft) === JSON.stringify(prevBase.current)) history.reset(clone(base));
+    if (prevBase.current !== base && JSON.stringify(prevBase.current) !== JSON.stringify(base)) {
+      if (JSON.stringify(draft) === JSON.stringify(prevBase.current)) history.reset(clone(base));
+      else if (JSON.stringify(draft) !== JSON.stringify(base)) setConflict(true);
+    }
     prevBase.current = base;
   }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -123,19 +128,37 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   }, [draft, comps]);
 
   const save = async () => {
-    if (draft.fields.filter((f) => f.kind === 'id').length !== 1) return alert('A component type needs exactly one ID field.');
+    if (draft.fields.filter((f) => f.kind === 'id').length !== 1) return alertDialog({ title: 'ID field needed', message: 'A component type needs exactly one field of kind ID: it identifies each component and matches rows on import.' });
     setBusy(true);
-    const ok = await attempt(() => saveType(draft), 'Component type saved');
+    // Someone else may have saved this type since we loaded it.
+    const current = await currentTypeRev(type.id).catch(() => base.rev || 0);
+    if (current !== (base.rev || 0)) {
+      const overwrite = await confirmDialog({
+        title: 'Someone else changed this type',
+        message: 'Another admin saved changes to this component type after you started editing. Saving now replaces their changes with yours.',
+        confirmLabel: 'Save mine anyway',
+        danger: true,
+      });
+      if (!overwrite) return setBusy(false);
+    }
+    const ok = await attempt(() => saveType({ ...draft, rev: current + 1 }), 'Component type saved');
     setBusy(false);
     if (ok) onSaved();
   };
 
-  const addField = () => {
-    const label = prompt('Name of the new field');
-    if (!label?.trim()) return;
-    const f = newField(label.trim(), 'ability', draft.fields.map((x) => x.key));
-    setDraft((d) => ({ ...d, fields: [...d.fields, f] }));
+  const addField = ({ label, kind, onCard }) => {
+    const f = newField(label, kind, draft.fields.map((x) => x.key));
+    setDraft((d) => ({
+      ...d,
+      fields: [...d.fields, f],
+      layout: onCard && kind !== 'id' && kind !== 'state' ? placeCell(d.layout, { ...DEFAULT_CELL, key: f.key }, { row: d.layout.rows.length, newRow: true }) : d.layout,
+    }));
     setSelected(f.key);
+  };
+  const [adding, setAdding] = useState(false);
+  const addToCard = (key) => {
+    place(key, { row: draft.layout.rows.length, newRow: true });
+    setSelected(key);
   };
 
   const moveField = (i, delta) =>
@@ -147,9 +170,15 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
       return { ...d, fields };
     });
 
-  const removeField = (key) => {
+  const removeField = async (key) => {
     const f = fieldOf.get(key);
-    if (!confirm(`Remove the field “${f.label}”? Its data stays in the components but is no longer shown.`)) return;
+    const ok = await confirmDialog({
+      title: 'Remove field',
+      message: `Remove the field “${f.label}” from this type? The values stay stored in the components, but are no longer shown anywhere.`,
+      confirmLabel: 'Remove field',
+      danger: true,
+    });
+    if (!ok) return;
     setDraft((d) => ({ ...d, fields: d.fields.filter((x) => x.key !== key), layout: dropEmptyRows(withoutCell(d.layout, key)) }));
     setSelected(null);
   };
@@ -159,6 +188,25 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
 
   return (
     <div className="type-editor">
+      {conflict && (
+        <div className="conflict-bar" role="alert">
+          <Icon name="info" />
+          <span>Someone else just saved changes to this component type while you were editing it.</span>
+          <button
+            className="small"
+            onClick={() => {
+              history.reset(clone(base));
+              setConflict(false);
+            }}
+          >
+            Load their version
+          </button>
+          <button className="small" onClick={() => setConflict(false)} title="Keep your edits; saving will ask before replacing their changes">
+            Keep mine
+          </button>
+        </div>
+      )}
+      {adding && <AddFieldDialog existing={draft.fields} onClose={() => setAdding(false)} onAdd={addField} />}
       <section className="panel">
         <div className="panel-head">
           <h2>Type settings</h2>
@@ -172,7 +220,7 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
             <button
               className="danger small"
               onClick={async () => {
-                if (!confirm(`Delete the type “${type.name}” and all ${comps.length} of its components?`)) return;
+                if (!(await confirmDialog({ title: 'Delete component type', message: `Delete “${type.name}” and all ${comps.length} of its components? You can undo this.`, confirmLabel: 'Delete type', danger: true }))) return;
                 const ok = await attempt(() => deleteType(type.id, allComponents), 'Type deleted');
                 if (ok) {
                   await onSaved();
@@ -312,17 +360,18 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
               </div>
             </div>
             <div className="lb-unplaced">
-              <span className="small muted">Not on the card:</span>
-              {unplaced.length === 0 && <span className="small muted">every field is shown.</span>}
+              <span className="lb-unplaced-label">Add to card</span>
+              {unplaced.length === 0 && <span className="small muted">Every field is on the card.</span>}
               {unplaced.map((f) => (
-                <button key={f.key} type="button" className="chip" {...dragProps(f.key)} onClick={() => {
-                  place(f.key, { row: draft.layout.rows.length, newRow: true });
-                  setSelected(f.key);
-                }} title="Click to add as a new row, or drag onto the card">
+                <button key={f.key} type="button" className="chip add-chip" {...dragProps(f.key)} onClick={() => addToCard(f.key)} title={`Add “${f.label}” as a new row at the bottom, or drag it into a row`}>
                   <Icon name="plus" size={12} />
                   {f.label}
                 </button>
               ))}
+              <button type="button" className="chip" onClick={() => setAdding(true)} title="Create a new field and put it on the card">
+                <Icon name="plus" size={12} />
+                New field…
+              </button>
             </div>
           </section>
 
@@ -341,7 +390,7 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
           <section className="panel">
             <div className="panel-head">
               <h2>Fields</h2>
-              <button className="small" onClick={addField}>
+              <button className="small" onClick={() => setAdding(true)} title="Create a new data field for this component type">
                 <Icon name="plus" />
                 Add field
               </button>
@@ -353,11 +402,21 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
                   <button className="field-pick" onClick={() => setSelected(f.key)} aria-pressed={selected === f.key}>
                     <span className={`kind-dot k-${f.kind}`} aria-hidden="true" />
                     <span className="field-name">{f.label}</span>
-                    <span className="muted small">
-                      {FIELD_KINDS[f.kind]?.label}
-                      {placed.has(f.key) ? ' · on card' : ''}
-                    </span>
+                    <span className="muted small">{FIELD_KINDS[f.kind]?.label}</span>
                   </button>
+                  {f.kind === 'id' || f.kind === 'state' ? (
+                    <span className="field-place muted small" title={f.kind === 'id' ? 'The ID is shown in the details, not on the card' : 'States are switched in the details, not shown on the card'}>
+                      details only
+                    </span>
+                  ) : placed.has(f.key) ? (
+                    <button className="field-place on" onClick={() => setLayout((l) => dropEmptyRows(withoutCell(l, f.key)))} title="Shown on the card. Click to hide it from the card.">
+                      <Icon name="eye" size={14} /> On card
+                    </button>
+                  ) : (
+                    <button className="field-place" onClick={() => addToCard(f.key)} title="Only in the details. Click to add it to the card.">
+                      <Icon name="plus" size={14} /> Add to card
+                    </button>
+                  )}
                   <button className="icon-btn" onClick={() => moveField(i, -1)} disabled={i === 0} aria-label={`Move ${f.label} up`}>
                     <Icon name="chevronUp" />
                   </button>
@@ -398,6 +457,56 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   );
 }
 
+function AddFieldDialog({ existing, onClose, onAdd }) {
+  const [label, setLabel] = useState('');
+  const [kind, setKind] = useState('ability');
+  const [onCard, setOnCard] = useState(true);
+  const hasId = existing.some((f) => f.kind === 'id');
+  const taken = existing.some((f) => f.label.trim().toLowerCase() === label.trim().toLowerCase());
+  const submit = (e) => {
+    e.preventDefault();
+    if (!label.trim() || taken) return;
+    onAdd({ label: label.trim(), kind, onCard });
+    onClose();
+  };
+  return (
+    <Modal title="Add a field" onClose={onClose}>
+      <form className="form" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="af-label">Name</label>
+          <input id="af-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Cost, Faction, Flavor text" maxLength={60} required aria-invalid={taken} />
+          {taken && <p className="error small">A field with this name already exists.</p>}
+        </div>
+        <div className="field">
+          <label htmlFor="af-kind">Kind</label>
+          <select id="af-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+            {Object.entries(FIELD_KINDS).map(([k, v]) => (
+              <option key={k} value={k} disabled={k === 'id' && hasId}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+          <p className="hint">{FIELD_KINDS[kind].help}</p>
+        </div>
+        {kind !== 'id' && kind !== 'state' && (
+          <label className="check">
+            <input type="checkbox" checked={onCard} onChange={(e) => setOnCard(e.target.checked)} />
+            Show it on the card (as a new row at the bottom)
+          </label>
+        )}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={!label.trim() || taken}>
+            Add field
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function CellSettings({ cell, at, layout, kind, setCell, place, remove }) {
   const [ri, ci] = at;
   const rowLen = layout.rows[ri].cells.length;
@@ -429,7 +538,9 @@ function CellSettings({ cell, at, layout, kind, setCell, place, remove }) {
       </div>
       {rowLen > 1 && (
         <div className="field">
-          <label htmlFor="cs-width">Share of the row: {cell.width}</label>
+          <label htmlFor="cs-width" title="How much of the row's width this field gets, compared to the other fields in the row">
+            Share of the row: {cell.width}
+          </label>
           <input id="cs-width" type="range" min="1" max="6" step="1" value={cell.width} onChange={(e) => setCell(cell.key, { width: Number(e.target.value) })} />
         </div>
       )}
@@ -440,7 +551,7 @@ function CellSettings({ cell, at, layout, kind, setCell, place, remove }) {
               <label>Text size</label>
               <div className="seg">
                 {Object.entries(SIZES).map(([k, v]) => (
-                  <button key={k} type="button" className={cell.size === k ? 'on' : ''} onClick={() => setCell(cell.key, { size: k })} title={v}>
+                  <button key={k} type="button" className={cell.size === k ? 'on' : ''} onClick={() => setCell(cell.key, { size: k })} title={`${v} text`}>
                     {k.toUpperCase()}
                   </button>
                 ))}

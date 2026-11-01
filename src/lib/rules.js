@@ -7,15 +7,19 @@ export { commitInChunks };
 export const LABELS = ['Rulebook', 'Official Ruling', 'Community', 'Suggestion'];
 export const LABEL_CLASS = { Rulebook: 'rulebook', 'Official Ruling': 'official', Community: 'community', Suggestion: 'suggestion' };
 
-export const KINDS = {
-  rule: 'Rule',
-  note: 'Note',
-  change: 'Changed from Blood Rage',
-  tip: 'Tip',
-  example: 'Example',
-  flavor: 'Flavor',
-  summary: 'Quick reference',
-};
+/** Rule kinds until an admin edits the list (Admin → Rules → Rule kinds; stored in config/site). */
+export const DEFAULT_KINDS = [
+  { id: 'rule', label: 'Rule', color: '#9c9087' },
+  { id: 'note', label: 'Note', color: '#6d9ccf' },
+  { id: 'change', label: 'Changed from Blood Rage', color: '#d79a3b' },
+  { id: 'tip', label: 'Tip', color: '#6fae5a' },
+  { id: 'example', label: 'Example', color: '#6fae5a' },
+  { id: 'flavor', label: 'Flavor', color: '#8a7d72' },
+  { id: 'summary', label: 'Quick reference', color: '#d1a54b' },
+];
+
+/** The plain "rule" kind gets no badge; every other kind is shown on the rule. */
+export const kindInfo = (kinds, id) => kinds.find((k) => k.id === (id || 'rule')) || { id, label: id, color: '' };
 
 /** The built-in ruleset: every active rule, using its Rulebook version. Never stored. */
 export const RULEBOOK_SET = { id: 'rulebook', name: 'Rulebook (as printed)', description: 'Every rule exactly as printed in the official rulebook.', builtIn: true };
@@ -139,10 +143,12 @@ export async function moveRule(siblings, index, delta) {
   await commitInChunks(reordered.map((r, i) => (batch) => batch.update(doc(db, 'rules', r.id), { order: i + 1 })));
 }
 
-export async function addComment({ ruleId, versionId, text }, user) {
+/** A comment on a rule (`ruleId`) or a component (`componentId`). Rules keep a comment counter. */
+export async function addComment({ ruleId = null, componentId = null, versionId, text }, user) {
   const batch = writeBatch();
   batch.set(doc(collection(db, 'comments')), {
     ruleId,
+    ...(componentId ? { componentId } : {}),
     versionId: versionId || null,
     text,
     uid: user.uid,
@@ -151,14 +157,14 @@ export async function addComment({ ruleId, versionId, text }, user) {
     reactions: {},
     createdAt: serverTimestamp(),
   });
-  batch.update(doc(db, 'rules', ruleId), { commentCount: increment(1) });
+  if (ruleId) batch.update(doc(db, 'rules', ruleId), { commentCount: increment(1) });
   await batch.commit();
 }
 
 export async function deleteComment(comment) {
   const batch = writeBatch();
   batch.delete(doc(db, 'comments', comment.id));
-  batch.update(doc(db, 'rules', comment.ruleId), { commentCount: increment(-1) });
+  if (comment.ruleId) batch.update(doc(db, 'rules', comment.ruleId), { commentCount: increment(-1) });
   await batch.commit();
 }
 

@@ -6,6 +6,9 @@ import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
 import { useHistory, useUndoKeys } from './lib/history.js';
 import { Avatar, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
+import { DialogHost } from './components/dialogs.jsx';
+import Tooltips from './components/Tooltips.jsx';
+import { useTheme } from './lib/theme.js';
 import SetupNeeded from './components/SetupNeeded.jsx';
 import RulesPage from './pages/RulesPage.jsx';
 
@@ -13,6 +16,7 @@ import RulesPage from './pages/RulesPage.jsx';
 const ComponentsPage = lazy(() => import('./pages/ComponentsPage.jsx'));
 const AccountPage = lazy(() => import('./pages/AccountPage.jsx'));
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
+const HelpPage = lazy(() => import('./pages/HelpPage.jsx'));
 
 export default function App() {
   if (!configured) return <SetupNeeded />;
@@ -27,13 +31,14 @@ function Shell() {
   const route = useRoute();
   const { user, isAdmin, realUser, realRole, role, previewing, setViewAs } = useSession();
   const history = useHistory();
+  const theme = useTheme();
   useUndoKeys(useCallback((kind, label) => toast(`${kind === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'ok'), []));
   const lowerRoles = Object.keys(ROLES).slice(Object.keys(ROLES).indexOf(realRole));
   const [welcomeSeen, setWelcomeSeen] = useLocalStorage('brv-welcome-seen', false);
   const [showWelcome, setShowWelcome] = useState(!welcomeSeen);
 
   useEffect(() => {
-    const titles = { rules: 'Rules', components: 'Components', account: 'Account', admin: 'Admin' };
+    const titles = { rules: 'Rules', components: 'Components', account: 'Account', admin: 'Admin', help: 'Help' };
     document.title = `${titles[route.page] || 'Rules'} · Blood Rage Valhalla: Unofficial Living Rulebook`;
   }, [route.page]);
 
@@ -43,9 +48,10 @@ function Shell() {
   };
 
   const nav = [
-    { page: 'rules', label: 'Rules', icon: 'book' },
-    { page: 'components', label: 'Components', icon: 'grid' },
-    isAdmin && { page: 'admin', label: 'Admin', icon: 'shield' },
+    { page: 'rules', label: 'Rules', icon: 'book', tip: 'The rules, with versions, discussion and rulesets' },
+    { page: 'components', label: 'Components', icon: 'grid', tip: 'Browse the cards and other components' },
+    isAdmin && { page: 'admin', label: 'Admin', icon: 'shield', tip: 'Manage content, rulesets, people and backups' },
+    { page: 'help', label: 'Help', icon: 'help', tip: 'How everything on this site works' },
   ].filter(Boolean);
 
   return (
@@ -65,7 +71,7 @@ function Shell() {
         </a>
         <nav className="main-nav" aria-label="Main">
           {nav.map((n) => (
-            <a key={n.page} href={href(n.page)} className={route.page === n.page ? 'active' : ''} aria-current={route.page === n.page ? 'page' : undefined}>
+            <a key={n.page} href={href(n.page)} className={route.page === n.page ? 'active' : ''} aria-current={route.page === n.page ? 'page' : undefined} title={n.tip}>
               <Icon name={n.icon} />
               <span className="nav-label">{n.label}</span>
             </a>
@@ -103,7 +109,15 @@ function Shell() {
               </select>
             </label>
           )}
-          <button className="icon-btn" onClick={() => setShowWelcome(true)} title="About this site" aria-label="About this site">
+          <button
+            className="icon-btn"
+            onClick={theme.toggle}
+            title={`Switch to ${theme.theme === 'light' ? 'dark' : 'light'} mode${theme.following ? ' (now following your system setting)' : ''}`}
+            aria-label={`Switch to ${theme.theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            <Icon name={theme.theme === 'light' ? 'moon' : 'sun'} size={18} />
+          </button>
+          <button className="icon-btn about-btn" onClick={() => setShowWelcome(true)} title="About this site" aria-label="About this site">
             <Icon name="info" size={18} />
           </button>
           <a className={`account-link ${route.page === 'account' ? 'active' : ''}`} href={href('account')}>
@@ -137,6 +151,8 @@ function Shell() {
             <AccountPage />
           ) : route.page === 'admin' ? (
             <AdminPage route={route} />
+          ) : route.page === 'help' ? (
+            <HelpPage route={route} />
           ) : (
             <RulesPage route={route} />
           )}
@@ -152,6 +168,8 @@ function Shell() {
         </button>
       </footer>
       {showWelcome && <WelcomeModal onClose={closeWelcome} />}
+      <DialogHost />
+      <Tooltips />
     </>
   );
 }

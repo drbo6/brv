@@ -4,16 +4,17 @@ import { db } from '../../lib/firebase.js';
 import { onRevert, setDoc } from '../../lib/store.js';
 import { loadComponents, NEW_TYPE, saveType } from '../../lib/components.js';
 import { href, navigate } from '../../lib/router.js';
+import { useLive } from '../../lib/hooks.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner } from '../ui.jsx';
 import TypeEditor from './TypeEditor.jsx';
-import Importer from './Importer.jsx';
+import Importer, { SpreadsheetExport } from './Importer.jsx';
 import ComponentList from './ComponentList.jsx';
 
 const SUBTABS = [
-  { id: 'layout', label: 'Fields & layout' },
-  { id: 'import', label: 'Import spreadsheet' },
-  { id: 'list', label: 'Components' },
+  { id: 'list', label: 'Components', tip: 'Browse, edit, add and delete the components of this type' },
+  { id: 'layout', label: 'Fields & layout', tip: 'Define the data fields and arrange them on the card' },
+  { id: 'import', label: 'Spreadsheet', tip: 'Import components from, or export them to, an .xlsx or .csv file' },
 ];
 
 export default function ComponentsAdmin({ route }) {
@@ -22,6 +23,11 @@ export default function ComponentsAdmin({ route }) {
   useEffect(() => {
     reload().catch((e) => setData({ error: e }));
   }, [reload]);
+  // Other admins' changes move the shared counter: reload when it does.
+  const meta = useLive(() => doc(db, 'config', 'componentsMeta'), []);
+  useEffect(() => {
+    if (data && !data.error && (meta.data?.version || 0) !== data.version) reload();
+  }, [meta.data?.version]); // eslint-disable-line react-hooks/exhaustive-deps
   // Undo/redo changes components behind this page's back: reload when that happens.
   useEffect(
     () =>
@@ -36,7 +42,7 @@ export default function ComponentsAdmin({ route }) {
 
   const typeId = route.parts[1];
   const type = data.types.find((t) => t.id === typeId);
-  const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || (route.params.get('edit') ? 'list' : 'layout');
+  const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || 'list';
   const comps = type ? data.components.filter((c) => c.typeId === type.id) : [];
 
   const createType = async () => {
@@ -87,13 +93,18 @@ export default function ComponentsAdmin({ route }) {
           <>
             <nav className="tabs small" aria-label="Type sections">
               {SUBTABS.map((s) => (
-                <a key={s.id} href={href('admin', ['components', type.id], { tab: s.id })} className={sub === s.id ? 'on' : ''}>
+                <a key={s.id} href={href('admin', ['components', type.id], { tab: s.id })} className={sub === s.id ? 'on' : ''} title={s.tip}>
                   {s.label}
                 </a>
               ))}
             </nav>
             {sub === 'layout' && <TypeEditor key={type.id} type={type} comps={comps} allComponents={data.components} onSaved={reload} />}
-            {sub === 'import' && <Importer key={type.id} type={type} comps={comps} onDone={reload} />}
+            {sub === 'import' && (
+              <div className="col gap">
+                <SpreadsheetExport type={type} comps={comps} />
+                <Importer key={type.id} type={type} comps={comps} onDone={reload} />
+              </div>
+            )}
             {sub === 'list' && <ComponentList key={type.id} type={type} comps={comps} editId={route.params.get('edit')} onChanged={reload} />}
           </>
         )}

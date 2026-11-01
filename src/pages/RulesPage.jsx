@@ -1,37 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { collection, deleteField } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, KINDS, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { exportRulesPdf } from '../lib/pdf.js';
 import RuleCard from '../components/RuleCard.jsx';
+import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx';
 import { RuleDialog, SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { attempt, copyText, Empty, Icon, Spinner, toast } from '../components/ui.jsx';
+import { confirmDialog } from '../components/dialogs.jsx';
 
 export default function RulesPage({ route }) {
-  const { user, isAdmin, site, shorthands, requireUser } = useSession();
+  const { user, isAdmin, shorthands, requireUser, kinds } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const versions = useLive(() => collection(db, 'versions'), []);
-  const publicSets = useLive(() => query(collection(db, 'rulesets'), where('visibility', '==', 'public')), []);
-  const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
 
   // ----- ruleset selection -----
-  const linkedSetId = route.params.get('set');
-  const linkedSet = useLive(() => (linkedSetId && linkedSetId !== RULEBOOK_SET.id ? doc(db, 'rulesets', linkedSetId) : null), [linkedSetId]);
-  const [storedSetId, setStoredSetId] = useLocalStorage('brv-ruleset', null);
-
-  const allSets = useMemo(() => {
-    const seen = new Map([[RULEBOOK_SET.id, RULEBOOK_SET]]);
-    for (const s of [...(publicSets.data || []), ...(mySets.data || []), linkedSet.data].filter(Boolean)) seen.set(s.id, s);
-    return seen;
-  }, [publicSets.data, mySets.data, linkedSet.data]);
-
-  const selectedSet = allSets.get(linkedSetId) || allSets.get(storedSetId) || allSets.get(site.defaultRulesetId) || RULEBOOK_SET;
+  const choice = useRulesetChoice(route.params.get('set'));
+  const { selectedSet, setStoredSetId } = choice;
 
   // ----- derived rule data -----
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
@@ -75,8 +66,8 @@ export default function RulesPage({ route }) {
   }), []);
   const onUseVersion = useCallback((ruleId, vid) => setDraft((d) => ({ ...d, entries: { ...d.entries, [ruleId]: vid } })), []);
 
-  const selectSet = (id) => {
-    if (draft && changeCount && !confirm('Discard your unsaved ruleset changes?')) return;
+  const selectSet = async (id) => {
+    if (draft && changeCount && !(await confirmDialog({ title: 'Discard changes', message: 'Discard your unsaved ruleset changes?', confirmLabel: 'Discard', danger: true }))) return;
     endDraft(null);
     setViewVersion({});
     setStoredSetId(id);
@@ -159,7 +150,12 @@ export default function RulesPage({ route }) {
 
   const saveExisting = () =>
     requireUser(async () => {
-      const ok = await attempt(() => updateRuleset(selectedSet.id, { entries: draft.entries }), 'Ruleset saved');
+      // Write only the rules that changed, so edits others made to other rules in this set survive.
+      const patch = {};
+      for (const k of new Set([...Object.keys(draft.entries), ...Object.keys(baseEntries)])) {
+        if (draft.entries[k] !== baseEntries[k]) patch[`entries.${k}`] = draft.entries[k] ?? deleteField();
+      }
+      const ok = await attempt(() => updateRuleset(selectedSet.id, patch), 'Ruleset saved');
       if (ok) endDraft(null);
     });
 
@@ -182,13 +178,13 @@ export default function RulesPage({ route }) {
         code: it.rule.code,
         title: it.rule.title,
         label: it.shown?.label,
-        kindLabel: it.rule.kind && it.rule.kind !== 'rule' ? KINDS[it.rule.kind] : '',
+        kindLabel: it.rule.kind && it.rule.kind !== 'rule' ? kindInfo(kinds, it.rule.kind).label : '',
         inactive: !it.active,
         html: it.shown?.text || '',
       })),
     }));
     const name = draft ? `${selectedSet.name} (edited)` : selectedSet.name;
-    const filters = [q && `search "${q}"`, labelFilter && `label ${labelFilter}`, kindFilter && KINDS[kindFilter], showInactive && 'including inactive rules'].filter(Boolean).join(', ');
+    const filters = [q && `search "${q}"`, labelFilter && `label ${labelFilter}`, kindFilter && kindInfo(kinds, kindFilter).label, showInactive && 'including inactive rules'].filter(Boolean).join(', ');
     return attempt(() =>
       exportRulesPdf({
         title: 'Blood Rage: Valhalla - Living Rulebook',
@@ -232,40 +228,7 @@ export default function RulesPage({ route }) {
         <section className="ruleset-bar" aria-label="Ruleset">
           <div className="ruleset-pick">
             <label htmlFor="ruleset-select">Ruleset</label>
-            <select id="ruleset-select" value={selectedSet.id} onChange={(e) => selectSet(e.target.value)}>
-              <option value={RULEBOOK_SET.id}>
-                {RULEBOOK_SET.name}
-                {site.defaultRulesetId === RULEBOOK_SET.id ? ' — default' : ''}
-              </option>
-              {(publicSets.data || []).length > 0 && (
-                <optgroup label="Community rulesets">
-                  {publicSets.data.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                      {site.defaultRulesetId === s.id ? ' — default' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {(mySets.data || []).filter((s) => s.visibility !== 'public').length > 0 && (
-                <optgroup label="My rulesets">
-                  {mySets.data
-                    .filter((s) => s.visibility !== 'public')
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-              {linkedSet.data && linkedSet.data.visibility !== 'public' && linkedSet.data.ownerUid !== user?.uid && (
-                <optgroup label="Shared with you">
-                  <option value={linkedSet.data.id}>
-                    {linkedSet.data.name} (by {linkedSet.data.ownerName})
-                  </option>
-                </optgroup>
-              )}
-            </select>
+            <RulesetSelect choice={choice} onChange={selectSet} />
           </div>
           <p className="ruleset-desc">
             {selectedSet.description || (selectedSet.builtIn ? '' : `A ruleset by ${selectedSet.ownerName || 'a community member'}.`)}
@@ -309,9 +272,9 @@ export default function RulesPage({ route }) {
           </select>
           <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} aria-label="Filter by kind">
             <option value="">All kinds</option>
-            {Object.entries(KINDS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
+            {kinds.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
               </option>
             ))}
           </select>
@@ -407,7 +370,7 @@ export default function RulesPage({ route }) {
             <button className="icon-btn" onClick={draftHistory.redo} disabled={!draftHistory.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
               <Icon name="redo" />
             </button>
-            <button onClick={() => (!changeCount || confirm('Discard your changes?')) && endDraft(null)}>Discard</button>
+            <button onClick={async () => (!changeCount || (await confirmDialog({ title: 'Discard changes', message: `Discard your ${changeCount} unsaved change${changeCount === 1 ? '' : 's'}?`, confirmLabel: 'Discard', danger: true }))) && endDraft(null)}>Discard</button>
             {ownsSet && (
               <button className="primary" onClick={saveExisting} disabled={!changeCount}>
                 <Icon name="save" />

@@ -37,7 +37,7 @@ export function newField(label, kind = 'ability', existingKeys = []) {
 // like inline-flex items; `width` is a field's share of its row. One or more rows can `fill` the
 // remaining height. Text sizes are relative to the card's width, so cards look the same at any size.
 
-export const SIZES = { xs: 'Tiny', s: 'Small', m: 'Normal', l: 'Large', xl: 'Huge' };
+export const SIZES = { xs: 'Tiny', s: 'Small', m: 'Normal', l: 'Large', xl: 'Huge', xxl: 'Giant' };
 export const ALIGNS = ['left', 'center', 'right'];
 export const DEFAULT_CELL = { width: 1, size: 'm', align: 'left', bold: false, italic: false, muted: false, upper: false, label: false, prefix: '', suffix: '' };
 export const DEFAULT_ROW = { fill: false, band: false, divider: false };
@@ -164,6 +164,12 @@ export const bumpComponentsVersion = () => rawSetDoc(doc(db, 'config', 'componen
 onRevert((paths) => {
   if (paths.some((p) => p.startsWith('components/') || p.startsWith('componentTypes/'))) bumpComponentsVersion().catch((e) => console.warn(e));
 });
+
+/** The saved revision of a type, to notice when someone else saved it in the meantime. */
+export async function currentTypeRev(typeId) {
+  const snap = await getDoc(doc(db, 'componentTypes', typeId));
+  return snap.exists() ? snap.data().rev || 0 : 0;
+}
 
 export async function saveType(type) {
   const { id, ...data } = type;

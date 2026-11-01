@@ -3,7 +3,7 @@
 
 const STORE_KEY = 'brv-demo-db';
 const listeners = new Set();
-let store = load();
+let store = {}; // filled below, once Timestamp exists (load() revives timestamps)
 
 function load() {
   try {
@@ -34,6 +34,13 @@ function persistAndNotify() {
   queueMicrotask(() => listeners.forEach((l) => l()));
 }
 
+// Other tabs of the demo share localStorage: pick up their writes, so the demo shows live collaboration.
+window.addEventListener('storage', (e) => {
+  if (e.key !== STORE_KEY) return;
+  store = load();
+  listeners.forEach((l) => l());
+});
+
 export class Timestamp {
   constructor(ms) {
     this._ms = ms;
@@ -53,6 +60,8 @@ export class Timestamp {
     return new Timestamp(ms);
   }
 }
+
+store = load();
 
 const SENTINEL = Symbol('sentinel');
 export const serverTimestamp = () => ({ [SENTINEL]: 'ts' });
@@ -149,7 +158,8 @@ function querySnap(q) {
       entries = entries.filter(([, d]) => {
         const v = getPath(d, c.field);
         if (c.op === '==') return v === c.value;
-        if (c.op === '!=') return v !== c.value;
+        // Like Firestore, != never matches documents that lack the field.
+        if (c.op === '!=') return v !== undefined && v !== c.value;
         if (c.op === 'in') return c.value.includes(v);
         if (c.op === 'array-contains') return Array.isArray(v) && v.includes(c.value);
         throw new Error(`demo firestore: unsupported op ${c.op}`);

@@ -1,0 +1,204 @@
+.help-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.help-toc {
+  position: sticky;
+  top: calc(var(--header-h) + 16px);
+  align-self: start;
+  min-width: 0;
+}
+
+.help-toc summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  color: var(--gold-2);
+  margin-bottom: 8px;
+}
+
+.help-toc nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.help-toc a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.help-toc a:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.help-main {
+  min-width: 0;
+}
+
+.help-intro h1 {
+  margin: 0 0 4px;
+}
+
+.help-section {
+  padding: 18px 0 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+  line-height: 1.6;
+}
+
+.help-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+
+.help-section h2 .icon {
+  color: var(--blood-2);
+}
+
+.help-section h4 {
+  margin: 16px 0 6px;
+  color: var(--gold-2);
+}
+
+.help-section ul,
+.help-section ol {
+  padding-left: 1.3em;
+}
+
+.help-section li {
+  margin: 4px 0;
+}
+
+.help-section .icon {
+  vertical-align: -0.15em;
+}
+
+.help-tip {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+}
+
+.help-tip .icon {
+  color: var(--gold-2);
+  margin-top: 0.25em;
+}
+
+.help-defs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.help-defs dd {
+  margin: 0;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.help-table th,
+.help-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.help-table td:first-child {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.help-faq dt {
+  font-weight: 700;
+  margin-top: 12px;
+}
+
+.help-faq dd {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+
+.help-keys {
+  white-space: nowrap;
+}
+
+.help-section kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: var(--font-ui);
+  font-size: 0.82em;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .help-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .help-toc {
+    position: static;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .help-toc summary {
+    margin: 0;
+  }
+
+  .help-toc nav {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .help-defs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .help-table td:first-child {
+    white-space: normal;
+  }
+}

@@ -4,6 +4,8 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import { useLive } from './hooks.js';
 import { clearHistory } from './store.js';
+import { DEFAULT_KINDS } from './rules.js';
+import { alertDialog } from '../components/dialogs.jsx';
 
 const SessionCtx = createContext(null);
 
@@ -62,7 +64,7 @@ export function SessionProvider({ children }) {
 
   const signIn = useCallback(async () => {
     if (viewAs === 'visitor') {
-      alert('You are previewing the site as a visitor. Stop previewing to sign in or make changes.');
+      alertDialog({ title: 'Previewing as a visitor', message: 'Stop previewing (in the banner at the top) to sign in or make changes.' });
       return false;
     }
     try {
@@ -71,7 +73,7 @@ export function SessionProvider({ children }) {
       await signInWithPopup(auth, provider);
       return true;
     } catch (e) {
-      if (e?.code !== 'auth/popup-closed-by-user' && e?.code !== 'auth/cancelled-popup-request') alert(`Sign-in failed: ${e.message}`);
+      if (e?.code !== 'auth/popup-closed-by-user' && e?.code !== 'auth/cancelled-popup-request') alertDialog({ title: 'Sign-in failed', message: e.message });
       return false;
     }
   }, [viewAs]);
@@ -104,6 +106,7 @@ export function SessionProvider({ children }) {
       previewing: role !== realRole,
       setViewAs,
       site: { ...DEFAULT_SITE, ...(site.data || {}) },
+      kinds: site.data?.kinds?.length ? site.data.kinds : DEFAULT_KINDS,
       shorthands: shorthands.data?.items || {},
       signIn,
       signOut: () => signOut(auth),

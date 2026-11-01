@@ -1,0 +1,587 @@
+import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../components/ui.jsx';
+import '../help.css';
+
+const Tip = ({ children }) => (
+  <aside className="help-tip">
+    <Icon name="bulb" />
+    <div>{children}</div>
+  </aside>
+);
+
+const Keys = ({ k }) => (
+  <span className="help-keys">
+    {k.split('+').map((x, i) => (
+      <span key={i}>
+        {i > 0 && '+'}
+        <kbd>{x}</kbd>
+      </span>
+    ))}
+  </span>
+);
+
+const TOPICS = [
+  {
+    id: 'about',
+    title: 'What this site is',
+    icon: 'info',
+    body: (
+      <>
+        <p>
+          <b>Blood Rage: Valhalla</b> is a great game, but its rulebook leaves some questions open. This site is an unofficial, community-maintained living rulebook: every rule from
+          the book, plus official rulings, community clarifications and suggested balance changes, all in one searchable place.
+        </p>
+        <ul>
+          <li>
+            <b>Visitors</b> can read everything: rules, versions, discussions, rulesets and cards.
+          </li>
+          <li>
+            <b>Signed-in members</b> can react, discuss, suggest changes and save their own rulesets.
+          </li>
+          <li>
+            <b>Admins</b> curate the content: they adopt suggestions, publish rulesets, manage cards and keep backups.
+          </li>
+        </ul>
+        <p className="muted small">This is a fan project and is not affiliated with the game's publishers.</p>
+      </>
+    ),
+  },
+  {
+    id: 'reading',
+    title: 'Reading the rules',
+    icon: 'book',
+    body: (
+      <>
+        <p>The Rules page reads like a book. Each rule shows its ID, title and text; nothing else gets in the way.</p>
+        <ul>
+          <li>
+            <b>Click a rule</b> (its text or title) to open its tools: versions, reactions, discussion, suggestions and the link button. Click again to close it. One rule is open at a
+            time.
+          </li>
+          <li>
+            <b>Rule IDs</b> like <code>SUM.1</code> are permanent. Moving a rule or renaming a section never changes them, so they are safe to cite. Section numbers such as{' '}
+            <i>5.3.1</i> are only for display and can change.
+          </li>
+          <li>
+            <b>Copy link</b> <Icon name="link" size={14} /> gives a direct link that opens the site on that rule.
+          </li>
+          <li>
+            <b>Search</b> looks through IDs, titles and the text of every version.
+          </li>
+          <li>
+            <b>Filters</b> narrow the list by version label (for example "Has an Official Ruling") or by kind.
+          </li>
+          <li>
+            <b>Show inactive</b> also lists rules that are not part of the current ruleset, greyed out, and suggested new rules.
+          </li>
+          <li>
+            The <b>Contents</b> list jumps to any section. On phones it starts collapsed above the rules.
+          </li>
+          <li>
+            <b>PDF</b> <Icon name="download" size={14} /> downloads exactly the rules currently shown, with your ruleset, search and filters applied. Images in rules appear as{' '}
+            <i>[Image: description]</i>.
+          </li>
+        </ul>
+        <Tip>Small hints next to a closed rule tell you when it has more versions or comments, so you know where the discussion is.</Tip>
+      </>
+    ),
+  },
+  {
+    id: 'versions',
+    title: 'Versions and labels',
+    icon: 'layers',
+    body: (
+      <>
+        <p>A rule can have several versions. Open a rule and use the arrows to step through them. Each version carries a label:</p>
+        <dl className="help-defs">
+          <dt>
+            <span className="label l-rulebook">Rulebook</span>
+          </dt>
+          <dd>The text exactly as printed, with its page number.</dd>
+          <dt>
+            <span className="label l-official">Official Ruling</span>
+          </dt>
+          <dd>A clarification from the designers or publisher.</dd>
+          <dt>
+            <span className="label l-community">Community</span>
+          </dt>
+          <dd>A clarification or balance change the community has agreed on.</dd>
+          <dt>
+            <span className="label l-suggestion">Suggestion</span>
+          </dt>
+          <dd>A proposal by a member, open for reactions and discussion.</dd>
+        </dl>
+        <p>
+          The version you see first is the one your ruleset uses. If you browse to another one, it is tagged <span className="tag t-warn">Not in …</span> so you always know which
+          text applies at your table.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'kinds',
+    title: 'Rule kinds',
+    icon: 'grid',
+    body: (
+      <>
+        <p>
+          Every rule has a <b>kind</b>: a small colored badge such as <i>Rule</i>, <i>Note</i>, <i>Changed from Blood Rage</i>, <i>Tip</i>, <i>Example</i>, <i>Flavor</i> or{' '}
+          <i>Quick reference</i>. Kinds are only a category: they help readers skim and can be used as a filter. They don't change how a rule works.
+        </p>
+        <ul>
+          <li>
+            Admins manage the list of kinds (name and color) in <b>Admin → Rules → Rule kinds</b>.
+          </li>
+          <li>
+            The kind of a rule is set in its <b>Rule details</b> dialog: open the rule and choose <i>Rule details</i> in the Admin row.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'reactions',
+    title: 'Reactions and discussion',
+    icon: 'message',
+    body: (
+      <>
+        <p>Signed-in members can react to each version:</p>
+        <ul>
+          <li>👍 Agree: this wording is right or this change is good.</li>
+          <li>👎 Disagree.</li>
+          <li>❓ Unclear: this still leaves questions.</li>
+        </ul>
+        <p>
+          Reactions belong to a version, not the whole rule: agreeing with the printed text says nothing about a community rewrite. Click your reaction again to take it back.
+        </p>
+        <p>
+          <b>Discuss</b> opens the comment thread. Each comment remembers which version its author was looking at, so later readers know what was being discussed. You can edit or
+          delete your own comments, and react to others'.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'suggesting',
+    title: 'Suggesting changes',
+    icon: 'bulb',
+    body: (
+      <>
+        <ul>
+          <li>
+            <b>Suggest change</b> on an open rule adds your wording as a new <i>Suggestion</i> version. Add a rationale or source so others understand why.
+          </li>
+          <li>
+            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It gets a temporary ID like <code>SUG-4KQ2</code> until an admin approves it and gives it a permanent one.
+            Turn on <i>Show inactive</i> to see suggested rules.
+          </li>
+          <li>You can edit your own suggestions at any time, and withdraw a suggested rule as long as nobody has commented on it.</li>
+        </ul>
+        <h4>The text editor</h4>
+        <p>
+          Type plain text: blank lines become paragraphs. The toolbar adds <b>bold</b>, <i>italic</i>, bulleted lists and links. <b>Image</b> <Icon name="image" size={14} />{' '}
+          inserts a picture hosted elsewhere (Imgur, BoardGameGeek, a public cloud link…): paste its <code>https://</code> address, describe it for screen readers and optionally add
+          a caption. Use <b>Preview</b> to check the result. Shorthands such as <code>[rage]</code> turn into icons.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'rulesets',
+    title: 'Rulesets',
+    icon: 'layers',
+    body: (
+      <>
+        <p>
+          A ruleset decides which rules are active and which version of each rule (and of each card) applies. The built-in <b>Rulebook (as printed)</b> set uses every printed rule
+          and card.
+        </p>
+        <ul>
+          <li>
+            Pick a ruleset at the top of the Rules page. Your choice is remembered on this device.
+          </li>
+          <li>
+            <b>Customize</b> starts editing: switch rules <i>In ruleset</i> on or off, or browse to another version and choose <i>Use this version</i>. Undo and redo work while you customize.
+            Cards work differently: open a card, step to another version and choose <i>Use in …</i> to put it in a ruleset you own, so a ruleset can carry balance changes to cards too.
+          </li>
+          <li>
+            <b>Save</b> updates a ruleset you own; <b>Save as new…</b> makes a copy.
+          </li>
+          <li>
+            Share a ruleset with the link button <Icon name="link" size={14} />. New rulesets are private but anyone with the link can view them.
+          </li>
+          <li>Admins can make a ruleset public for everyone and choose the site's default ruleset.</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'components',
+    title: 'Components and cards',
+    icon: 'grid',
+    body: (
+      <>
+        <p>The Components page shows every card (and other components) as tidy cards of the same size.</p>
+        <ul>
+          <li>
+            <b>Search</b>, <b>filter</b> (by type, god…), <b>sort</b> and change the <b>card size</b> with the slider.
+          </li>
+          <li>
+            Click a card for its <b>details</b>: every field, including ones not shown on the card, and a link to it.
+          </li>
+          <li>
+            A <b>⟲</b> badge means the card has alternate states (flipped, upgraded…). Switch between them in the details.
+          </li>
+        </ul>
+        <h4>Versions, reactions and discussion</h4>
+        <p>
+          Cards work just like rules. Each card can have versions: the <span className="label l-rulebook">Printed</span> card plus <i>Official Ruling</i>, <i>Community</i> and{' '}
+          <i>Suggestion</i> versions. React 👍 👎 ❓, discuss, and use <b>Suggest change</b> in the card details to propose new values. The selected ruleset decides which version of
+          each card is shown.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'undo',
+    title: 'Undo and redo',
+    icon: 'undo',
+    body: (
+      <>
+        <p>Every change you save can be undone, from reactions to deleting a rule or importing a whole spreadsheet.</p>
+        <ul>
+          <li>
+            The confirmation message after an action has an <b>Undo</b> button.
+          </li>
+          <li>
+            The <Icon name="undo" size={14} /> and <Icon name="redo" size={14} /> buttons in the header undo and redo your latest changes. Hover them to see what they will undo.
+          </li>
+          <li>
+            Keyboard: <Keys k="Ctrl+Z" /> to undo, <Keys k="Ctrl+Shift+Z" /> or <Keys k="Ctrl+Y" /> to redo (<kbd>⌘</kbd> on a Mac).
+          </li>
+          <li>Editors with unsaved changes, like customizing a ruleset or the card layout editor, have their own undo; the keyboard shortcuts use it first.</li>
+          <li>While you type in a text box, the browser's normal text undo applies.</li>
+        </ul>
+        <Tip>
+          The history belongs to this browser tab and is cleared when you sign out. Rarely, an undo is refused because your permissions no longer allow it, for example after someone
+          else deleted the same item.
+        </Tip>
+      </>
+    ),
+  },
+  {
+    id: 'together',
+    title: 'Working together',
+    icon: 'user',
+    body: (
+      <>
+        <ul>
+          <li>Everything updates live: new rules, versions, reactions, comments and card edits appear for everyone without reloading.</li>
+          <li>Changes are saved field by field, so two people editing different parts of the same thing don't overwrite each other.</li>
+          <li>
+            If someone else changes what you are editing, you get a warning and can choose to <b>Load their version</b> or keep yours. If you save anyway, you are asked first, because it replaces their changes.
+          </li>
+        </ul>
+        <p>Admins can coordinate in the Admin chat.</p>
+      </>
+    ),
+  },
+  {
+    id: 'view-as',
+    title: 'View as',
+    icon: 'eye',
+    body: (
+      <>
+        <p>
+          The <Icon name="eye" size={14} /> menu in the header shows the site as someone with less access: admins can preview it as a <i>signed-in user</i> or a <i>visitor</i>, and
+          members as a <i>visitor</i>. A banner reminds you that you are previewing; <b>Stop previewing</b> returns to your own view.
+        </p>
+        <p className="muted">The preview only lasts for the current tab, so reloading or opening a new tab never locks an admin out of the admin tools.</p>
+      </>
+    ),
+  },
+  {
+    id: 'theme',
+    title: 'Light and dark mode',
+    icon: 'info',
+    body: <p>The site follows your device's light or dark setting. Use the theme toggle in the header to switch manually; your choice is remembered on this device.</p>,
+  },
+  {
+    id: 'account',
+    title: 'Your account',
+    icon: 'user',
+    body: (
+      <ul>
+        <li>
+          Sign in with Google from the <b>Account</b> page. Only your name and profile picture are shown to others.
+        </li>
+        <li>The Account page lists your rulesets: open, rename, share or delete them.</li>
+        <li>
+          It also shows your <b>user ID</b>. To become an admin, send it to an existing admin.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: 'admin',
+    title: 'Admin guide',
+    icon: 'shield',
+    body: (
+      <>
+        <p>Admins see an Admin tab with these sections.</p>
+        <h4>Admin chat</h4>
+        <p>A private chat for the admin team. Enter sends, Shift+Enter starts a new line.</p>
+        <h4>Rules</h4>
+        <ul>
+          <li>
+            <b>Suggestions queue:</b> new rule and card suggestions. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to discuss, or delete it.
+            Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>), which gives them a permanent ID.
+          </li>
+          <li>
+            <b>Sections:</b> add sections, rename them, change their short code, nest them and reorder them. Rule IDs never change when you do.
+          </li>
+          <li>
+            <b>Rule kinds:</b> the list of kinds with their name and color.
+          </li>
+          <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (ID, section, kind, page, status), move it, approve it or delete it.</li>
+        </ul>
+        <h4>Rulesets</h4>
+        <p>Make rulesets public or private and choose the site default that new visitors see.</p>
+      </>
+    ),
+  },
+  {
+    id: 'admin-components',
+    title: 'Managing components',
+    icon: 'grid',
+    body: (
+      <>
+        <p>
+          In <b>Admin → Components</b>, pick a component type (or create one) and use its three tabs:
+        </p>
+        <ol>
+          <li>
+            <b>Components:</b> the list of all components of that type. Search, edit, add or delete them. Use <i>Columns</i> to choose which fields are shown in the list.
+          </li>
+          <li>
+            <b>Fields &amp; layout:</b> the type's fields and how its card looks.
+          </li>
+          <li>
+            <b>Spreadsheet:</b> import an <code>.xlsx</code> or <code>.csv</code> file (map its columns to fields; rows are matched by ID), or export all components to{' '}
+            <code>.xlsx</code> or <code>.csv</code>.
+          </li>
+        </ol>
+        <h4>Field kinds</h4>
+        <table className="help-table">
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>Use it for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ID</td>
+              <td>The unique identifier. Exactly one per type; imports update components with the same ID.</td>
+            </tr>
+            <tr>
+              <td>Title</td>
+              <td>The component's name. Doesn't need to be unique.</td>
+            </tr>
+            <tr>
+              <td>Type</td>
+              <td>A category such as type, faction or god. Can be offered as a filter and can set the card's accent color.</td>
+            </tr>
+            <tr>
+              <td>Image</td>
+              <td>An external image URL, or a value inserted into a URL template.</td>
+            </tr>
+            <tr>
+              <td>Ability</td>
+              <td>Gameplay text. HTML and shorthands are rendered.</td>
+            </tr>
+            <tr>
+              <td>Lore</td>
+              <td>Flavor text without gameplay effect.</td>
+            </tr>
+            <tr>
+              <td>Value</td>
+              <td>A number such as a cost or strength. Sorts numerically.</td>
+            </tr>
+            <tr>
+              <td>State</td>
+              <td>Marks a component as an alternate state (flipped, upgraded…) of another one, with a state name.</td>
+            </tr>
+          </tbody>
+        </table>
+        <h4>Card layout</h4>
+        <ul>
+          <li>A card is a stack of <b>rows</b>. Fields in a row sit side by side; each field has a <b>share</b> of the row's width.</li>
+          <li>
+            Rows can <b>Fill</b> the remaining height (long text fades out), be <b>Highlighted</b> in the accent color, or have a <b>Line</b> above them.
+          </li>
+          <li>
+            Each field on the card has a text size from XS to XXL, alignment, bold, italic, subdued, capitals, an optional field name, and text before or after the value (for example{' '}
+            <code>+</code> before a strength or <code>[rage]</code> after a cost).
+          </li>
+          <li>
+            <b>Adding a field to the card:</b> use <i>Add to card</i> in the layout panel or the field list, or drag the field onto the card. New fields are placed on the card
+            automatically. <i>Hide from card</i> takes a field off again; it still appears in the details.
+          </li>
+          <li>The card shape (width ÷ height) is shared by all cards of the type, and text scales with the card size.</li>
+          <li>The accent color can come from a Type field, for example red Battle cards and green Quest cards.</li>
+        </ul>
+        <h4>Shorthands</h4>
+        <p>
+          Shorthands turn <code>[keyword]</code> in any card or rule text into an emoji or a small image. Define them in the Shorthands panel of Admin → Components.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'admin-data',
+    title: 'People, backups and imports',
+    icon: 'database',
+    body: (
+      <>
+        <h4>People</h4>
+        <p>Everyone who has signed in is listed here. Promote members to admin or remove admin rights.</p>
+        <h4>Backup &amp; import</h4>
+        <ul>
+          <li>
+            <b>Export</b> downloads any set of collections as one JSON file. Keep regular backups.
+          </li>
+          <li>
+            <b>Import</b> reads such a file. <i>Merge</i> adds and overwrites documents with the same ID and leaves everything else alone. <i>Replace</i> makes each chosen collection
+            match the file exactly.
+          </li>
+          <li>Admins, user profiles and admin chat are only imported when you tick them, and Replace never removes your own admin entry.</li>
+          <li>Imports can be undone.</li>
+        </ul>
+        <Tip>
+          The repository contains <code>imports/blood-rage-valhalla.json</code> with the transcribed rulebook, the card type and layout, all cards and the icon shorthands. Import it in
+          Merge mode to set up a new site.
+        </Tip>
+      </>
+    ),
+  },
+  {
+    id: 'shortcuts',
+    title: 'Keyboard shortcuts',
+    icon: 'edit',
+    body: (
+      <table className="help-table">
+        <tbody>
+          <tr>
+            <td>
+              <Keys k="Ctrl+Z" />
+            </td>
+            <td>Undo</td>
+          </tr>
+          <tr>
+            <td>
+              <Keys k="Ctrl+Shift+Z" /> or <Keys k="Ctrl+Y" />
+            </td>
+            <td>Redo</td>
+          </tr>
+          <tr>
+            <td>
+              <kbd>Esc</kbd>
+            </td>
+            <td>Close a dialog</td>
+          </tr>
+          <tr>
+            <td>
+              <kbd>Enter</kbd>
+            </td>
+            <td>Confirm a dialog</td>
+          </tr>
+          <tr>
+            <td>
+              <kbd>Tab</kbd>
+            </td>
+            <td>Move between controls; every action can be reached without a mouse</td>
+          </tr>
+        </tbody>
+      </table>
+    ),
+  },
+  {
+    id: 'faq',
+    title: 'Questions',
+    icon: 'search',
+    body: (
+      <dl className="help-faq">
+        <dt>Why can't I see a rule?</dt>
+        <dd>It may not be part of the current ruleset (turn on Show inactive), or a search or filter hides it.</dd>
+        <dt>How do I cite a rule?</dt>
+        <dd>
+          Use its ID, for example <code>SUM.1</code>, or the link from the rule's link button. Both stay valid when rules are reordered.
+        </dd>
+        <dt>Who can change what?</dt>
+        <dd>
+          Visitors read. Signed-in members react, comment, suggest rules and versions, edit their own suggestions and comments, and save their own rulesets. Admins can change
+          everything else.
+        </dd>
+        <dt>My change disappeared. Can I get it back?</dt>
+        <dd>If you made it in this tab, use Undo. Admins can also restore content from a backup.</dd>
+        <dt>Is this official?</dt>
+        <dd>No. Official rulings are marked as such, but the site itself is run by fans.</dd>
+      </dl>
+    ),
+  },
+];
+
+export default function HelpPage({ route }) {
+  const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
+  const jumped = useRef(null);
+  const topic = route?.parts?.[0];
+
+  const go = (id) => document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  useEffect(() => {
+    if (!topic || jumped.current === topic) return;
+    jumped.current = topic;
+    document.getElementById(`help-${topic}`)?.scrollIntoView({ block: 'start' });
+  }, [topic]);
+
+  return (
+    <div className="help-layout">
+      <aside className="help-toc" aria-label="Help topics">
+        <details open={tocOpen}>
+          <summary>Topics</summary>
+          <nav>
+            {TOPICS.map((t) => (
+              <a
+                key={t.id}
+                href={`#/help/${t.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  go(t.id);
+                }}
+              >
+                <Icon name={t.icon} size={14} />
+                <span>{t.title}</span>
+              </a>
+            ))}
+          </nav>
+        </details>
+      </aside>
+      <div className="help-main">
+        <header className="help-intro">
+          <h1>Help</h1>
+          <p className="muted">Everything this site can do, for readers, members and admins.</p>
+        </header>
+        {TOPICS.map((t) => (
+          <section key={t.id} id={`help-${t.id}`} className="help-section" aria-labelledby={`help-h-${t.id}`}>
+            <h2 id={`help-h-${t.id}`}>
+              <Icon name={t.icon} size={18} />
+              {t.title}
+            </h2>
+            {t.body}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}

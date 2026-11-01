@@ -150,9 +150,9 @@ export default function Importer({ type, comps, onDone }) {
 
   return (
     <section className="panel importer">
-      <h2>Import a spreadsheet into “{type.name}”</h2>
+      <h2>Import</h2>
       <p className="small muted">
-        Upload an .xlsx, .xls or .csv file with one component per row and column headers in the first row. Rows are matched by their ID: existing components are updated, new ones are
+        Upload an .xlsx, .xls or .csv file with one component per row and column headers in the first row. New columns can become new fields. Rows are matched by their ID: existing components are updated, new ones are
         added.
       </p>
       <label className="file-drop">
@@ -249,6 +249,47 @@ export default function Importer({ type, comps, onDone }) {
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+/** Download a type's components as a spreadsheet. The headers match the field names, so it imports back. */
+export function SpreadsheetExport({ type, comps }) {
+  const [busy, setBusy] = useState(false);
+  const save = async (format) => {
+    setBusy(true);
+    await attempt(async () => {
+      const XLSX = await import('xlsx');
+      const header = type.fields.map((f) => f.label);
+      const rows = comps.map((c) =>
+        type.fields.map((f) => {
+          const v = c.data[f.key];
+          // A state is stored as { of, name }; the spreadsheet holds the ID of the component it belongs to.
+          return f.kind === 'state' ? (v?.of ?? '') : (v ?? '');
+        }),
+      );
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), type.name.replace(/[\/?*[\]:]/g, ' ').slice(0, 31) || 'Components');
+      XLSX.writeFile(wb, `${type.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.${format}`, { bookType: format });
+    });
+    setBusy(false);
+  };
+  return (
+    <section className="panel">
+      <h2>Export</h2>
+      <p className="small muted">
+        Download all {comps.length} “{type.name}” components with one column per field. Edit the file and import it again below to update them in bulk.
+      </p>
+      <div className="row gap wrap">
+        <button onClick={() => save('xlsx')} disabled={busy || !comps.length} title="Excel workbook">
+          <Icon name="download" />
+          Download .xlsx
+        </button>
+        <button onClick={() => save('csv')} disabled={busy || !comps.length} title="Comma-separated values, for any spreadsheet program">
+          <Icon name="download" />
+          Download .csv
+        </button>
+      </div>
     </section>
   );
 }

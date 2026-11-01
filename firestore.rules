@@ -131,6 +131,39 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Card versions work like rule versions: users suggest, admins label and edit.
+    match /componentVersions/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (signedIn()
+        && request.resource.data.label == 'Suggestion'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.data is map
+        && request.resource.data.data.size() <= 50
+        && noReactions());
+      allow update: if isAdmin()
+        || ownReactionOnly()
+        || (signedIn()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.label == 'Suggestion'
+          && onlyChanged(['data', 'note', 'updatedAt'])
+          && request.resource.data.data is map);
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
+    }
+
+    // Reactions to the printed version of a card, kept apart from the admin-only component docs.
+    match /componentMeta/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['reactions'])
+        && request.resource.data.reactions.keys().hasOnly([request.auth.uid])
+        && request.resource.data.reactions[request.auth.uid] in ['up', 'down', 'q'];
+      allow update: if isAdmin() || ownReactionOnly();
+      // Lets a user undo the reaction that created this document, while it holds only theirs.
+      allow delete: if isAdmin() || (signedIn()
+        && resource.data.keys().hasOnly(['reactions'])
+        && resource.data.reactions.keys().hasOnly([request.auth.uid]));
+    }
+
     match /adminChat/{id} {
       allow read: if isAdmin();
       allow create: if isAdmin() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);

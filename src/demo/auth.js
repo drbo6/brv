@@ -1,6 +1,7 @@
 // Stand-in for `firebase/auth` in demo mode. "Signing in" makes you a demo user;
 // the first demo user is made an admin so every screen can be tried out.
 import { doc, setDoc } from './firestore.js';
+import { promptDialog } from '../components/dialogs.jsx';
 
 const KEY = 'brv-demo-user';
 const subs = new Set();
@@ -33,7 +34,9 @@ export function onAuthStateChanged(_auth, cb) {
 }
 
 export async function signInWithPopup() {
-  const name = window.prompt('Demo sign-in: choose a display name.\nThe name "Admin" signs in as a site admin.', 'Admin');
+  const name = (
+    await promptDialog({ title: 'Demo sign-in', message: 'Choose a display name. The name “Admin” signs in as a site admin.', label: 'Display name', initial: 'Admin', confirmLabel: 'Sign in' })
+  )?.trim();
   if (!name) throw Object.assign(new Error('cancelled'), { code: 'auth/popup-closed-by-user' });
   const uid = 'demo-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   current = { uid, displayName: name, photoURL: '', email: `${uid}@example.com` };

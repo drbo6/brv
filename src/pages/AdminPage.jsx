@@ -4,10 +4,12 @@ import { addDoc, deleteDoc, setDoc, updateDoc } from '../lib/store.js';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, deleteRuleset, LABEL_CLASS, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
+import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
+import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo } from '../components/ui.jsx';
+import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
 const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
@@ -152,6 +154,7 @@ function RulesAdmin() {
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
+  const cardSuggestions = useLive(() => query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const ruleById = useMemo(() => new Map((rules.data || []).map((r) => [r.id, r])), [rules.data]);
 
@@ -194,7 +197,7 @@ function RulesAdmin() {
                     <button className="small" onClick={() => attempt(() => updateVersion(v.id, { label: 'Official Ruling' }), 'Labeled Official Ruling')}>
                       Mark Official Ruling
                     </button>
-                    <button className="small danger" onClick={() => confirm('Delete this suggestion?') && attempt(() => deleteDoc(doc(db, 'versions', v.id)), 'Deleted')}>
+                    <button className="small danger" onClick={async () => (await confirmDialog({ title: 'Delete suggestion', message: 'Delete this suggested version?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'versions', v.id)), 'Suggestion deleted')}>
                       Delete
                     </button>
                   </div>
@@ -204,10 +207,155 @@ function RulesAdmin() {
           </ul>
         )}
         {suggestedRules.length > 0 && <p className="small muted">{suggestedRules.length} suggested new rule(s) — approve them from the rule card on the Rules page (turn on “Show inactive”).</p>}
+        <h3 className="queue-title">Card suggestions</h3>
+        {cardSuggestions.loading ? (
+          <Spinner />
+        ) : !cardSuggestions.data?.length ? (
+          <p className="muted small">No card suggestions waiting.</p>
+        ) : (
+          <ul className="queue">
+            {[...cardSuggestions.data]
+              .sort((a, b) => millis(b.createdAt) - millis(a.createdAt))
+              .map((v) => {
+                const c = reactionCounts(v.reactions);
+                return (
+                  <li key={v.id}>
+                    <div className="queue-head">
+                      <a href={href('components', [v.typeId, v.componentId])} title="Open the card to compare versions and discuss">
+                        <b>{v.componentId.split('__').pop()}</b> {v.data?.title || ''}
+                      </a>
+                      <span className="small muted">changes {Object.keys(v.data || {}).join(', ')}</span>
+                    </div>
+                    <p className="small muted">
+                      by {v.createdByName} · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
+                      {v.note && ` · “${v.note}”`}
+                    </p>
+                    <div className="row gap wrap">
+                      <button className="small" onClick={() => attempt(() => updateCardVersion(v.id, { label: 'Community' }), 'Labeled Community')}>
+                        Mark Community
+                      </button>
+                      <button className="small" onClick={() => attempt(() => updateCardVersion(v.id, { label: 'Official Ruling' }), 'Labeled Official Ruling')}>
+                        Mark Official Ruling
+                      </button>
+                      <button
+                        className="small danger"
+                        onClick={async () =>
+                          (await confirmDialog({ title: 'Delete suggestion', message: 'Delete this suggested card version?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteCardVersion(v.id), 'Suggestion deleted')
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
       </section>
 
       <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
+      <KindsEditor rules={rules.data || []} />
     </div>
+  );
+}
+
+/** Admins define the list of rule kinds: a name and a color each. Rules store the kind's id. */
+function KindsEditor({ rules }) {
+  const { kinds } = useSession();
+  const [rows, setRows] = useState(kinds);
+  useEffect(() => {
+    setRows(kinds);
+  }, [kinds]);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(kinds);
+  const used = (id) => rules.filter((r) => (r.kind || 'rule') === id).length;
+  const update = (i, patch) => setRows((list) => list.map((k, j) => (j === i ? { ...k, ...patch } : k)));
+  const move = (i, d) =>
+    setRows((list) => {
+      const next = [...list];
+      [next[i], next[i + d]] = [next[i + d], next[i]];
+      return next;
+    });
+
+  const add = async () => {
+    const label = await promptDialog({
+      title: 'New rule kind',
+      label: 'Name',
+      placeholder: 'e.g. Errata, Variant, Clarification',
+      confirmLabel: 'Add kind',
+      validate: (v) => (rows.some((k) => k.label.toLowerCase() === v.trim().toLowerCase()) ? 'That kind already exists.' : ''),
+    });
+    if (!label?.trim()) return;
+    let id = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'kind';
+    while (rows.some((k) => k.id === id)) id += '-2';
+    setRows([...rows, { id, label: label.trim(), color: '#8a7d72' }]);
+  };
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Rule kinds</h2>
+        <div className="row gap">
+          <button className="small" onClick={add}>
+            <Icon name="plus" />
+            Add kind
+          </button>
+          <button className="small primary" disabled={!dirty} onClick={() => attempt(() => setDoc(doc(db, 'config', 'site'), { kinds: rows }, { merge: true }), 'Rule kinds saved')}>
+            <Icon name="save" />
+            Save
+          </button>
+        </div>
+      </div>
+      <p className="small muted">
+        Kinds categorize rules. Every kind except “{rows[0]?.label}” shows as a colored badge, and readers can filter by kind. Set a rule's kind with <b>Rule details</b> on the rule.
+        Renaming a kind updates every rule that uses it.
+      </p>
+      <table className="table kinds-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Color</th>
+            <th title="Number of rules with this kind">Rules</th>
+            <th aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((k, i) => (
+            <tr key={k.id}>
+              <td>
+                <input value={k.label} onChange={(e) => update(i, { label: e.target.value })} aria-label="Kind name" />
+              </td>
+              <td>
+                <span className="row gap">
+                  <input type="color" value={k.color || '#8a7d72'} onChange={(e) => update(i, { color: e.target.value })} aria-label={`Color of ${k.label}`} />
+                  <span className="kind-tag" style={{ '--kind': k.color }}>
+                    {k.label || '…'}
+                  </span>
+                </span>
+              </td>
+              <td className="muted">{used(k.id)}</td>
+              <td className="row">
+                <button className="icon-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${k.label} up`} title="Move up (order in menus)">
+                  <Icon name="chevronUp" />
+                </button>
+                <button className="icon-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label={`Move ${k.label} down`} title="Move down">
+                  <Icon name="chevronDown" />
+                </button>
+                <button
+                  className="icon-btn danger"
+                  disabled={i === 0 || used(k.id) > 0}
+                  title={i === 0 ? 'The first kind is the default for new rules' : used(k.id) ? 'Change the kind of its rules first' : 'Remove this kind'}
+                  aria-label={`Remove ${k.label}`}
+                  onClick={() => setRows(rows.filter((_, j) => j !== i))}
+                >
+                  <Icon name="trash" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {kinds === DEFAULT_KINDS && !dirty && <p className="hint">These are the built-in kinds. Saving stores them so you can change them.</p>}
+    </section>
   );
 }
 
@@ -229,7 +377,7 @@ function SectionsEditor({ tree, rules, loading }) {
   const add = async (e) => {
     e.preventDefault();
     const code = adding.code.trim().toUpperCase();
-    if (codes.has(code)) return alert('That section code is already used.');
+    if (codes.has(code)) return alertDialog({ title: 'Code in use', message: `The section code ${code} is already used. Pick another one.` });
     const siblings = tree.children.get(adding.parent || null) || [];
     const ok = await attempt(() => setDoc(doc(db, 'sections', code), { code, title: adding.title.trim(), parent: adding.parent || null, order: siblings.length + 1 }), 'Section added');
     if (ok) setAdding({ code: '', title: '', parent: '' });
@@ -268,7 +416,7 @@ function SectionsEditor({ tree, rules, loading }) {
                       const v = e.target.value.trim().toUpperCase();
                       if (v && v !== s.code) {
                         if (codes.has(v)) {
-                          alert('That code is already used.');
+                          alertDialog({ title: 'Code in use', message: `The section code ${v} is already used.` });
                           e.target.value = s.code;
                         } else attempt(() => updateDoc(doc(db, 'sections', s.id), { code: v }), null, 'section code');
                       }
@@ -311,7 +459,7 @@ function SectionsEditor({ tree, rules, loading }) {
                     aria-label="Delete section"
                     disabled={ruleCount(s.id) > 0 || (tree.children.get(s.id) || []).length > 0}
                     title={ruleCount(s.id) > 0 ? 'Move or delete its rules first' : 'Delete section'}
-                    onClick={() => confirm(`Delete section ${s.title}?`) && attempt(() => deleteDoc(doc(db, 'sections', s.id)), 'Section deleted')}
+                    onClick={async () => (await confirmDialog({ title: 'Delete section', message: `Delete the section “${s.title}”? Its rules stay, but show under “Unsorted” until you move them.`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'sections', s.id)), 'Section deleted')}
                   >
                     <Icon name="trash" />
                   </button>
@@ -411,7 +559,7 @@ function RulesetsAdmin() {
                       type="checkbox"
                       checked={s.visibility === 'public'}
                       onChange={(e) => {
-                        if (!e.target.checked && site.defaultRulesetId === s.id) return alert('Choose another default ruleset first.');
+                        if (!e.target.checked && site.defaultRulesetId === s.id) return alertDialog({ title: 'This is the default', message: 'Choose another default ruleset before making this one private.' });
                         attempt(() => updateRuleset(s.id, { visibility: e.target.checked ? 'public' : 'private' }), e.target.checked ? 'Ruleset made public' : 'Ruleset made private');
                       }}
                     />
@@ -424,7 +572,7 @@ function RulesetsAdmin() {
                     className="icon-btn danger"
                     aria-label={`Delete ${s.name}`}
                     disabled={site.defaultRulesetId === s.id}
-                    onClick={() => confirm(`Delete “${s.name}” by ${s.ownerName}?`) && attempt(() => deleteRuleset(s.id), 'Deleted')}
+                    onClick={async () => (await confirmDialog({ title: 'Delete ruleset', message: `Delete “${s.name}” by ${s.ownerName}?`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteRuleset(s.id), 'Ruleset deleted')}
                   >
                     <Icon name="trash" />
                   </button>
@@ -450,10 +598,10 @@ function PeopleAdmin() {
     .filter((u) => !filter || u.name?.toLowerCase().includes(filter.toLowerCase()))
     .sort((a, b) => (adminIds.has(b.id) ? 1 : 0) - (adminIds.has(a.id) ? 1 : 0) || millis(b.lastSeen) - millis(a.lastSeen));
 
-  const toggle = (u) => {
+  const toggle = async (u) => {
     if (adminIds.has(u.id)) {
-      if (u.id === user.uid && !confirm('Remove your own admin access?')) return;
-      if (adminIds.size <= 1) return alert('There must be at least one admin.');
+      if (adminIds.size <= 1) return alertDialog({ title: 'Last admin', message: 'There must be at least one admin.' });
+      if (u.id === user.uid && !(await confirmDialog({ title: 'Remove your admin access', message: 'You will lose access to the admin pages. Another admin can give it back.', confirmLabel: 'Remove', danger: true }))) return;
       return attempt(() => deleteDoc(doc(db, 'admins', u.id)), `${u.name} is no longer an admin`);
     }
     return attempt(() => setDoc(doc(db, 'admins', u.id), { name: u.name, addedAt: serverTimestamp(), addedBy: user.uid }), `${u.name} is now an admin`);

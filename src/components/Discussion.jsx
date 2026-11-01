@@ -6,11 +6,16 @@ import { addComment, deleteComment, editComment, millis, react } from '../lib/ru
 import { plainToHtml } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Reactions, Spinner, timeAgo } from './ui.jsx';
+import { confirmDialog } from './dialogs.jsx';
 
-/** Comment thread for one rule. Each comment remembers which version the author was looking at. */
-export default function Discussion({ rule, versions, shownVersion }) {
+/**
+ * Comment thread for a rule, or for a component (`target={{ field: 'componentId', id, name }}`).
+ * Each comment remembers which version the author was looking at.
+ */
+export default function Discussion({ rule, target: given, versions, shownVersion }) {
   const { user, isAdmin, requireUser, signIn } = useSession();
-  const comments = useLive(() => query(collection(db, 'comments'), where('ruleId', '==', rule.id)), [rule.id]);
+  const target = given || { field: 'ruleId', id: rule.id, name: rule.code };
+  const comments = useLive(() => query(collection(db, 'comments'), where(target.field, '==', target.id)), [target.field, target.id]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -27,12 +32,12 @@ export default function Discussion({ rule, versions, shownVersion }) {
     const body = text.trim();
     if (!body) return;
     setBusy(true);
-    await requireUser((u) => attempt(() => addComment({ ruleId: rule.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment').then(() => setText('')));
+    await requireUser((u) => attempt(() => addComment({ [target.field]: target.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment').then(() => setText('')));
     setBusy(false);
   };
 
   return (
-    <section className="discussion" aria-label={`Discussion of ${rule.code}`}>
+    <section className="discussion" aria-label={`Discussion of ${target.name}`}>
       {comments.loading ? (
         <Spinner label="Loading discussion…" />
       ) : sorted.length === 0 ? (
@@ -79,7 +84,7 @@ export default function Discussion({ rule, versions, shownVersion }) {
                     </button>
                   )}
                   {(user?.uid === c.uid || isAdmin) && (
-                    <button className="link-btn small danger" onClick={() => confirm('Delete this comment?') && attempt(() => deleteComment(c), 'Comment deleted')}>
+                    <button className="link-btn small danger" onClick={async () => (await confirmDialog({ title: 'Delete comment', message: 'Delete this comment?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteComment(c), 'Comment deleted')}>
                       Delete
                     </button>
                   )}
@@ -94,7 +99,7 @@ export default function Discussion({ rule, versions, shownVersion }) {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={`Discuss ${rule.code}${shownVersion ? ` (${shownVersion.label} version)` : ''}…`}
+            placeholder={`Discuss ${target.name}${shownVersion ? ` (${shownVersion.label} version)` : ''}…`}
             rows={2}
             maxLength={5000}
             aria-label="Write a comment"

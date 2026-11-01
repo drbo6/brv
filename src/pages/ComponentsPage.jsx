@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { compareValues, displayTitle, FIELD_KINDS, idField, imageUrl, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
+import { collection, doc, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
+import { compareValues, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
+import { dataIn } from '../lib/cardVersions.js';
+import { LABEL_CLASS } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
-import { useDebounced, useLocalStorage } from '../lib/hooks.js';
-import { absoluteLink, href, navigate } from '../lib/router.js';
+import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
+import { href, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from '../components/ComponentCard.jsx';
-import { copyText, Empty, Icon, Modal, RichText, Spinner, toast } from '../components/ui.jsx';
+import ComponentDetail from '../components/ComponentDetail.jsx';
+import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx';
+import { Empty, Icon, Spinner } from '../components/ui.jsx';
 
 /** Index the components of a type: lookup by ID value and alternate states per base component. */
 export function indexStates(type, comps) {
@@ -43,11 +49,51 @@ export default function ComponentsPage({ route }) {
   useEffect(() => {
     load();
   }, [load]);
+  // Live: when anyone changes components, the counter moves and we fetch the new data.
+  const meta = useLive(() => doc(db, 'config', 'componentsMeta'), []);
+  const liveVersion = meta.data?.version || 0;
+  useEffect(() => {
+    if (state.version !== undefined && liveVersion !== state.version) load();
+  }, [liveVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Versions, reactions and discussion counts are small collections and stay live.
+  const cardVersionDocs = useLive(() => collection(db, 'componentVersions'), []);
+  const cardMeta = useLive(() => collection(db, 'componentMeta'), []);
+  const cardComments = useLive(() => query(collection(db, 'comments'), where('componentId', '!=', null)), []);
+  const versionsByComp = useMemo(() => {
+    const m = new Map();
+    for (const v of cardVersionDocs.data || []) {
+      if (!m.has(v.componentId)) m.set(v.componentId, []);
+      m.get(v.componentId).push(v);
+    }
+    return m;
+  }, [cardVersionDocs.data]);
+  const metaById = useMemo(() => new Map((cardMeta.data || []).map((d) => [d.id, d])), [cardMeta.data]);
+  const commentsByComp = useMemo(() => {
+    const m = new Map();
+    for (const c of cardComments.data || []) m.set(c.componentId, (m.get(c.componentId) || 0) + 1);
+    return m;
+  }, [cardComments.data]);
+
+  const choice = useRulesetChoice(route.params.get('set'));
+  const { selectedSet } = choice;
 
   const types = state.types || [];
   const type = types.find((t) => t.id === route.parts[0]) || types[0];
-  const comps = useMemo(() => (type ? (state.components || []).filter((c) => c.typeId === type.id) : []), [state.components, type]);
-  const states = useMemo(() => (type ? indexStates(type, comps) : null), [type, comps]);
+  // Each component as the selected ruleset shows it (a chosen card version replaces fields).
+  const comps = useMemo(() => {
+    if (!type) return [];
+    const byId = new Map((cardVersionDocs.data || []).map((v) => [v.id, v]));
+    return (state.components || [])
+      .filter((c) => c.typeId === type.id)
+      .map((c) => {
+        const v = byId.get(selectedSet.cards?.[c.id]);
+        return v && v.componentId === c.id ? { ...c, data: dataIn(c, v), version: v } : c;
+      });
+  }, [state.components, type, selectedSet, cardVersionDocs.data]);
+  // States are indexed on the printed cards; the detail view applies versions itself.
+  const printedComps = useMemo(() => (type ? (state.components || []).filter((c) => c.typeId === type.id) : []), [state.components, type]);
+  const states = useMemo(() => (type ? indexStates(type, printedComps) : null), [type, printedComps]);
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
@@ -106,7 +152,8 @@ export default function ComponentsPage({ route }) {
   }, [comps, type, q, filters, sortKey, sortDir, showStates, states, searchIndex]);
 
   const open = useCallback((c) => navigate('components', [type.id, c.id]), [type?.id]);
-  const detail = route.parts[1] ? comps.find((c) => c.id === route.parts[1]) : null;
+  const detailId = route.parts[1];
+  const detail = detailId ? (state.components || []).find((c) => c.id === detailId) : null;
 
   if (state.error)
     return (
@@ -139,10 +186,15 @@ export default function ComponentsPage({ route }) {
       )}
       <div className="page-head">
         <h1>{type.name}</h1>
-        <p className="muted">
-          {visible.length} of {comps.length - (showStates ? 0 : states.isState.size)} shown
-          {state.fromCache && ' · from local cache'}
-        </p>
+        <div className="page-head-side">
+          <label className="ruleset-inline" title="A ruleset can use community or official versions of cards">
+            <span className="muted small">Ruleset</span>
+            <RulesetSelect choice={choice} onChange={(id) => choice.setStoredSetId(id)} id="cards-ruleset" />
+          </label>
+          <p className="muted small">
+            {visible.length} of {comps.length - (showStates ? 0 : states.isState.size)} shown
+          </p>
+        </div>
       </div>
       <section className="toolbar sticky" aria-label="Search, filter and sort">
         <div className="search">
@@ -186,9 +238,6 @@ export default function ComponentsPage({ route }) {
           <Icon name="grid" />
           <input type="range" min="130" max="360" step="10" value={cardWidth} onChange={(e) => setCardWidth(Number(e.target.value))} aria-label="Card size" />
         </label>
-        <button className="icon-btn" onClick={() => load(true)} title="Reload from the server" aria-label="Reload from the server">
-          <Icon name="flip" />
-        </button>
       </section>
 
       {visible.length === 0 ? (
@@ -208,12 +257,25 @@ export default function ComponentsPage({ route }) {
               shorthands={shorthands}
               hasStates={states.statesOf.has(String(c.data[states.idf?.key]))}
               onClick={() => open(c)}
-            />
+            >
+              <CardBadges version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
+            </ComponentCard>
           )}
         />
       )}
 
-      {detail && <ComponentDetail type={type} comp={detail} states={states} onClose={() => navigate('components', [type.id])} />}
+      {detail && (
+        <ComponentDetail
+          type={type}
+          comp={detail}
+          states={states}
+          versionsOf={(id) => versionsByComp.get(id) || []}
+          metaOf={(id) => metaById.get(id)}
+          commentCount={(id) => commentsByComp.get(id) || 0}
+          selectedSet={selectedSet}
+          onClose={() => navigate('components', [type.id])}
+        />
+      )}
     </div>
   );
 }
@@ -256,79 +318,27 @@ function VirtualGrid({ items, aspect, cardWidth, renderItem }) {
   );
 }
 
-function ComponentDetail({ type, comp, states, onClose }) {
-  const { shorthands, isAdmin } = useSession();
-  const { byIdValue, statesOf, idf, sf } = states;
-  // The family: the base component plus all its alternate states.
-  const baseId = sf && comp.data[sf.key]?.of ? String(comp.data[sf.key].of) : String(comp.data[idf?.key]);
-  const base = byIdValue.get(baseId) || comp;
-  const family = [{ comp: base, name: 'Default' }, ...(statesOf.get(baseId) || [])];
-  const [current, setCurrent] = useState(comp);
-  useEffect(() => {
-    setCurrent(comp);
-  }, [comp]);
-
-  const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(current.data[f.key], type));
-
+/** Small corner marks: the version a ruleset uses, and whether there are versions or comments to see. */
+function CardBadges({ version, versions, comments }) {
+  if (!version && !versions && !comments) return null;
+  const tip = [version && `Shown as the ${version.label} version`, versions && `${versions} alternative version${versions === 1 ? '' : 's'}`, comments && `${comments} comment${comments === 1 ? '' : 's'}`]
+    .filter(Boolean)
+    .join(' · ');
   return (
-    <Modal title={displayTitle(type, current)} onClose={onClose} wide className="detail-modal">
-      <div className="detail">
-        <div className="detail-card">
-          <ComponentCard type={type} comp={current} shorthands={shorthands} />
-          {family.length > 1 && (
-            <div className="seg state-switch" role="group" aria-label="States">
-              {family.map((s) => (
-                <button key={s.comp.id} className={s.comp.id === current.id ? 'on' : ''} onClick={() => setCurrent(s.comp)}>
-                  <Icon name="flip" size={13} />
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="detail-data">
-          <dl>
-            {rows.map((f) => (
-              <div key={f.key} className="detail-row">
-                <dt>
-                  {f.label}
-                  <span className="kind-mini">{FIELD_KINDS[f.kind]?.label}</span>
-                </dt>
-                <dd>
-                  {f.kind === 'image' ? (
-                    imageUrl(f, current.data[f.key]) ? (
-                      <a href={imageUrl(f, current.data[f.key])} target="_blank" rel="noreferrer">
-                        {String(current.data[f.key])}
-                      </a>
-                    ) : (
-                      <code>{String(current.data[f.key])}</code>
-                    )
-                  ) : (
-                    <RichText html={String(current.data[f.key])} as="span" />
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <div className="row gap wrap">
-            <button
-              onClick={async () => {
-                await copyText(absoluteLink('components', [type.id, current.id]));
-                toast('Link copied', 'ok');
-              }}
-            >
-              <Icon name="link" />
-              Copy link
-            </button>
-            {isAdmin && (
-              <a className="btn" href={href('admin', ['components', type.id], { edit: current.id })}>
-                <Icon name="edit" />
-                Edit
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </Modal>
+    <span className="card-badges" title={tip}>
+      {version && <span className={`label l-${LABEL_CLASS[version.label] || 'other'}`}>{version.label}</span>}
+      {versions > 0 && (
+        <span className="card-badge">
+          <Icon name="layers" size={11} />
+          {versions}
+        </span>
+      )}
+      {comments > 0 && (
+        <span className="card-badge">
+          <Icon name="message" size={11} />
+          {comments}
+        </span>
+      )}
+    </span>
   );
 }
