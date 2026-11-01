@@ -27,13 +27,14 @@ export function useRulesetChoice(linkedSetId) {
 }
 
 /** Dropdown of the rulesets a reader can pick. */
-export default function RulesetSelect({ choice, onChange, id = 'ruleset-select' }) {
+export default function RulesetSelect({ choice, onChange, id = 'ruleset-select', unsaved = false }) {
   const { user, site } = useSession();
   const { selectedSet, publicSets, mySets, linkedSet } = choice;
   const privateMine = mySets.filter((s) => s.visibility !== 'public');
-  const isDefault = (sid) => (site.defaultRulesetId === sid ? ' — default' : '');
+  // The selected set's name says when it has unsaved changes.
+  const isDefault = (sid) => (unsaved && sid === selectedSet.id ? ' — unsaved changes' : site.defaultRulesetId === sid ? ' — default' : '');
   return (
-    <select id={id} value={selectedSet.id} onChange={(e) => onChange(e.target.value)} title="Which rules and card versions you see">
+    <select id={id} className={unsaved ? 'is-unsaved' : ''} value={selectedSet.id} onChange={(e) => onChange(e.target.value)} title="Which rules and card versions you see">
       <option value={RULEBOOK_SET.id}>
         {RULEBOOK_SET.name}
         {isDefault(RULEBOOK_SET.id)}
@@ -53,6 +54,7 @@ export default function RulesetSelect({ choice, onChange, id = 'ruleset-select' 
           {privateMine.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
+              {isDefault(s.id)}
             </option>
           ))}
         </optgroup>
@@ -60,7 +62,7 @@ export default function RulesetSelect({ choice, onChange, id = 'ruleset-select' 
       {linkedSet && linkedSet.visibility !== 'public' && linkedSet.ownerUid !== user?.uid && (
         <optgroup label="Shared with you">
           <option value={linkedSet.id}>
-            {linkedSet.name} (by {linkedSet.ownerName})
+            {linkedSet.name} (by {linkedSet.ownerName}){isDefault(linkedSet.id)}
           </option>
         </optgroup>
       )}

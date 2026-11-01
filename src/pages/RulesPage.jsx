@@ -58,13 +58,27 @@ export default function RulesPage({ route }) {
   const [openId, setOpenId] = useState(null);
   const onToggle = useCallback((ruleId) => setOpenId((id) => (id === ruleId ? null : ruleId)), []);
   const onShowVersion = useCallback((ruleId, vid) => setViewVersion((m) => ({ ...m, [ruleId]: vid })), []);
-  const onSetActive = useCallback((ruleId, vid) => setDraft((d) => {
-    const next = { ...d.entries };
-    if (vid) next[ruleId] = vid;
-    else delete next[ruleId];
-    return { ...d, entries: next };
-  }), []);
-  const onUseVersion = useCallback((ruleId, vid) => setDraft((d) => ({ ...d, entries: { ...d.entries, [ruleId]: vid } })), []);
+  // Changing a rule's version or switching it off starts an unsaved draft of the ruleset if needed.
+  const baseRef = useRef(null);
+  baseRef.current = { baseId: selectedSet.id, entries: baseEntries };
+  const editDraft = useCallback(
+    (fn) => setDraft((d) => {
+      const cur = d || { ...baseRef.current, customizing: false };
+      return { ...cur, entries: fn({ ...cur.entries }) };
+    }),
+    [setDraft],
+  );
+  const onSetActive = useCallback(
+    (ruleId, vid) =>
+      editDraft((e) => {
+        if (vid) e[ruleId] = vid;
+        else delete e[ruleId];
+        return e;
+      }),
+    [editDraft],
+  );
+  const onUseVersion = useCallback((ruleId, vid) => editDraft((e) => ({ ...e, [ruleId]: vid })), [editDraft]);
+  const unsaved = Boolean(draft) && changeCount > 0;
 
   const selectSet = async (id) => {
     if (draft && changeCount && !(await confirmDialog({ title: 'Discard changes', message: 'Discard your unsaved ruleset changes?', confirmLabel: 'Discard', danger: true }))) return;
@@ -228,15 +242,23 @@ export default function RulesPage({ route }) {
         <section className="ruleset-bar" aria-label="Ruleset">
           <div className="ruleset-pick">
             <label htmlFor="ruleset-select">Ruleset</label>
-            <RulesetSelect choice={choice} onChange={selectSet} />
+            <RulesetSelect choice={choice} onChange={selectSet} unsaved={unsaved} />
+            {unsaved && (
+              <span className="tag t-warn unsaved-tag" title="You changed which rules or versions this ruleset uses. Save or discard below.">
+                Unsaved changes
+              </span>
+            )}
           </div>
           <p className="ruleset-desc">
             {selectedSet.description || (selectedSet.builtIn ? '' : `A ruleset by ${selectedSet.ownerName || 'a community member'}.`)}
             {!selectedSet.builtIn && <span className="muted"> · {Object.keys(selectedSet.entries || {}).length} rules</span>}
           </p>
           <div className="ruleset-actions">
-            {!draft ? (
-              <button onClick={() => endDraft({ baseId: selectedSet.id, entries: { ...baseEntries } })} title="Choose which rules and versions are part of a ruleset">
+            {!draft?.customizing ? (
+              <button
+                onClick={() => (draft ? setDraft((d) => ({ ...d, customizing: true })) : endDraft({ baseId: selectedSet.id, entries: { ...baseEntries }, customizing: true }))}
+                title="Show an “In ruleset” switch on every rule, to choose which rules and versions are part of this ruleset"
+              >
                 <Icon name="layers" />
                 Customize
               </button>
@@ -330,8 +352,8 @@ export default function RulesPage({ route }) {
                       <RuleCard
                         key={it.rule.id}
                         item={it}
-                        setName={draft ? 'your edit' : selectedSet.name}
-                        editing={Boolean(draft)}
+                        setName={unsaved ? `${selectedSet.name} (unsaved)` : selectedSet.name}
+                        editing={Boolean(draft?.customizing)}
                         focused={it.rule.code === focusCode}
                         open={openId === it.rule.id}
                         onToggle={onToggle}
@@ -356,12 +378,18 @@ export default function RulesPage({ route }) {
       {draft && (
         <div className="draft-bar" role="region" aria-label="Ruleset editor">
           <div>
-            <b>Customizing “{selectedSet.name}”</b>
+            <b>{draft.customizing ? `Customizing “${selectedSet.name}”` : `Unsaved changes to “${selectedSet.name}”`}</b>
             <span className="muted">
               {' '}
               · {Object.keys(draft.entries).length} rules active · {changeCount} change{changeCount === 1 ? '' : 's'}
             </span>
-            <p className="small muted">Toggle “In ruleset” on each rule, or browse to another version and choose “Use this version”.</p>
+            <p className="small muted">
+              {draft.customizing
+                ? 'Toggle “In ruleset” on each rule, or browse to another version and choose “Use this version”.'
+                : selectedSet.builtIn
+                  ? 'The printed rulebook can’t be changed: save your changes as a new ruleset.'
+                  : 'Save them to the ruleset, save them as a new ruleset, or discard them.'}
+            </p>
           </div>
           <div className="row gap">
             <button className="icon-btn" onClick={draftHistory.undo} disabled={!draftHistory.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">

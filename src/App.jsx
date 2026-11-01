@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { configured, isDemo } from './lib/firebase.js';
 import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
@@ -96,19 +96,7 @@ function Shell() {
               )}
             </div>
           )}
-          {lowerRoles.length > 1 && (
-            <label className={`view-as ${previewing ? 'on' : ''}`} title="See the site as someone with less access">
-              <Icon name="eye" />
-              <span className="sr-only">View the site as</span>
-              <select value={role} onChange={(e) => setViewAs(e.target.value === realRole ? null : e.target.value)}>
-                {lowerRoles.map((r) => (
-                  <option key={r} value={r}>
-                    {r === realRole ? `${ROLES[r]} (you)` : `View as ${ROLES[r].toLowerCase()}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {lowerRoles.length > 1 && <ViewAsMenu roles={lowerRoles} role={role} realRole={realRole} previewing={previewing} setViewAs={setViewAs} />}
           <button
             className="icon-btn"
             onClick={theme.toggle}
@@ -171,6 +159,59 @@ function Shell() {
       <DialogHost />
       <Tooltips />
     </>
+  );
+}
+
+const ROLE_HINTS = {
+  admin: 'Everything, including editing and the Admin pages',
+  user: 'Signed in, without admin rights: react, discuss, suggest',
+  visitor: 'Not signed in: read only',
+};
+
+/** Pick a lower role to preview the site with. */
+function ViewAsMenu({ roles, role, realRole, previewing, setViewAs }) {
+  const ref = useRef(null);
+  const close = () => ref.current?.removeAttribute('open');
+  useEffect(() => {
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) close();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
+  return (
+    <details ref={ref} className={`menu view-as ${previewing ? 'on' : ''}`}>
+      <summary className="view-as-btn" title="See the site as someone with less access" aria-label={`Viewing as ${ROLES[role]}. Change`}>
+        <Icon name="eye" />
+        <span className="view-as-label">{previewing ? `As ${ROLES[role].toLowerCase()}` : 'View as'}</span>
+        <Icon name="chevronDown" size={14} />
+      </summary>
+      <div className="menu-pop view-as-pop" role="menu">
+        <p className="menu-title">View the site as</p>
+        {roles.map((r) => (
+          <button
+            key={r}
+            type="button"
+            role="menuitemradio"
+            aria-checked={r === role}
+            className={`menu-item ${r === role ? 'on' : ''}`}
+            onClick={() => {
+              setViewAs(r === realRole ? null : r);
+              close();
+            }}
+          >
+            <Icon name={r === role ? 'check' : r === 'admin' ? 'shield' : r === 'user' ? 'user' : 'eye'} />
+            <span>
+              <b>
+                {ROLES[r]}
+                {r === realRole ? ' (you)' : ''}
+              </b>
+              <span className="small muted">{ROLE_HINTS[r]}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 

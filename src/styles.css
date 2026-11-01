@@ -1338,8 +1338,18 @@ h4.section-heading {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
+/* Rules with a kind get a tint of the kind's color, so notes, tips and changes stand out. */
 .rule.has-kind {
-  border-left-color: color-mix(in srgb, var(--kind) 60%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--kind) 75%, transparent);
+  background: color-mix(in srgb, var(--kind) 9%, transparent);
+}
+
+.rule.has-kind:not(.open):hover {
+  background: color-mix(in srgb, var(--kind) 14%, transparent);
+}
+
+.rule.has-kind.open {
+  background: color-mix(in srgb, var(--kind) 8%, var(--surface));
 }
 
 .rule.kind-flavor .rule-text {
@@ -2670,28 +2680,72 @@ button.ccard:hover:not(:disabled) {
   align-items: center;
 }
 
-.view-as {
+.view-as-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding-left: 8px;
-  border: 1px solid var(--border);
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.view-as-btn:hover {
+  border-color: var(--gold);
+}
+
+.view-as.on .view-as-btn {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 18%, var(--surface-2));
+  color: var(--text);
+}
+
+.view-as-pop {
+  min-width: 280px;
+  gap: 2px;
+  padding: 8px;
+}
+
+.menu-title {
+  margin: 2px 6px 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
-.view-as.on {
-  border-color: var(--gold);
-  color: var(--gold-2);
+.menu-item {
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
 }
 
-.view-as select {
-  min-height: 30px;
-  max-width: 170px;
-  padding: 2px 26px 2px 4px;
-  border: none;
-  background-color: transparent;
-  font-size: 0.85rem;
+.menu-item > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-item.on {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+.menu-item .icon {
+  margin-top: 3px;
 }
 
 .preview-banner {
@@ -2832,22 +2886,20 @@ button.ccard:hover:not(:disabled) {
     display: none;
   }
 
-  .view-as {
-    padding-left: 6px;
+  .view-as-label {
+    display: none;
+  }
+
+  .view-as .view-as-pop {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: calc(var(--header-h) - 4px);
+    min-width: 0;
   }
 
   .image-form {
     grid-template-columns: 1fr;
-  }
-
-  .view-as select {
-    max-width: 34px;
-    padding-right: 0;
-    color: transparent;
-  }
-
-  .view-as select option {
-    color: var(--text);
   }
 
   .lb-row {
@@ -3153,6 +3205,16 @@ span.field-place {
   padding: 0;
   border: none;
   background: none;
+}
+
+/* A ruleset with unsaved changes. */
+select.is-unsaved {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn);
+}
+
+.unsaved-tag {
+  flex: none;
 }
 
 @media (max-width: 1100px) {

@@ -118,6 +118,18 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                     Not in {setName}
                   </span>
                 )}
+                {!editing && shown && !shownInSet && (
+                  <button className="chip ok" onClick={() => (active ? onUseVersion(rule.id, shown.id) : onSetActive(rule.id, shown.id))} title={`Make ${setName} use this version (saved when you save the ruleset)`}>
+                    <Icon name="check" />
+                    {active ? 'Use this version' : 'Add to ruleset'}
+                  </button>
+                )}
+                {!editing && active && (
+                  <button className="chip" onClick={() => onSetActive(rule.id, null)} title={`Make this rule inactive in ${setName} (saved when you save the ruleset)`}>
+                    <Icon name="eyeOff" />
+                    Make inactive
+                  </button>
+                )}
               </div>
             )}
 

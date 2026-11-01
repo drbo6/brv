@@ -317,7 +317,6 @@
   background: #efe6d5;
 }
 
-/* The header's "view as" picker sits inside its own pill. */
-:root[data-theme='light'] .view-as select {
-  background-color: transparent;
+:root[data-theme='light'] .rule.has-kind:not(.open):hover {
+  background: color-mix(in srgb, var(--kind) 14%, transparent);
 }

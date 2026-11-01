@@ -152,7 +152,7 @@ const TOPICS = [
           <li>❓ Unclear: this still leaves questions.</li>
         </ul>
         <p>
-          Reactions belong to a version, not the whole rule: agreeing with the printed text says nothing about a community rewrite. Click your reaction again to take it back.
+          Reactions belong to a version, not the whole rule: agreeing with the printed text says nothing about a community rewrite. Click your reaction again to take it back. Hover over a reaction to see who chose it.
         </p>
         <p>
           <b>Discuss</b> opens the comment thread. Each comment remembers which version its author was looking at, so later readers know what was being discussed. You can edit or
@@ -203,6 +203,10 @@ const TOPICS = [
           <li>
             <b>Customize</b> starts editing: switch rules <i>In ruleset</i> on or off, or browse to another version and choose <i>Use this version</i>. Undo and redo work while you customize.
             Cards work differently: open a card, step to another version and choose <i>Use in …</i> to put it in a ruleset you own, so a ruleset can carry balance changes to cards too.
+          </li>
+          <li>
+            You don't need Customize for a quick change: in an open rule, <b>Use this version</b>, <b>Add to ruleset</b> and <b>Make inactive</b> change the ruleset
+            directly. The ruleset picker then says <i>unsaved changes</i> until you save or discard.
           </li>
           <li>
             <b>Save</b> updates a ruleset you own; <b>Save as new…</b> makes a copy.

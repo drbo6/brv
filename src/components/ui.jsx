@@ -4,6 +4,7 @@ import { richHtml } from '../lib/html.js';
 import { reactionCounts } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import { record, redo, undo } from '../lib/store.js';
+import { useUserNames } from '../lib/userNames.js';
 
 const ICONS = {
   up: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
@@ -146,14 +147,33 @@ const REACTIONS = [
 ];
 
 /** Thumbs up / thumbs down / question reactions. `onReact(type)` toggles. */
+/** "Agree: you, Alice and 3 others" — who picked a reaction, for its tooltip. */
+function whoReacted(label, reactions, type, names, myUid) {
+  const uids = Object.keys(reactions || {}).filter((u) => reactions[u] === type);
+  if (!uids.length) return `${label}: nobody yet`;
+  const list = uids.map((u) => (u === myUid ? 'you' : names.get(u) || 'someone')).sort((a, b) => (a === 'you' ? -1 : b === 'you' ? 1 : a.localeCompare(b)));
+  const shown = list.slice(0, 12);
+  const rest = list.length - shown.length;
+  const text = rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0];
+  return `${label}: ${text}`;
+}
+
 export function Reactions({ reactions, onReact, compact = false }) {
   const { user } = useSession();
+  const names = useUserNames();
   const counts = reactionCounts(reactions);
   const mine = user ? reactions?.[user.uid] : null;
   return (
     <div className={`reactions ${compact ? 'compact' : ''}`} role="group" aria-label="Reactions">
       {REACTIONS.map(({ type, label }) => (
-        <button key={type} className={`reaction r-${type} ${mine === type ? 'mine' : ''}`} onClick={() => onReact(type)} title={label} aria-pressed={mine === type}>
+        <button
+          key={type}
+          className={`reaction r-${type} ${mine === type ? 'mine' : ''}`}
+          onClick={() => onReact(type)}
+          title={whoReacted(label, reactions, type, names, user?.uid)}
+          aria-label={`${label}, ${counts[type]}`}
+          aria-pressed={mine === type}
+        >
           <Icon name={type} size={compact ? 13 : 15} />
           <span>{counts[type]}</span>
         </button>
