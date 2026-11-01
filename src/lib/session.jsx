@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import { useLive } from './hooks.js';
 import { clearHistory } from './store.js';
@@ -26,8 +26,19 @@ const readViewAs = () => {
  * App-wide state: the signed-in user, whether they are an admin, plus the small
  * config docs every page needs (site settings and [shorthand] definitions).
  */
+/** The signed-in user as the site shows them: their chosen username and avatar, never their Google name. */
+const asUser = (authUser, profile) => ({
+  uid: authUser.uid,
+  displayName: profile?.name || '',
+  photoURL: profile?.avatar?.photo || '',
+  avatar: profile?.avatar || null,
+  // Only ever shown to the user themselves; never written to the database.
+  email: authUser.email || '',
+  googlePhoto: authUser.photoURL || '',
+});
+
 export function SessionProvider({ children }) {
-  const [user, setUser] = useState(undefined);
+  const [authUser, setAuthUser] = useState(undefined);
   // Preview the site with a lower role. Kept per tab, so a reload doesn't lock an admin out of their tools.
   const [viewAs, setViewAsState] = useState(readViewAs);
   const setViewAs = useCallback((role) => {
@@ -43,20 +54,23 @@ export function SessionProvider({ children }) {
   // Undo history belongs to whoever made the changes.
   useEffect(() => {
     clearHistory();
-  }, [user?.uid]);
+  }, [authUser?.uid]);
 
   useEffect(
     () =>
       onAuthStateChanged(auth, (u) => {
-        setUser(u || null);
-        if (u) {
-          setDoc(doc(db, 'users', u.uid), { name: u.displayName || 'Anonymous', photo: u.photoURL || '', lastSeen: serverTimestamp() }, { merge: true }).catch((e) =>
-            console.warn('Could not update profile', e),
-          );
-        }
+        setAuthUser(u || null);
+        // Only a timestamp: the public profile is what the user chooses in the profile dialog.
+        if (u) setDoc(doc(db, 'users', u.uid), { lastSeen: serverTimestamp() }, { merge: true }).catch((e) => console.warn('Could not update profile', e));
       }),
     [],
   );
+
+  const profile = useLive(() => (authUser ? doc(db, 'users', authUser.uid) : null), [authUser?.uid]);
+  const user = useMemo(() => (authUser ? asUser(authUser, profile.data) : authUser), [authUser, profile.data]);
+  // New users choose a username and avatar before they can take part.
+  const needsProfile = Boolean(authUser && !profile.loading && !profile.data?.setup);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const adminDoc = useLive(() => (user ? doc(db, 'admins', user.uid) : null), [user?.uid]);
   const site = useLive(() => doc(db, 'config', 'site'), []);
@@ -78,14 +92,17 @@ export function SessionProvider({ children }) {
     }
   }, [viewAs]);
 
-  /** Run `fn` if signed in, otherwise ask to sign in first. */
+  /** Run `fn` as the signed-in user with a profile; otherwise ask to sign in (and set up a profile) first. */
   const requireUser = useCallback(
     async (fn) => {
-      if (user && viewAs !== 'visitor') return fn(user);
-      if (await signIn()) return fn(auth.currentUser);
-      return undefined;
+      if (user && viewAs !== 'visitor') return needsProfile ? undefined : fn(user);
+      if (!(await signIn())) return undefined;
+      const u = auth.currentUser;
+      const snap = await getDoc(doc(db, 'users', u.uid));
+      // A brand-new user first sees the profile dialog; they can repeat the action afterwards.
+      return snap.exists() && snap.data().setup ? fn(asUser(u, snap.data())) : undefined;
     },
-    [user, signIn, viewAs],
+    [user, signIn, viewAs, needsProfile],
   );
 
   const realAdmin = Boolean(user && adminDoc.data);
@@ -111,8 +128,12 @@ export function SessionProvider({ children }) {
       signIn,
       signOut: () => signOut(auth),
       requireUser,
+      needsProfile,
+      profileOpen: profileOpen || needsProfile,
+      editProfile: () => setProfileOpen(true),
+      closeProfile: () => setProfileOpen(false),
     }),
-    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser],
+    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
@@ -120,5 +141,4 @@ export function SessionProvider({ children }) {
 
 export const useSession = () => useContext(SessionCtx);
 
-/** Display-safe author info for documents we write. */
-export const authorOf = (user) => ({ uid: user.uid, name: user.displayName || 'Anonymous', photo: user.photoURL || '' });
+

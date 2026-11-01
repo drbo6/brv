@@ -7,7 +7,7 @@ import { useSession } from '../lib/session.jsx';
 import ComponentCard from './ComponentCard.jsx';
 import Discussion from './Discussion.jsx';
 import { alertDialog, confirmDialog } from './dialogs.jsx';
-import { attempt, copyText, Icon, Modal, Reactions, RichText, timeAgo, toast } from './ui.jsx';
+import { attempt, copyText, Icon, Modal, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 
 /**
  * A component in detail: its card, all its data, alternate states, and its versions with
@@ -96,7 +96,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
           {!shown.printed && (
             <p className="version-meta">
               <span>
-                Added by {shown.createdByName || 'someone'} · {timeAgo(shown.createdAt)}
+                Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
               </span>
               {shown.note && <span className="version-note">{shown.note}</span>}
             </p>

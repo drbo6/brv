@@ -5,7 +5,7 @@ import { attempt, Icon } from '../ui.jsx';
 import { confirmDialog } from '../dialogs.jsx';
 
 // People data is opt-in on import: restoring it is rarely what you want.
-const SENSITIVE = new Set(['admins', 'users', 'adminChat']);
+const SENSITIVE = new Set(['admins', 'users', 'usernames', 'adminChat']);
 
 export default function DataAdmin() {
   const { user } = useSession();

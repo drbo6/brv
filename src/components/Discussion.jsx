@@ -5,7 +5,7 @@ import { useLive } from '../lib/hooks.js';
 import { addComment, deleteComment, editComment, millis, react } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
-import { attempt, Avatar, Reactions, Spinner, timeAgo } from './ui.jsx';
+import { attempt, Reactions, Spinner, timeAgo, UserAvatar, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
 
 /**
@@ -46,10 +46,12 @@ export default function Discussion({ rule, target: given, versions, shownVersion
         <ol className="comments">
           {sorted.map((c) => (
             <li key={c.id} className="comment">
-              <Avatar name={c.name} photo={c.photo} size={30} />
+              <UserAvatar uid={c.uid} name={c.name} size={30} />
               <div className="comment-main">
                 <div className="comment-meta">
-                  <b>{c.name}</b>
+                  <b>
+                    <UserName uid={c.uid} fallback={c.name} />
+                  </b>
                   <span className="muted">{timeAgo(c.createdAt)}</span>
                   {c.editedAt && <span className="muted">(edited)</span>}
                   {versionTag(c.versionId) && <span className="tag tiny">on {versionTag(c.versionId)}</span>}

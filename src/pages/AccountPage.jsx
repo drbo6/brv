@@ -8,7 +8,7 @@ import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../com
 import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 export default function AccountPage() {
-  const { user, authLoading, isAdmin, signIn, signOut } = useSession();
+  const { user, authLoading, isAdmin, signIn, signOut, editProfile } = useSession();
   const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
 
   if (authLoading) return <Spinner />;
@@ -28,7 +28,7 @@ export default function AccountPage() {
             </svg>
             Continue with Google
           </button>
-          <p className="hint">We only store your display name and profile picture, which are shown next to your comments and suggestions.</p>
+          <p className="hint">After signing in you choose a username and avatar. Those are all others see: your email address and Google name are never shown or stored with your posts.</p>
         </section>
       </div>
     );
@@ -38,17 +38,26 @@ export default function AccountPage() {
   return (
     <div className="page narrow">
       <section className="profile">
-        <Avatar name={user.displayName} photo={user.photoURL} size={64} />
+        <Avatar name={user.displayName} avatar={user.avatar} size={64} />
         <div>
-          <h1>{user.displayName}</h1>
-          <p className="muted">
-            {user.email} {isAdmin && <span className="tag t-official">Admin</span>}
+          <h1>{user.displayName || 'New member'}</h1>
+          <p className="muted small">
+            <span title="Only you can see this. It is never shown to others.">
+              <Icon name="eyeOff" size={13} /> {user.email} · private
+            </span>{' '}
+            {isAdmin && <span className="tag t-official">Admin</span>}
           </p>
         </div>
-        <button onClick={signOut}>
-          <Icon name="logout" />
-          Log out
-        </button>
+        <div className="row gap wrap">
+          <button onClick={editProfile} title="Change your username and avatar">
+            <Icon name="edit" />
+            Edit profile
+          </button>
+          <button onClick={signOut}>
+            <Icon name="logout" />
+            Log out
+          </button>
+        </div>
       </section>
 
       <section className="panel">

@@ -4,7 +4,7 @@ import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, nextCode, react, upda
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
-import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast } from './ui.jsx';
+import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
 
 /**
@@ -86,7 +86,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
             <p className="version-meta">
               {shown.label !== 'Rulebook' && (
                 <span>
-                  Added by {shown.createdByName || 'someone'} · {timeAgo(shown.createdAt)}
+                  Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
                 </span>
               )}
               {shown.note && <span className="version-note">{shown.note}</span>}

@@ -7,6 +7,7 @@ import { useHistory, useUndoKeys } from './lib/history.js';
 import { Avatar, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
 import { DialogHost } from './components/dialogs.jsx';
+import ProfileDialog from './components/ProfileDialog.jsx';
 import Tooltips from './components/Tooltips.jsx';
 import { useTheme } from './lib/theme.js';
 import SetupNeeded from './components/SetupNeeded.jsx';
@@ -29,7 +30,7 @@ export default function App() {
 
 function Shell() {
   const route = useRoute();
-  const { user, isAdmin, realUser, realRole, role, previewing, setViewAs } = useSession();
+  const { user, isAdmin, realUser, realRole, role, previewing, setViewAs, profileOpen } = useSession();
   const history = useHistory();
   const theme = useTheme();
   useUndoKeys(useCallback((kind, label) => toast(`${kind === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'ok'), []));
@@ -109,7 +110,7 @@ function Shell() {
             <Icon name="info" size={18} />
           </button>
           <a className={`account-link ${route.page === 'account' ? 'active' : ''}`} href={href('account')}>
-            {user ? <Avatar name={user.displayName} photo={user.photoURL} size={26} /> : <Icon name="user" />}
+            {user ? <Avatar name={user.displayName} avatar={user.avatar} size={26} /> : <Icon name="user" />}
             <span className="nav-label">{user ? 'Account' : 'Log in'}</span>
           </a>
         </div>
@@ -156,6 +157,7 @@ function Shell() {
         </button>
       </footer>
       {showWelcome && <WelcomeModal onClose={closeWelcome} />}
+      {profileOpen && user && <ProfileDialog />}
       <DialogHost />
       <Tooltips />
     </>

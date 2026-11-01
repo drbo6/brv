@@ -11,7 +11,7 @@ import { exportRulesPdf } from '../lib/pdf.js';
 import RuleCard from '../components/RuleCard.jsx';
 import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx';
 import { RuleDialog, SaveRulesetDialog } from '../components/RuleDialogs.jsx';
-import { attempt, copyText, Empty, Icon, Spinner, toast } from '../components/ui.jsx';
+import { attempt, copyText, Empty, Icon, Spinner, toast, UserName } from '../components/ui.jsx';
 import { confirmDialog } from '../components/dialogs.jsx';
 
 export default function RulesPage({ route }) {
@@ -291,7 +291,7 @@ export default function RulesPage({ route }) {
             </div>
           )}
           <p className="ruleset-desc">
-            {selectedSet.description || (selectedSet.builtIn ? '' : `A ruleset by ${selectedSet.ownerName || 'a community member'}.`)}
+            {selectedSet.description || (selectedSet.builtIn ? '' : <>A ruleset by <UserName uid={selectedSet.ownerUid} fallback={selectedSet.ownerName || 'a community member'} />.</>)}
             {!selectedSet.builtIn && <span className="muted"> · {Object.keys(selectedSet.entries || {}).length} rules</span>}
           </p>
           <div className="ruleset-actions">

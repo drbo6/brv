@@ -317,7 +317,12 @@ const TOPICS = [
     body: (
       <ul>
         <li>
-          Sign in with Google from the <b>Account</b> page. Only your name and profile picture are shown to others.
+          Sign in with Google from the <b>Account</b> page. The first time, you choose a <b>username</b> (unique, 3–24 characters) and an <b>avatar</b>: an emoji on a
+          color (you are offered a random selection of emoji nobody else uses), a picture from any https address, or your Google picture.
+        </li>
+        <li>
+          Your email address and Google name are private: they are never shown to anyone or stored with your posts. Change your username or avatar any time with{' '}
+          <b>Edit profile</b>; your comments and suggestions show the new name.
         </li>
         <li>The Account page lists your rulesets: open, rename, share or delete them.</li>
         <li>

@@ -8,7 +8,7 @@ import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, millis, reac
 import { plainToHtml } from '../lib/html.js';
 import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { useSession } from '../lib/session.jsx';
-import { attempt, Avatar, Empty, Icon, Spinner, timeAgo } from '../components/ui.jsx';
+import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
@@ -93,7 +93,7 @@ function AdminChat() {
     const body = text.trim();
     if (!body) return;
     setText('');
-    await attempt(() => addDoc(collection(db, 'adminChat'), { uid: user.uid, name: user.displayName || 'Admin', photo: user.photoURL || '', text: body, createdAt: serverTimestamp() }), null, 'chat message');
+    await attempt(() => addDoc(collection(db, 'adminChat'), { uid: user.uid, name: user.displayName || 'Admin', text: body, createdAt: serverTimestamp() }), null, 'chat message');
   };
 
   return (
@@ -108,11 +108,13 @@ function AdminChat() {
             const grouped = i > 0 && list[i - 1].uid === m.uid && millis(m.createdAt) - millis(list[i - 1].createdAt) < 5 * 60 * 1000;
             return (
               <div key={m.id} className={`chat-msg ${m.uid === user.uid ? 'mine' : ''} ${grouped ? 'grouped' : ''}`}>
-                {!grouped && <Avatar name={m.name} photo={m.photo} size={30} />}
+                {!grouped && <UserAvatar uid={m.uid} name={m.name} size={30} />}
                 <div className="chat-bubble">
                   {!grouped && (
                     <div className="chat-meta">
-                      <b>{m.name}</b> <span className="muted">{timeAgo(m.createdAt)}</span>
+                      <b>
+                        <UserName uid={m.uid} fallback={m.name} />
+                      </b> <span className="muted">{timeAgo(m.createdAt)}</span>
                     </div>
                   )}
                   <p dangerouslySetInnerHTML={{ __html: plainToHtml(m.text) }} />
@@ -188,7 +190,7 @@ function RulesAdmin() {
                     {r?.status === 'suggested' && <span className="tag t-suggestion">New rule</span>}
                   </div>
                   <p className="small muted">
-                    by {v.createdByName} · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
+                    by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
                   </p>
                   <div className="row gap wrap">
                     <button className="small" onClick={() => attempt(() => updateVersion(v.id, { label: 'Community' }), 'Labeled Community')}>
@@ -227,7 +229,7 @@ function RulesAdmin() {
                       <span className="small muted">changes {Object.keys(v.data || {}).join(', ')}</span>
                     </div>
                     <p className="small muted">
-                      by {v.createdByName} · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
+                      by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
                       {v.note && ` · “${v.note}”`}
                     </p>
                     <div className="row gap wrap">
@@ -550,7 +552,9 @@ function RulesetsAdmin() {
                   <a href={href('rules', [], { set: s.id })}>{s.name}</a>
                   {s.description && <p className="small muted clamp">{s.description}</p>}
                 </td>
-                <td>{s.ownerName}</td>
+                <td>
+                  <UserName uid={s.ownerUid} fallback={s.ownerName} />
+                </td>
                 <td>{Object.keys(s.entries || {}).length}</td>
                 <td className="muted">{timeAgo(s.updatedAt)}</td>
                 <td>
@@ -618,7 +622,7 @@ function PeopleAdmin() {
         <ul className="people">
           {list.map((u) => (
             <li key={u.id}>
-              <Avatar name={u.name} photo={u.photo} size={32} />
+              <Avatar name={u.name} avatar={u.avatar} photo={u.photo} size={32} />
               <div>
                 <b>{u.name}</b> {adminIds.has(u.id) && <span className={`tag t-${LABEL_CLASS['Official Ruling']}`}>Admin</span>}
                 <p className="small muted">last seen {timeAgo(u.lastSeen)}</p>

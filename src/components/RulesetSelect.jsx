@@ -4,6 +4,7 @@ import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { RULEBOOK_SET } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
+import { useProfiles } from '../lib/profiles.js';
 
 /**
  * The ruleset the reader is using, shared by the Rules and Components pages:
@@ -29,6 +30,7 @@ export function useRulesetChoice(linkedSetId) {
 /** Dropdown of the rulesets a reader can pick. */
 export default function RulesetSelect({ choice, onChange, id = 'ruleset-select', unsaved = false, differs = false }) {
   const { user, site } = useSession();
+  const profiles = useProfiles();
   const { selectedSet, publicSets, mySets, linkedSet } = choice;
   const privateMine = mySets.filter((s) => s.visibility !== 'public');
   // The selected set's name says when it has unsaved changes.
@@ -63,7 +65,7 @@ export default function RulesetSelect({ choice, onChange, id = 'ruleset-select',
       {linkedSet && linkedSet.visibility !== 'public' && linkedSet.ownerUid !== user?.uid && (
         <optgroup label="Shared with you">
           <option value={linkedSet.id}>
-            {linkedSet.name} (by {linkedSet.ownerName}){isDefault(linkedSet.id)}
+            {linkedSet.name} (by {profiles.get(linkedSet.ownerUid)?.name || linkedSet.ownerName}){isDefault(linkedSet.id)}
           </option>
         </optgroup>
       )}

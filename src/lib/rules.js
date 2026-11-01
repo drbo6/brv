@@ -152,8 +152,8 @@ export async function addComment({ ruleId = null, componentId = null, versionId,
     versionId: versionId || null,
     text,
     uid: user.uid,
+    // The name is a fallback: pages show the author's current username.
     name: user.displayName || 'Anonymous',
-    photo: user.photoURL || '',
     reactions: {},
     createdAt: serverTimestamp(),
   });

@@ -162,7 +162,8 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `config/shorthands` | `items` {keyword: {type, value}} |
 | `config/componentsMeta` | `version` (cache counter) |
 | `admins/{uid}` | Admin flag |
-| `users/{uid}` | Display name and photo |
+| `users/{uid}` | Public profile: chosen `name` and `avatar` ({glyph, color} or {photo}). Never an email address |
+| `usernames/{name}` | `uid` holding each (lowercased) username, so names are unique |
 | `adminChat` | Admin messages |
 
 ## Development

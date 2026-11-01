@@ -45,12 +45,35 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Public profiles: a chosen username and avatar. Never an email address.
     match /users/{uid} {
       allow read: if true;
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'photo', 'lastSeen'])
-        && shortText('name', 200);
+        && request.resource.data.keys().hasOnly(['name', 'avatar', 'photo', 'setup', 'lastSeen', 'updatedAt'])
+        && (!('name' in request.resource.data) || validName(request.resource.data.name))
+        && nameUnchangedOrClaimed(uid);
       allow delete: if isAdmin();
+    }
+
+    function validName(n) {
+      return n is string && n.size() >= 3 && n.size() <= 24 && !n.matches('.*@.*');
+    }
+
+    // A new or changed username must be claimed by this user in /usernames (in the same batch).
+    function nameUnchangedOrClaimed(uid) {
+      return !('name' in request.resource.data)
+        || (resource != null && resource.data.get('name', '') == request.resource.data.name)
+        || getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.name.lower())).data.uid == uid;
+    }
+
+    // usernames/{lowercased name} → { uid }: one owner per username.
+    match /usernames/{name} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid'])
+        && name == name.lower();
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
     match /sections/{id} {
