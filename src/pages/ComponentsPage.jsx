@@ -40,7 +40,9 @@ export default function ComponentsPage({ route }) {
       .then((r) => setState({ ...r, loading: false }))
       .catch((error) => setState({ loading: false, error }));
   }, []);
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const types = state.types || [];
   const type = types.find((t) => t.id === route.parts[0]) || types[0];
@@ -234,7 +236,9 @@ function VirtualGrid({ items, aspect, cardWidth, renderItem }) {
   const rowH = w / aspect + gap;
   const rows = Math.ceil(items.length / cols);
   const virt = useWindowVirtualizer({ count: rows, estimateSize: () => rowH, overscan: 4, scrollMargin: box.top });
-  useEffect(() => virt.measure(), [rowH, cols, virt]);
+  useEffect(() => {
+    virt.measure();
+  }, [rowH, cols, virt]);
 
   return (
     <div ref={ref} className="vgrid" style={{ height: box.width ? virt.getTotalSize() : undefined }}>
@@ -260,7 +264,9 @@ function ComponentDetail({ type, comp, states, onClose }) {
   const base = byIdValue.get(baseId) || comp;
   const family = [{ comp: base, name: 'Default' }, ...(statesOf.get(baseId) || [])];
   const [current, setCurrent] = useState(comp);
-  useEffect(() => setCurrent(comp), [comp]);
+  useEffect(() => {
+    setCurrent(comp);
+  }, [comp]);
 
   const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(current.data[f.key], type));
 

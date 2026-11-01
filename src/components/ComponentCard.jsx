@@ -37,7 +37,10 @@ function FieldContent({ field, value, shorthands }) {
     return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable="false" /> : <span className="img-missing" aria-hidden="true" />;
   }
   const s = field.style || {};
-  const html = richHtml(`${s.prefix || ''}${value}${s.suffix || ''}`, shorthands);
+  const text = String(value);
+  // "+" in front of "-1" would read "+-1".
+  const prefix = s.prefix && !(/^[-+−]/.test(text) && /^[+-]/.test(s.prefix)) ? s.prefix : '';
+  const html = richHtml(`${prefix}${text}${s.suffix || ''}`, shorthands);
   return (
     <>
       {s.showLabel && <span className="cf-label">{field.label}</span>}
@@ -54,11 +57,20 @@ function ComponentCard({ type, comp, shorthands, onClick, className = '', hasSta
   const accent = accentFor(type, comp);
   const fields = type.fields.filter((f) => f.layout?.show && f.kind !== 'state' && !isEmptyValue(comp.data?.[f.key], type));
   const Tag = onClick ? 'button' : 'div';
+  const aspect = type.aspect || 0.7;
   return (
     <Tag
       type={onClick ? 'button' : undefined}
       className={`ccard ${className}`}
-      style={{ '--accent': accent, aspectRatio: type.aspect || 0.7, gridTemplateColumns: `repeat(${type.cols || 20}, 1fr)`, gridTemplateRows: `repeat(${type.rows || 28}, 1fr)` }}
+      style={{
+        '--accent': accent,
+        aspectRatio: aspect,
+        // Round corners: the vertical radius is a share of the height, so scale it by the aspect ratio.
+        borderRadius: `4.5% / ${4.5 * aspect}%`,
+        // minmax(0, 1fr) keeps rows from growing with their content, so the layout stays exact.
+        gridTemplateColumns: `repeat(${type.cols || 20}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${type.rows || 28}, minmax(0, 1fr))`,
+      }}
       onClick={onClick}
     >
       {fields.map((f) => {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FIELD_KINDS, idField, importComponents, newField, saveType, slugKey } from '../../lib/components.js';
+import { autoLayout, FIELD_KINDS, idField, importComponents, newField, saveType, slugKey } from '../../lib/components.js';
 import { attempt, Icon, toast } from '../ui.jsx';
 
 const SKIP = '__skip';
@@ -127,7 +127,9 @@ export default function Importer({ type, comps, onDone }) {
     const ok = await attempt(async () => {
       let target = type;
       if (plan.created.length) {
-        target = { ...type, fields: [...type.fields, ...plan.created] };
+        const fields = [...type.fields, ...plan.created];
+        // A brand-new type has nothing on its card yet: start from an automatic layout.
+        target = { ...type, fields: type.fields.some((f) => f.layout?.show) ? fields : autoLayout(fields, type.cols, type.rows) };
         await saveType(target);
       }
       const r = await importComponents(target, records, { removeMissing, existing: comps });

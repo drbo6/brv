@@ -216,7 +216,7 @@ export async function importRulebookSeed(seed, user) {
       }),
     );
     ops.push((b) =>
-      b.set(versionRef, { ruleId: ruleRef.id, label: 'Rulebook', text: r.text, note: `Rulebook p. ${r.page ?? '?'}`, reactions: {}, createdAt: serverTimestamp(), ...author(user) }),
+      b.set(versionRef, { ruleId: ruleRef.id, label: 'Rulebook', text: r.text, note: '', reactions: {}, createdAt: serverTimestamp(), ...author(user) }),
     );
   }
   await commitInChunks(ops);

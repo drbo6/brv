@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { BACKGROUNDS, deleteType, DEFAULT_STYLE, FIELD_KINDS, FONTS, isEmptyValue, newField, saveType, SHAPES } from '../../lib/components.js';
+import { autoLayout, BACKGROUNDS, deleteType, DEFAULT_STYLE, FIELD_KINDS, FONTS, isEmptyValue, newField, saveType, SHAPES } from '../../lib/components.js';
 import { navigate } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
 import ComponentCard, { accentFor } from '../ComponentCard.jsx';
@@ -213,7 +213,12 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
               </select>
             )}
           </div>
-          <p className="small muted">Drag a box to move it; drag its corner to resize. Positions snap to the grid. Font sizes scale with the card.</p>
+          <p className="small muted">
+            Drag a box to move it; drag its corner to resize. Positions snap to the grid. Font sizes scale with the card.{' '}
+            <button className="link-btn small" onClick={() => confirm('Replace the current layout with an automatic one?') && setDraft((d) => ({ ...d, fields: autoLayout(d.fields, d.cols, d.rows) }))}>
+              Auto-arrange
+            </button>
+          </p>
           <LayoutCanvas draft={draft} sample={sample} shorthands={shorthands} selected={selected} onSelect={setSelected} onLayout={setLayout} />
         </section>
       </div>
@@ -432,7 +437,7 @@ function LayoutCanvas({ draft, sample, shorthands, selected, onSelect, onLayout 
         <div
           ref={ref}
           className="layout-overlay"
-          style={{ gridTemplateColumns: `repeat(${draft.cols}, 1fr)`, gridTemplateRows: `repeat(${draft.rows}, 1fr)`, '--cols': draft.cols, '--rows': draft.rows }}
+          style={{ gridTemplateColumns: `repeat(${draft.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${draft.rows}, minmax(0, 1fr))`, '--cols': draft.cols, '--rows': draft.rows }}
           onPointerMove={move}
           onPointerUp={end}
           onPointerCancel={end}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { configured, isDemo } from './lib/firebase.js';
 import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
@@ -63,7 +63,7 @@ function Shell() {
           {nav.map((n) => (
             <a key={n.page} href={href(n.page)} className={route.page === n.page ? 'active' : ''} aria-current={route.page === n.page ? 'page' : undefined}>
               <Icon name={n.icon} />
-              <span>{n.label}</span>
+              <span className="nav-label">{n.label}</span>
             </a>
           ))}
         </nav>
@@ -73,7 +73,7 @@ function Shell() {
           </button>
           <a className={`account-link ${route.page === 'account' ? 'active' : ''}`} href={href('account')}>
             {user ? <Avatar name={user.displayName} photo={user.photoURL} size={26} /> : <Icon name="user" />}
-            <span>{user ? 'Account' : 'Log in'}</span>
+            <span className="nav-label">{user ? 'Account' : 'Log in'}</span>
           </a>
         </div>
       </header>
@@ -83,6 +83,7 @@ function Shell() {
         </div>
       )}
       <main id="main">
+        <ErrorBoundary key={route.page}>
         <Suspense fallback={<Spinner />}>
           {route.page === 'components' ? (
             <ComponentsPage route={route} />
@@ -94,6 +95,7 @@ function Shell() {
             <RulesPage route={route} />
           )}
         </Suspense>
+        </ErrorBoundary>
       </main>
       <footer className="site-footer">
         <p>
@@ -106,4 +108,30 @@ function Shell() {
       {showWelcome && <WelcomeModal onClose={closeWelcome} />}
     </>
   );
+}
+
+/** Keeps one broken page from blanking the whole site. */
+class ErrorBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error(error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="page narrow">
+        <div className="empty">
+          <h3>Something went wrong on this page</h3>
+          <p>{String(this.state.error.message || this.state.error)}</p>
+          <button onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 }

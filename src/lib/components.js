@@ -38,6 +38,47 @@ export function newField(label, kind = 'ability', existingKeys = []) {
   return { key, label, kind, filterable: kind === 'type', urlTemplate: '', layout: { show: false, x: 2, y: 2, w: 8, h: 3, z: 1 }, style: { ...DEFAULT_STYLE } };
 }
 
+/** A sensible starting layout: title on top, image, value badges, a type band and the ability text. */
+export function autoLayout(fields, cols, rows) {
+  const out = fields.map((f) => ({ ...f, layout: { ...f.layout, show: false }, style: { ...DEFAULT_STYLE, ...f.style } }));
+  const first = (kind) => out.find((f) => f.kind === kind);
+  const place = (f, layout, style = {}) => {
+    if (!f) return;
+    f.layout = { show: true, z: 1, ...layout };
+    f.style = { ...DEFAULT_STYLE, ...style };
+  };
+  const th = Math.max(2, Math.round(rows * 0.12));
+  const title = first('title');
+  place(title, { x: 0, y: 0, w: cols, h: th, z: 2 }, { font: 'display', bold: true, fontScale: 1.3 });
+  let y = title ? th : 0;
+  const image = first('image');
+  const imageTop = y;
+  if (image) {
+    const ih = Math.round(rows * 0.42);
+    place(image, { x: 0, y, w: cols, h: ih });
+    y += ih;
+  }
+  const badge = Math.max(2, Math.round(cols * 0.22));
+  out
+    .filter((f) => f.kind === 'value')
+    .slice(0, 3)
+    .forEach((f, i) => {
+      const x = [0, cols - badge, Math.round((cols - badge) / 2)][i];
+      place(f, { x, y: imageTop + (image ? 1 : 0), w: badge, h: Math.max(2, Math.round((badge * rows) / cols)), z: 4 }, { font: 'display', bold: true, fontScale: 1.6, shape: 'circle', bg: 'dark' });
+    });
+  if (!image) y = imageTop + Math.max(2, Math.round((badge * rows) / cols)) + 1;
+  const type = first('type');
+  if (type) {
+    place(type, { x: 0, y, w: cols, h: 2, z: 2 }, { font: 'condensed', upper: true, fontScale: 0.9, bg: 'dark' });
+    y += 2;
+  }
+  const lore = first('lore');
+  const loreH = lore ? Math.max(2, Math.round(rows * 0.1)) : 0;
+  place(first('ability'), { x: 0, y, w: cols, h: Math.max(2, rows - y - loreH), z: 2 }, { fontScale: 0.95 });
+  place(lore, { x: 0, y: rows - loreH, w: cols, h: loreH, z: 2 }, { italic: true, fontScale: 0.75 });
+  return out;
+}
+
 export const NEW_TYPE = { name: 'New component type', order: 99, aspect: 0.7, cols: 20, rows: 28, emptyValues: ['n/a'], accentField: '', accentColors: {}, defaultAccent: '#2b2427', fields: [] };
 
 export function isEmptyValue(v, type) {

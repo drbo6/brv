@@ -1104,6 +1104,11 @@ select {
   padding-bottom: 160px;
 }
 
+.toc,
+.rules-main {
+  min-width: 0;
+}
+
 .toc {
   position: sticky;
   top: calc(var(--header-h) + 16px);
@@ -1249,8 +1254,12 @@ select {
 
 .search {
   position: relative;
-  flex: 1 1 260px;
-  min-width: 200px;
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.toolbar > select {
+  max-width: 170px;
 }
 
 .search .icon {
@@ -1504,6 +1513,12 @@ img.sh {
   text-align: center;
 }
 
+.page-ref {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 4px;
+}
+
 .version-switch .tag {
   margin-left: 6px;
 }
@@ -1657,8 +1672,8 @@ img.sh {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
-  transform: translate(-50%, 20px);
+  top: calc(var(--header-h) + 14px);
+  transform: translate(-50%, -12px);
   opacity: 0;
   z-index: 500;
   padding: 10px 18px;
@@ -1732,7 +1747,6 @@ img.sh {
   min-height: 0;
   padding: 0;
   border: none;
-  border-radius: 4.5cqw;
   overflow: hidden;
   background:
     radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.08), transparent 60%),
@@ -2185,10 +2199,33 @@ button.ccard:hover:not(:disabled) {
 
 .sh-row {
   display: grid;
-  grid-template-columns: 76px 92px minmax(0, 1fr) 26px 28px;
+  grid-template-columns: minmax(0, 1fr) 104px 30px;
+  grid-template-areas:
+    'key type del'
+    'val val prev';
   gap: 4px;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.sh-row > :nth-child(1) {
+  grid-area: key;
+}
+
+.sh-row > :nth-child(2) {
+  grid-area: type;
+}
+
+.sh-row > :nth-child(3) {
+  grid-area: val;
+}
+
+.sh-row > :nth-child(4) {
+  grid-area: prev;
+}
+
+.sh-row > :nth-child(5) {
+  grid-area: del;
 }
 
 .sh-row input,
@@ -2548,7 +2585,12 @@ button.ccard:hover:not(:disabled) {
   }
 
   .ruleset-bar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .ruleset-pick {
+    min-width: 0;
   }
 
   .ruleset-desc {
@@ -2580,8 +2622,7 @@ button.ccard:hover:not(:disabled) {
   }
 
   .brand-sub,
-  .main-nav span,
-  .account-link span,
+  .nav-label,
   .hide-sm {
     display: none;
   }

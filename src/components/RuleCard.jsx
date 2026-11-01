@@ -99,6 +99,7 @@ function RuleCard({ item, setName, editing, focused, onShowVersion, onSetActive,
               </button>
             )}
             <span className={`label l-${LABEL_CLASS[shown.label] || 'other'}`}>{shown.label}</span>
+            {shown.label === 'Rulebook' && rule.page != null && <span className="page-ref">p. {rule.page}</span>}
             {vs.length > 1 && (
               <>
                 <span className="version-count" aria-live="polite">

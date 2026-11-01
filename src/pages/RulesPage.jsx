@@ -95,12 +95,13 @@ export default function RulesPage({ route }) {
       .filter((it) => {
         if (it.rule.code === focusCode) return true;
         if (it.rule.status === 'rejected' && !(isAdmin && showInactive)) return false;
-        if (!it.active && !showInactive) return false;
+        // While customizing a ruleset, inactive rules stay visible so they can be switched back on.
+        if (!it.active && !showInactive && !draft) return false;
         if (labelFilter && !it.vs.some((v) => v.label === labelFilter)) return false;
         if (kindFilter && (it.rule.kind || 'rule') !== kindFilter) return false;
         return tokens.every((t) => it.searchText.includes(t));
       });
-  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isAdmin, focusCode]);
+  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isAdmin, focusCode, draft]);
 
   const groups = useMemo(() => {
     const bySection = new Map();
@@ -143,6 +144,8 @@ export default function RulesPage({ route }) {
   );
 
   const [dialog, setDialog] = useState(null);
+  // The contents list starts collapsed on narrow screens, where it sits above the rules.
+  const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
   const ownsSet = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isAdmin);
 
   const saveExisting = () =>
@@ -194,7 +197,7 @@ export default function RulesPage({ route }) {
   return (
     <div className={`rules-layout ${draft ? 'is-editing' : ''}`}>
       <aside className="toc" aria-label="Contents">
-        <details open className="toc-details">
+        <details open={tocOpen} className="toc-details">
           <summary>Contents</summary>
           <nav>
             {groups.map(({ section, total }) => (

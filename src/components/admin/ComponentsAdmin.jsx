@@ -104,7 +104,9 @@ export default function ComponentsAdmin({ route }) {
 function ShorthandsEditor() {
   const { shorthands } = useSession();
   const [rows, setRows] = useState(null);
-  useEffect(() => setRows(Object.entries(shorthands).map(([key, v]) => ({ key, ...v }))), [shorthands]);
+  useEffect(() => {
+    setRows(Object.entries(shorthands).map(([key, v]) => ({ key, ...v })));
+  }, [shorthands]);
   if (!rows) return null;
 
   const update = (i, patch) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));

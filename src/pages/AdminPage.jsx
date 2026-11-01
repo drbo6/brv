@@ -73,7 +73,10 @@ function AdminChat() {
   const [text, setText] = useState('');
   const endRef = useRef(null);
   const list = useMemo(() => [...(messages.data || [])].reverse(), [messages.data]);
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [list.length]);
+  useEffect(() => {
+    // Block body on purpose: newer browsers return a Promise from scrollIntoView, which must not reach React.
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [list.length]);
 
   const send = async (e) => {
     e.preventDefault();
