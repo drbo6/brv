@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
+import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { absoluteLink, navigate } from '../lib/router.js';
 import { createRuleset, groupVersions, KINDS, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
@@ -47,7 +48,10 @@ export default function RulesPage({ route }) {
   );
 
   // ----- editing a ruleset -----
-  const [draft, setDraft] = useState(null); // { baseId, entries }
+  // { baseId, entries } while customizing. Each toggle is one undo step (Ctrl+Z works too).
+  const [draft, setDraft, draftHistory] = useDraftHistory(null, 0);
+  useUndoScope(draftHistory);
+  const endDraft = draftHistory.reset;
   const baseEntries = selectedSet.builtIn ? rulebook : selectedSet.entries || {};
   const entries = draft ? draft.entries : baseEntries;
   const changeCount = useMemo(() => {
@@ -59,6 +63,9 @@ export default function RulesPage({ route }) {
   }, [draft, baseEntries]);
 
   const [viewVersion, setViewVersion] = useState({});
+  // One rule at a time shows its tools; a linked rule starts open.
+  const [openId, setOpenId] = useState(null);
+  const onToggle = useCallback((ruleId) => setOpenId((id) => (id === ruleId ? null : ruleId)), []);
   const onShowVersion = useCallback((ruleId, vid) => setViewVersion((m) => ({ ...m, [ruleId]: vid })), []);
   const onSetActive = useCallback((ruleId, vid) => setDraft((d) => {
     const next = { ...d.entries };
@@ -70,7 +77,7 @@ export default function RulesPage({ route }) {
 
   const selectSet = (id) => {
     if (draft && changeCount && !confirm('Discard your unsaved ruleset changes?')) return;
-    setDraft(null);
+    endDraft(null);
     setViewVersion({});
     setStoredSetId(id);
     navigate('rules', route.parts, {}, { replace: true });
@@ -129,16 +136,18 @@ export default function RulesPage({ route }) {
     const el = document.getElementById(`rule-${focusCode}`);
     if (el) {
       focusedOnce.current = focusCode;
+      const linked = allRules.find((r) => r.code === focusCode);
+      if (linked) setOpenId(linked.id);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [focusCode, rules.loading, versions.loading, groups]);
+  }, [focusCode, rules.loading, versions.loading, groups, allRules]);
 
   // ----- actions -----
   const onMove = useCallback(
     (ruleId, delta) => {
       const rule = allRules.find((r) => r.id === ruleId);
       const siblings = allRules.filter((r) => r.sectionId === rule.sectionId);
-      return attempt(() => moveRule(siblings, siblings.indexOf(rule), delta));
+      return attempt(() => moveRule(siblings, siblings.indexOf(rule), delta), null, 'move rule');
     },
     [allRules],
   );
@@ -151,14 +160,14 @@ export default function RulesPage({ route }) {
   const saveExisting = () =>
     requireUser(async () => {
       const ok = await attempt(() => updateRuleset(selectedSet.id, { entries: draft.entries }), 'Ruleset saved');
-      if (ok) setDraft(null);
+      if (ok) endDraft(null);
     });
 
   const saveAsNew = async ({ name, description }) =>
     requireUser(async (u) => {
       const id = await attempt(() => createRuleset({ name, description, entries: draft.entries }, u), 'Ruleset saved');
       if (id) {
-        setDraft(null);
+        endDraft(null);
         setStoredSetId(id);
         navigate('rules', [], {}, { replace: true });
       }
@@ -264,7 +273,7 @@ export default function RulesPage({ route }) {
           </p>
           <div className="ruleset-actions">
             {!draft ? (
-              <button onClick={() => setDraft({ baseId: selectedSet.id, entries: { ...baseEntries } })} title="Choose which rules and versions are part of a ruleset">
+              <button onClick={() => endDraft({ baseId: selectedSet.id, entries: { ...baseEntries } })} title="Choose which rules and versions are part of a ruleset">
                 <Icon name="layers" />
                 Customize
               </button>
@@ -331,7 +340,7 @@ export default function RulesPage({ route }) {
           <Spinner label="Loading rules…" />
         ) : allRules.length === 0 ? (
           <Empty title="No rules yet">
-            <p>{isAdmin ? 'Import the transcribed rulebook from Admin → Rules to get started.' : 'An admin needs to import the rulebook first.'}</p>
+            <p>{isAdmin ? 'Load the rules from Admin → Backup & import (for example imports/blood-rage-valhalla.json from the repository).' : 'An admin needs to import the rulebook first.'}</p>
           </Empty>
         ) : groups.length === 0 ? (
           <Empty title="No rules match">
@@ -361,6 +370,8 @@ export default function RulesPage({ route }) {
                         setName={draft ? 'your edit' : selectedSet.name}
                         editing={Boolean(draft)}
                         focused={it.rule.code === focusCode}
+                        open={openId === it.rule.id}
+                        onToggle={onToggle}
                         onShowVersion={onShowVersion}
                         onSetActive={onSetActive}
                         onUseVersion={onUseVersion}
@@ -390,7 +401,13 @@ export default function RulesPage({ route }) {
             <p className="small muted">Toggle “In ruleset” on each rule, or browse to another version and choose “Use this version”.</p>
           </div>
           <div className="row gap">
-            <button onClick={() => (!changeCount || confirm('Discard your changes?')) && setDraft(null)}>Discard</button>
+            <button className="icon-btn" onClick={draftHistory.undo} disabled={!draftHistory.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+              <Icon name="undo" />
+            </button>
+            <button className="icon-btn" onClick={draftHistory.redo} disabled={!draftHistory.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+              <Icon name="redo" />
+            </button>
+            <button onClick={() => (!changeCount || confirm('Discard your changes?')) && endDraft(null)}>Discard</button>
             {ownsSet && (
               <button className="primary" onClick={saveExisting} disabled={!changeCount}>
                 <Icon name="save" />

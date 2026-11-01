@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { richHtml } from '../lib/html.js';
 import { reactionCounts } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
+import { record, redo, undo } from '../lib/store.js';
 
 const ICONS = {
   up: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
@@ -38,6 +39,13 @@ const ICONS = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
+  bold: '<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>',
+  italic: '<path d="M19 4h-9"/><path d="M14 20H5"/><path d="M15 4 9 20"/>',
+  list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
 };
 
 export function Icon({ name, size = 16, className = '' }) {
@@ -172,29 +180,70 @@ export async function copyText(text) {
   }
 }
 
-/** Small transient status message at the bottom of the screen. */
-export function toast(message, kind = 'info') {
+/** Small transient status message under the header, optionally with one action button (e.g. Undo). */
+export function toast(message, kind = 'info', action = null) {
   const el = document.createElement('div');
   el.className = `toast toast-${kind}`;
   el.setAttribute('role', 'status');
-  el.textContent = message;
-  document.body.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => {
+  const text = document.createElement('span');
+  text.textContent = message;
+  el.appendChild(text);
+  let timer;
+  const close = () => {
+    clearTimeout(timer);
     el.classList.remove('show');
     setTimeout(() => el.remove(), 300);
-  }, 2600);
+  };
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.onclick = () => {
+      close();
+      action.onClick();
+    };
+    el.appendChild(btn);
+    el.addEventListener('mouseenter', () => clearTimeout(timer));
+    el.addEventListener('mouseleave', () => (timer = setTimeout(close, 2500)));
+  }
+  document.querySelectorAll('.toast').forEach((t) => t.remove());
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  timer = setTimeout(close, action ? 6000 : 2600);
+}
+
+/** Undo one recorded action and say so. */
+export async function undoWithToast(entry) {
+  try {
+    const label = await undo(entry);
+    if (label) toast(`Undone: ${label}`, 'ok', { label: 'Redo', onClick: () => redoWithToast() });
+  } catch (e) {
+    console.error(e);
+    toast(e?.code === 'permission-denied' ? 'That change can no longer be undone with your permissions.' : `Could not undo: ${e.message}`, 'error');
+  }
+}
+
+export async function redoWithToast(entry) {
+  try {
+    const label = await redo(entry);
+    if (label) toast(`Redone: ${label}`, 'ok', { label: 'Undo', onClick: () => undoWithToast() });
+  } catch (e) {
+    console.error(e);
+    toast(`Could not redo: ${e.message}`, 'error');
+  }
 }
 
 /**
- * Wrap an async action: shows errors as toasts instead of failing silently.
- * Resolves to the action's result (or `true`) on success, `undefined` on failure.
+ * Wrap an async action: records its writes for undo and shows errors as toasts instead of failing
+ * silently. Resolves to the action's result (or `true`) on success, `undefined` on failure.
+ * `label` names the action in the undo history when there is no success message.
  */
-export async function attempt(fn, success) {
+export async function attempt(fn, success, label) {
   try {
-    const r = await fn();
-    if (success) toast(success, 'ok');
-    return r === undefined ? true : r;
+    const { result, entry } = await record(success || label, fn);
+    if (success) toast(success, 'ok', entry ? { label: 'Undo', onClick: () => undoWithToast(entry) } : null);
+    return result === undefined ? true : result;
   } catch (e) {
     console.error(e);
     toast(e?.code === 'permission-denied' ? 'You do not have permission to do that.' : `Something went wrong: ${e.message}`, 'error');

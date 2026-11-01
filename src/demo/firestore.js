@@ -49,6 +49,9 @@ export class Timestamp {
   static now() {
     return new Timestamp(Date.now());
   }
+  static fromMillis(ms) {
+    return new Timestamp(ms);
+  }
 }
 
 const SENTINEL = Symbol('sentinel');
@@ -67,8 +70,9 @@ export function collection(_db, path) {
 }
 
 export function doc(parent, path, id) {
-  if (parent.kind === 'collection') return { kind: 'doc', col: parent.path, id: path ?? autoId() };
-  return { kind: 'doc', col: path, id };
+  const ref = parent.kind === 'collection' ? { kind: 'doc', col: parent.path, id: path ?? autoId() } : { kind: 'doc', col: path, id };
+  ref.path = `${ref.col}/${ref.id}`;
+  return ref;
 }
 
 export const where = (field, op, value) => ({ type: 'where', field, op, value });

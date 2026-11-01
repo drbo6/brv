@@ -1,14 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, deleteDoc, setDoc, updateDoc } from '../lib/store.js';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, deleteRuleset, exportRulesBackup, importRulebookSeed, LABEL_CLASS, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
+import { commitInChunks, deleteRuleset, LABEL_CLASS, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo } from '../components/ui.jsx';
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
+const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
 
 const TABS = [
   { id: 'chat', label: 'Admin chat' },
@@ -16,6 +18,7 @@ const TABS = [
   { id: 'rulesets', label: 'Rulesets' },
   { id: 'components', label: 'Components' },
   { id: 'people', label: 'People' },
+  { id: 'data', label: 'Backup & import' },
 ];
 
 export default function AdminPage({ route }) {
@@ -61,6 +64,11 @@ export default function AdminPage({ route }) {
         </Suspense>
       )}
       {tab === 'people' && <PeopleAdmin />}
+      {tab === 'data' && (
+        <Suspense fallback={<Spinner />}>
+          <DataAdmin />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -83,7 +91,7 @@ function AdminChat() {
     const body = text.trim();
     if (!body) return;
     setText('');
-    await attempt(() => addDoc(collection(db, 'adminChat'), { uid: user.uid, name: user.displayName || 'Admin', photo: user.photoURL || '', text: body, createdAt: serverTimestamp() }));
+    await attempt(() => addDoc(collection(db, 'adminChat'), { uid: user.uid, name: user.displayName || 'Admin', photo: user.photoURL || '', text: body, createdAt: serverTimestamp() }), null, 'chat message');
   };
 
   return (
@@ -108,7 +116,7 @@ function AdminChat() {
                   <p dangerouslySetInnerHTML={{ __html: plainToHtml(m.text) }} />
                 </div>
                 {m.uid === user.uid && (
-                  <button className="icon-btn chat-del" aria-label="Delete message" onClick={() => attempt(() => deleteDoc(doc(db, 'adminChat', m.id)))}>
+                  <button className="icon-btn chat-del" aria-label="Delete message" onClick={() => attempt(() => deleteDoc(doc(db, 'adminChat', m.id)), 'Message deleted')}>
                     <Icon name="x" size={12} />
                   </button>
                 )}
@@ -141,34 +149,11 @@ function AdminChat() {
 // ---------------------------------------------------------------- rules
 
 function RulesAdmin() {
-  const { user } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
-  const [busy, setBusy] = useState(false);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const ruleById = useMemo(() => new Map((rules.data || []).map((r) => [r.id, r])), [rules.data]);
-
-  const importSeed = async () => {
-    const hasRules = (rules.data || []).length > 0;
-    if (!confirm(hasRules ? `There are already ${rules.data.length} rules. Importing again will add duplicates. Continue?` : 'Import the transcribed rulebook?')) return;
-    setBusy(true);
-    const seed = (await import('../data/rulebook-seed.json')).default;
-    await attempt(() => importRulebookSeed(seed, user), `Imported ${seed.rules.length} rules`);
-    setBusy(false);
-  };
-
-  const backup = async () => {
-    setBusy(true);
-    const data = await attempt(exportRulesBackup);
-    setBusy(false);
-    if (!data) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    a.download = `brv-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
 
   const suggestedRules = (rules.data || []).filter((r) => r.status === 'suggested');
   const queue = [...(suggestions.data || [])].sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
@@ -221,23 +206,6 @@ function RulesAdmin() {
         {suggestedRules.length > 0 && <p className="small muted">{suggestedRules.length} suggested new rule(s) — approve them from the rule card on the Rules page (turn on “Show inactive”).</p>}
       </section>
 
-      <section className="panel">
-        <h2>Rulebook data</h2>
-        <p className="small muted">
-          {rules.data ? `${rules.data.length} rules in ${tree.ordered.length} sections.` : 'Loading…'} The transcribed rulebook ships with the site and can be imported once.
-        </p>
-        <div className="row gap wrap">
-          <button className={rules.data?.length ? '' : 'primary'} onClick={importSeed} disabled={busy || rules.loading}>
-            <Icon name="upload" />
-            Import transcribed rulebook
-          </button>
-          <button onClick={backup} disabled={busy}>
-            <Icon name="download" />
-            Download JSON backup
-          </button>
-        </div>
-      </section>
-
       <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
     </div>
   );
@@ -255,7 +223,7 @@ function SectionsEditor({ tree, rules, loading }) {
     if (j < 0 || j >= siblings.length) return;
     const list = [...siblings];
     [list[i], list[j]] = [list[j], list[i]];
-    return attempt(() => commitInChunks(list.map((x, k) => (b) => b.update(doc(db, 'sections', x.id), { order: k + 1 }))));
+    return attempt(() => commitInChunks(list.map((x, k) => (b) => b.update(doc(db, 'sections', x.id), { order: k + 1 }))), null, 'move section');
   };
 
   const add = async (e) => {
@@ -302,13 +270,13 @@ function SectionsEditor({ tree, rules, loading }) {
                         if (codes.has(v)) {
                           alert('That code is already used.');
                           e.target.value = s.code;
-                        } else attempt(() => updateDoc(doc(db, 'sections', s.id), { code: v }));
+                        } else attempt(() => updateDoc(doc(db, 'sections', s.id), { code: v }), null, 'section code');
                       }
                     }}
                   />
                 </td>
                 <td style={{ paddingLeft: 8 + s.depth * 18 }}>
-                  <input defaultValue={s.title} aria-label="Title" onBlur={(e) => e.target.value.trim() && e.target.value !== s.title && attempt(() => updateDoc(doc(db, 'sections', s.id), { title: e.target.value.trim() }))} />
+                  <input defaultValue={s.title} aria-label="Title" onBlur={(e) => e.target.value.trim() && e.target.value !== s.title && attempt(() => updateDoc(doc(db, 'sections', s.id), { title: e.target.value.trim() }), null, 'section title')} />
                 </td>
                 <td>
                   <select
@@ -317,7 +285,7 @@ function SectionsEditor({ tree, rules, loading }) {
                     onChange={(e) => {
                       const parent = e.target.value || null;
                       const order = (tree.children.get(parent) || []).length + 1;
-                      attempt(() => updateDoc(doc(db, 'sections', s.id), { parent, order }));
+                      attempt(() => updateDoc(doc(db, 'sections', s.id), { parent, order }), null, 'section parent');
                     }}
                   >
                     <option value="">— top level —</option>
@@ -343,7 +311,7 @@ function SectionsEditor({ tree, rules, loading }) {
                     aria-label="Delete section"
                     disabled={ruleCount(s.id) > 0 || (tree.children.get(s.id) || []).length > 0}
                     title={ruleCount(s.id) > 0 ? 'Move or delete its rules first' : 'Delete section'}
-                    onClick={() => confirm(`Delete section ${s.title}?`) && attempt(() => deleteDoc(doc(db, 'sections', s.id)))}
+                    onClick={() => confirm(`Delete section ${s.title}?`) && attempt(() => deleteDoc(doc(db, 'sections', s.id)), 'Section deleted')}
                   >
                     <Icon name="trash" />
                   </button>
@@ -444,7 +412,7 @@ function RulesetsAdmin() {
                       checked={s.visibility === 'public'}
                       onChange={(e) => {
                         if (!e.target.checked && site.defaultRulesetId === s.id) return alert('Choose another default ruleset first.');
-                        attempt(() => updateRuleset(s.id, { visibility: e.target.checked ? 'public' : 'private' }));
+                        attempt(() => updateRuleset(s.id, { visibility: e.target.checked ? 'public' : 'private' }), e.target.checked ? 'Ruleset made public' : 'Ruleset made private');
                       }}
                     />
                     <span className="switch-track" aria-hidden="true" />

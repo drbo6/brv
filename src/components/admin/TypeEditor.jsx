@@ -1,26 +1,119 @@
-import { useMemo, useRef, useState } from 'react';
-import { autoLayout, BACKGROUNDS, deleteType, DEFAULT_STYLE, FIELD_KINDS, FONTS, isEmptyValue, newField, saveType, SHAPES } from '../../lib/components.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ALIGNS, cardLayout, DEFAULT_CELL, DEFAULT_ROW, deleteType, FIELD_KINDS, isEmptyValue, newField, saveType, SIZES } from '../../lib/components.js';
+import { useDraftHistory, useUndoScope } from '../../lib/history.js';
 import { navigate } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
-import ComponentCard, { accentFor } from '../ComponentCard.jsx';
+import ComponentCard from '../ComponentCard.jsx';
 import { attempt, Icon } from '../ui.jsx';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+// The editor always works on an explicit layout, even for types that still use the automatic one.
+const editable = (type) => ({ ...clone(type), layout: cardLayout(type) });
+
+const ASPECTS = [
+  ['Poker card', 63 / 88],
+  ['Tarot card', 70 / 120],
+  ['Square', 1],
+  ['Landscape', 88 / 63],
+];
+
+// ---------- pure layout edits ----------
+
+const locate = (layout, key) => {
+  for (let r = 0; r < layout.rows.length; r++) {
+    const c = layout.rows[r].cells.findIndex((x) => x.key === key);
+    if (c >= 0) return [r, c];
+  }
+  return null;
+};
+
+const withoutCell = (layout, key) => ({ rows: layout.rows.map((r) => ({ ...r, cells: r.cells.filter((c) => c.key !== key) })) });
+const dropEmptyRows = (layout) => ({ rows: layout.rows.filter((r) => r.cells.length) });
+
+/** Place `cell` in row `row` before index `index`; `newRow: true` inserts a new row at position `row`. */
+function placeCell(layout, cell, { row, index = Infinity, newRow = false }) {
+  const from = locate(layout, cell.key);
+  let rows = withoutCell(layout, cell.key).rows;
+  if (newRow) rows = [...rows.slice(0, row), { ...DEFAULT_ROW, cells: [cell] }, ...rows.slice(row)];
+  else {
+    // Moving right within the same row: the removal shifted the target left by one.
+    const i = from && from[0] === row && from[1] < index ? index - 1 : index;
+    rows = rows.map((r, ri) => (ri === row ? { ...r, cells: [...r.cells.slice(0, i), cell, ...r.cells.slice(i)] } : r));
+  }
+  return dropEmptyRows({ rows });
+}
 
 export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   const { shorthands } = useSession();
-  const [draft, setDraft] = useState(() => clone(type));
-  const [selected, setSelected] = useState(draft.fields.find((f) => f.layout?.show)?.key || null);
+  const base = useMemo(() => editable(type), [type]);
+  const [draft, setDraft, history] = useDraftHistory(() => editable(type));
+  useUndoScope(history);
+  const [selected, setSelected] = useState(() => draft.layout.rows[0]?.cells[0]?.key || draft.fields[0]?.key || null);
   const [sampleId, setSampleId] = useState(comps[0]?.id || '');
   const [busy, setBusy] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(type);
+  const [drag, setDrag] = useState(null);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
 
-  const sample = comps.find((c) => c.id === sampleId) || comps[0] || { id: 'sample', data: Object.fromEntries(draft.fields.map((f) => [f.key, f.kind === 'image' ? '' : f.label])) };
+  // When the saved type changes underneath us (save, undo, redo) and there are no local edits, follow it.
+  const prevBase = useRef(base);
+  useEffect(() => {
+    if (prevBase.current !== base && JSON.stringify(draft) === JSON.stringify(prevBase.current)) history.reset(clone(base));
+    prevBase.current = base;
+  }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sample = comps.find((c) => c.id === sampleId) || comps[0] || { id: 'sample', data: Object.fromEntries(draft.fields.map((f) => [f.key, f.kind === 'image' ? '' : f.kind === 'value' ? 3 : f.label])) };
+  const fieldOf = useMemo(() => new Map(draft.fields.map((f) => [f.key, f])), [draft.fields]);
+  const placed = new Set(draft.layout.rows.flatMap((r) => r.cells.map((c) => c.key)));
+  const placeable = draft.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state');
+  const unplaced = placeable.filter((f) => !placed.has(f.key));
+
+  const setType = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const setLayout = (fn) => setDraft((d) => ({ ...d, layout: fn(d.layout) }));
   const setField = (key, patch) => setDraft((d) => ({ ...d, fields: d.fields.map((f) => (f.key === key ? { ...f, ...patch } : f)) }));
-  const setLayout = (key, patch) => setDraft((d) => ({ ...d, fields: d.fields.map((f) => (f.key === key ? { ...f, layout: { ...f.layout, ...patch } } : f)) }));
-  const setStyle = (key, patch) => setDraft((d) => ({ ...d, fields: d.fields.map((f) => (f.key === key ? { ...f, style: { ...DEFAULT_STYLE, ...f.style, ...patch } } : f)) }));
-  const sel = draft.fields.find((f) => f.key === selected);
+  const setCell = (key, patch) => setLayout((l) => ({ rows: l.rows.map((r) => ({ ...r, cells: r.cells.map((c) => (c.key === key ? { ...c, ...patch } : c)) })) }));
+  const setRow = (ri, patch) => setLayout((l) => ({ rows: l.rows.map((r, i) => (i === ri ? { ...r, ...patch } : r)) }));
+  const moveRow = (ri, d) =>
+    setLayout((l) => {
+      const rows = [...l.rows];
+      const j = ri + d;
+      if (j < 0 || j >= rows.length) return l;
+      [rows[ri], rows[j]] = [rows[j], rows[ri]];
+      return { rows };
+    });
+  const cellOf = (key) => {
+    const at = locate(draft.layout, key);
+    return at ? draft.layout.rows[at[0]].cells[at[1]] : { ...DEFAULT_CELL, key };
+  };
+  const place = (key, target) => setLayout((l) => placeCell(l, cellOf(key), target));
+
+  // ----- drag and drop -----
+  const dragProps = (key) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      e.dataTransfer.setData('text/plain', key);
+      e.dataTransfer.effectAllowed = 'move';
+      setDrag(key);
+    },
+    onDragEnd: () => setDrag(null),
+  });
+  const dropProps = (target) => ({
+    onDragOver: (e) => {
+      if (!drag) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.add('drop-on');
+    },
+    onDragLeave: (e) => e.currentTarget.classList.remove('drop-on'),
+    onDrop: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.remove('drop-on');
+      const key = e.dataTransfer.getData('text/plain') || drag;
+      if (key) place(key, target);
+      setDrag(null);
+      setSelected(key);
+    },
+  });
 
   const accentValues = useMemo(() => {
     if (!draft.accentField) return [];
@@ -30,8 +123,7 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   }, [draft, comps]);
 
   const save = async () => {
-    const ids = draft.fields.filter((f) => f.kind === 'id');
-    if (ids.length !== 1) return alert('A component type needs exactly one ID field.');
+    if (draft.fields.filter((f) => f.kind === 'id').length !== 1) return alert('A component type needs exactly one ID field.');
     setBusy(true);
     const ok = await attempt(() => saveType(draft), 'Component type saved');
     setBusy(false);
@@ -55,12 +147,28 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
       return { ...d, fields };
     });
 
+  const removeField = (key) => {
+    const f = fieldOf.get(key);
+    if (!confirm(`Remove the field “${f.label}”? Its data stays in the components but is no longer shown.`)) return;
+    setDraft((d) => ({ ...d, fields: d.fields.filter((x) => x.key !== key), layout: dropEmptyRows(withoutCell(d.layout, key)) }));
+    setSelected(null);
+  };
+
+  const sel = selected && fieldOf.get(selected);
+  const selAt = sel && locate(draft.layout, sel.key);
+
   return (
     <div className="type-editor">
       <section className="panel">
         <div className="panel-head">
           <h2>Type settings</h2>
-          <div className="row gap">
+          <div className="row gap wrap">
+            <button className="icon-btn" onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+              <Icon name="undo" />
+            </button>
+            <button className="icon-btn" onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+              <Icon name="redo" />
+            </button>
             <button
               className="danger small"
               onClick={async () => {
@@ -75,61 +183,47 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
               <Icon name="trash" />
               Delete type
             </button>
+            <button onClick={() => history.reset(clone(base))} disabled={!dirty || busy}>
+              Discard
+            </button>
             <button className="primary" onClick={save} disabled={!dirty || busy}>
               <Icon name="save" />
               {dirty ? 'Save changes' : 'Saved'}
             </button>
           </div>
         </div>
-        <div className="grid-4">
+        <div className="grid-3">
           <div className="field">
             <label htmlFor="t-name">Name</label>
-            <input id="t-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <input id="t-name" value={draft.name} onChange={(e) => setType({ name: e.target.value })} />
           </div>
           <div className="field">
-            <label>Card proportions (width × height)</label>
-            <div className="row gap">
-              <input
-                type="number"
-                min="1"
-                className="mini"
-                aria-label="Width"
-                value={Math.round((draft.aspect || 0.7) * 1000)}
-                onChange={(e) => setDraft({ ...draft, aspect: Number(e.target.value) / 1000 || 0.7 })}
-              />
-              <span>×</span>
-              <input type="number" className="mini" value={1000} disabled aria-label="Height" />
-            </div>
-            <div className="row gap wrap small">
-              {[
-                ['Poker', 63 / 88],
-                ['Tarot', 70 / 120],
-                ['Square', 1],
-                ['Blood Rage', 485 / 745],
-              ].map(([n, a]) => (
-                <button key={n} type="button" className="link-btn small" onClick={() => setDraft({ ...draft, aspect: a })}>
-                  {n}
-                </button>
+            <label htmlFor="t-aspect">Card shape</label>
+            <select id="t-aspect" value={ASPECTS.find(([, a]) => Math.abs(a - draft.aspect) < 0.005)?.[0] || 'custom'} onChange={(e) => {
+              const a = ASPECTS.find(([n]) => n === e.target.value);
+              if (a) setType({ aspect: a[1] });
+            }}>
+              {ASPECTS.map(([n]) => (
+                <option key={n}>{n}</option>
               ))}
-            </div>
-          </div>
-          <div className="field">
-            <label>Layout grid (columns × rows)</label>
-            <div className="row gap">
-              <input type="number" min="4" max="60" className="mini" value={draft.cols} onChange={(e) => setDraft({ ...draft, cols: clamp(Number(e.target.value) || 20, 4, 60) })} aria-label="Columns" />
-              <span>×</span>
-              <input type="number" min="4" max="80" className="mini" value={draft.rows} onChange={(e) => setDraft({ ...draft, rows: clamp(Number(e.target.value) || 28, 4, 80) })} aria-label="Rows" />
-            </div>
+              <option value="custom" disabled>
+                Custom
+              </option>
+            </select>
+            <p className="hint">
+              Width ÷ height:{' '}
+              <input type="number" className="mini" min="0.3" max="3" step="0.01" value={Number(draft.aspect || 0.7).toFixed(2)} onChange={(e) => setType({ aspect: Math.min(3, Math.max(0.3, Number(e.target.value) || 0.7)) })} aria-label="Width divided by height" />
+            </p>
           </div>
           <div className="field">
             <label htmlFor="t-empty">Values that mean “empty”</label>
-            <input id="t-empty" value={(draft.emptyValues || []).join(', ')} onChange={(e) => setDraft({ ...draft, emptyValues: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="n/a, -" />
+            <input id="t-empty" value={(draft.emptyValues || []).join(', ')} onChange={(e) => setType({ emptyValues: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="n/a, -" />
           </div>
         </div>
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="t-accent">Card color comes from</label>
-            <select id="t-accent" value={draft.accentField || ''} onChange={(e) => setDraft({ ...draft, accentField: e.target.value })}>
+            <label htmlFor="t-accent">Accent color comes from</label>
+            <select id="t-accent" value={draft.accentField || ''} onChange={(e) => setType({ accentField: e.target.value })}>
               <option value="">— one color for all —</option>
               {draft.fields
                 .filter((f) => f.kind === 'type')
@@ -139,21 +233,18 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
                   </option>
                 ))}
             </select>
+            <p className="hint">Used for the card's top edge and for highlighted rows.</p>
           </div>
           <div className="field">
             <label>Colors</label>
             <div className="color-list">
               <label className="color-chip">
-                <input type="color" value={draft.defaultAccent || '#2b2427'} onChange={(e) => setDraft({ ...draft, defaultAccent: e.target.value })} />
+                <input type="color" value={draft.defaultAccent || '#7c1a17'} onChange={(e) => setType({ defaultAccent: e.target.value })} />
                 <span>Default</span>
               </label>
               {accentValues.map((v) => (
                 <label key={v} className="color-chip">
-                  <input
-                    type="color"
-                    value={draft.accentColors?.[v] || draft.defaultAccent || '#2b2427'}
-                    onChange={(e) => setDraft({ ...draft, accentColors: { ...draft.accentColors, [v]: e.target.value } })}
-                  />
+                  <input type="color" value={draft.accentColors?.[v] || draft.defaultAccent || '#7c1a17'} onChange={(e) => setType({ accentColors: { ...draft.accentColors, [v]: e.target.value } })} />
                   <span>{v}</span>
                 </label>
               ))}
@@ -163,79 +254,247 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
       </section>
 
       <div className="layout-split">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Fields</h2>
-            <button className="small" onClick={addField}>
-              <Icon name="plus" />
-              Add field
-            </button>
-          </div>
-          <ul className="field-list">
-            {draft.fields.map((f, i) => (
-              <li key={f.key} className={selected === f.key ? 'on' : ''}>
-                <button className="field-pick" onClick={() => setSelected(f.key)} aria-pressed={selected === f.key}>
-                  <span className={`kind-dot k-${f.kind}`} aria-hidden="true" />
-                  <span className="field-name">{f.label}</span>
-                  <span className="muted small">{FIELD_KINDS[f.kind]?.label}</span>
+        <div className="col gap">
+          <section className="panel">
+            <div className="panel-head">
+              <h2>Card layout</h2>
+            </div>
+            <p className="small muted">
+              The card is a stack of rows; fields in a row sit side by side. Drag fields between rows, or select one and use its controls below.
+            </p>
+            <div className={`lb ${drag ? 'dragging' : ''}`}>
+              {draft.layout.rows.map((r, ri) => (
+                <div key={ri} className="lb-block">
+                  <div className="lb-gap" {...dropProps({ row: ri, newRow: true })} aria-hidden="true" />
+                  <div className={`lb-row ${r.band ? 'band' : ''} ${r.fill ? 'fill' : ''}`} {...dropProps({ row: ri })}>
+                    <div className="lb-cells">
+                      {r.cells.map((c, ci) => {
+                        const f = fieldOf.get(c.key);
+                        return (
+                          <button
+                            key={c.key}
+                            type="button"
+                            className={`lb-cell ${selected === c.key ? 'on' : ''}`}
+                            style={{ flexGrow: c.width || 1 }}
+                            onClick={() => setSelected(c.key)}
+                            aria-pressed={selected === c.key}
+                            {...dragProps(c.key)}
+                            {...dropProps({ row: ri, index: ci })}
+                          >
+                            <span className={`kind-dot k-${f.kind}`} aria-hidden="true" />
+                            <span className="lb-cell-name">{f.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="lb-row-tools" role="group" aria-label={`Row ${ri + 1}`}>
+                      <button type="button" className={`tog ${r.fill ? 'on' : ''}`} aria-pressed={r.fill} onClick={() => setRow(ri, { fill: !r.fill })} title="Let this row take up the remaining height">
+                        Fill
+                      </button>
+                      <button type="button" className={`tog ${r.band ? 'on' : ''}`} aria-pressed={r.band} onClick={() => setRow(ri, { band: !r.band })} title="Accent-colored background">
+                        Highlight
+                      </button>
+                      <button type="button" className={`tog ${r.divider ? 'on' : ''}`} aria-pressed={r.divider} onClick={() => setRow(ri, { divider: !r.divider })} title="Thin line above this row">
+                        Line
+                      </button>
+                      <button type="button" className="icon-btn" onClick={() => moveRow(ri, -1)} disabled={ri === 0} aria-label="Move row up">
+                        <Icon name="chevronUp" />
+                      </button>
+                      <button type="button" className="icon-btn" onClick={() => moveRow(ri, 1)} disabled={ri === draft.layout.rows.length - 1} aria-label="Move row down">
+                        <Icon name="chevronDown" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="lb-gap lb-gap-end" {...dropProps({ row: draft.layout.rows.length, newRow: true })}>
+                {drag ? 'Drop here for a new row' : draft.layout.rows.length ? '' : 'The card is empty. Add fields from the list below.'}
+              </div>
+            </div>
+            <div className="lb-unplaced">
+              <span className="small muted">Not on the card:</span>
+              {unplaced.length === 0 && <span className="small muted">every field is shown.</span>}
+              {unplaced.map((f) => (
+                <button key={f.key} type="button" className="chip" {...dragProps(f.key)} onClick={() => {
+                  place(f.key, { row: draft.layout.rows.length, newRow: true });
+                  setSelected(f.key);
+                }} title="Click to add as a new row, or drag onto the card">
+                  <Icon name="plus" size={12} />
+                  {f.label}
                 </button>
-                <label className="eye" title={f.layout?.show ? 'Shown on card' : 'Only in details'}>
-                  <input type="checkbox" checked={Boolean(f.layout?.show)} onChange={(e) => setLayout(f.key, { show: e.target.checked })} disabled={f.kind === 'state'} />
-                  <Icon name={f.layout?.show ? 'eye' : 'eyeOff'} />
-                  <span className="sr-only">Show {f.label} on card</span>
-                </label>
-                <button className="icon-btn" onClick={() => moveField(i, -1)} aria-label="Move up" title="Earlier fields are drawn below later ones">
-                  <Icon name="chevronUp" />
-                </button>
-                <button className="icon-btn" onClick={() => moveField(i, 1)} aria-label="Move down">
-                  <Icon name="chevronDown" />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {sel && <FieldSettings field={sel} draft={draft} setField={setField} setLayout={setLayout} setStyle={setStyle} onRemove={() => {
-            if (!confirm(`Remove the field “${sel.label}”? Its data stays in the components but will no longer be shown.`)) return;
-            setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.key !== sel.key) }));
-            setSelected(null);
-          }} />}
-        </section>
+              ))}
+            </div>
+          </section>
+
+          {sel && (
+            <section className="panel field-settings">
+              <div className="panel-head">
+                <h2>
+                  <span className={`kind-dot k-${sel.kind}`} aria-hidden="true" /> {sel.label}
+                </h2>
+              </div>
+              {selAt && <CellSettings cell={draft.layout.rows[selAt[0]].cells[selAt[1]]} at={selAt} layout={draft.layout} kind={sel.kind} setCell={setCell} place={place} remove={() => setLayout((l) => dropEmptyRows(withoutCell(l, sel.key)))} />}
+              <FieldSettings field={sel} draft={draft} setField={setField} onRemove={() => removeField(sel.key)} />
+            </section>
+          )}
+
+          <section className="panel">
+            <div className="panel-head">
+              <h2>Fields</h2>
+              <button className="small" onClick={addField}>
+                <Icon name="plus" />
+                Add field
+              </button>
+            </div>
+            <p className="small muted">Every field is listed in this order in a component's details, whether or not it is on the card.</p>
+            <ul className="field-list">
+              {draft.fields.map((f, i) => (
+                <li key={f.key} className={selected === f.key ? 'on' : ''}>
+                  <button className="field-pick" onClick={() => setSelected(f.key)} aria-pressed={selected === f.key}>
+                    <span className={`kind-dot k-${f.kind}`} aria-hidden="true" />
+                    <span className="field-name">{f.label}</span>
+                    <span className="muted small">
+                      {FIELD_KINDS[f.kind]?.label}
+                      {placed.has(f.key) ? ' · on card' : ''}
+                    </span>
+                  </button>
+                  <button className="icon-btn" onClick={() => moveField(i, -1)} disabled={i === 0} aria-label={`Move ${f.label} up`}>
+                    <Icon name="chevronUp" />
+                  </button>
+                  <button className="icon-btn" onClick={() => moveField(i, 1)} disabled={i === draft.fields.length - 1} aria-label={`Move ${f.label} down`}>
+                    <Icon name="chevronDown" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
 
         <section className="panel layout-panel">
           <div className="panel-head">
-            <h2>Card layout</h2>
-            {comps.length > 0 && (
-              <select value={sampleId} onChange={(e) => setSampleId(e.target.value)} aria-label="Preview with">
-                {comps.slice(0, 500).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    Preview: {String(c.data[draft.fields.find((f) => f.kind === 'title')?.key] ?? c.id)}
-                  </option>
-                ))}
-              </select>
-            )}
+            <h2>Preview</h2>
           </div>
-          <p className="small muted">
-            Drag a box to move it; drag its corner to resize. Positions snap to the grid. Font sizes scale with the card.{' '}
-            <button className="link-btn small" onClick={() => confirm('Replace the current layout with an automatic one?') && setDraft((d) => ({ ...d, fields: autoLayout(d.fields, d.cols, d.rows) }))}>
-              Auto-arrange
-            </button>
-          </p>
-          <LayoutCanvas draft={draft} sample={sample} shorthands={shorthands} selected={selected} onSelect={setSelected} onLayout={setLayout} />
+          {comps.length > 0 && (
+            <select value={sampleId} onChange={(e) => setSampleId(e.target.value)} aria-label="Preview with">
+              {comps.slice(0, 500).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {String(c.data[draft.fields.find((f) => f.kind === 'title')?.key] ?? c.id)}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="layout-stage">
+            <div className="layout-card-wrap">
+              <ComponentCard type={draft} comp={sample} shorthands={shorthands} layout={draft.layout} selectedKey={selected} />
+            </div>
+            <div className="layout-card-wrap small" aria-hidden="true">
+              <ComponentCard type={draft} comp={sample} shorthands={shorthands} layout={draft.layout} />
+            </div>
+          </div>
+          <p className="hint">Shown at two sizes: text scales with the card. Long text is faded out at the bottom of its row.</p>
         </section>
       </div>
     </div>
   );
 }
 
-function FieldSettings({ field, draft, setField, setLayout, setStyle, onRemove }) {
-  const s = { ...DEFAULT_STYLE, ...field.style };
-  const L = field.layout || {};
+function CellSettings({ cell, at, layout, kind, setCell, place, remove }) {
+  const [ri, ci] = at;
+  const rowLen = layout.rows[ri].cells.length;
+  const isImage = kind === 'image';
+  return (
+    <div className="cell-settings">
+      <h3>On the card</h3>
+      <div className="row gap wrap">
+        <button type="button" className="small" onClick={() => place(cell.key, { row: ri, index: ci - 1 })} disabled={ci === 0} title="Move left">
+          <Icon name="left" /> Left
+        </button>
+        <button type="button" className="small" onClick={() => place(cell.key, { row: ri, index: ci + 2 })} disabled={ci === rowLen - 1} title="Move right">
+          Right <Icon name="right" />
+        </button>
+        <button type="button" className="small" onClick={() => (ri === 0 ? place(cell.key, { row: 0, newRow: true }) : place(cell.key, { row: ri - 1 }))} disabled={ri === 0 && rowLen === 1} title="Into the row above">
+          <Icon name="chevronUp" /> Row above
+        </button>
+        <button type="button" className="small" onClick={() => (ri === layout.rows.length - 1 ? place(cell.key, { row: layout.rows.length, newRow: true }) : place(cell.key, { row: ri + 1, index: 0 }))} disabled={ri === layout.rows.length - 1 && rowLen === 1} title="Into the row below">
+          <Icon name="chevronDown" /> Row below
+        </button>
+        {rowLen > 1 && (
+          <button type="button" className="small" onClick={() => place(cell.key, { row: ci === 0 ? ri : ri + 1, newRow: true })} title="Give this field a row of its own">
+            Own row
+          </button>
+        )}
+        <button type="button" className="small danger" onClick={remove}>
+          <Icon name="eyeOff" /> Hide from card
+        </button>
+      </div>
+      {rowLen > 1 && (
+        <div className="field">
+          <label htmlFor="cs-width">Share of the row: {cell.width}</label>
+          <input id="cs-width" type="range" min="1" max="6" step="1" value={cell.width} onChange={(e) => setCell(cell.key, { width: Number(e.target.value) })} />
+        </div>
+      )}
+      {!isImage && (
+        <>
+          <div className="grid-2">
+            <div className="field">
+              <label>Text size</label>
+              <div className="seg">
+                {Object.entries(SIZES).map(([k, v]) => (
+                  <button key={k} type="button" className={cell.size === k ? 'on' : ''} onClick={() => setCell(cell.key, { size: k })} title={v}>
+                    {k.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <label>Alignment</label>
+              <div className="seg">
+                {ALIGNS.map((a) => (
+                  <button key={a} type="button" className={cell.align === a ? 'on' : ''} onClick={() => setCell(cell.key, { align: a })}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="row gap wrap">
+            {[
+              ['bold', 'Bold'],
+              ['italic', 'Italic'],
+              ['muted', 'Subdued'],
+              ['upper', 'Capitals'],
+              ['label', 'Show field name'],
+            ].map(([k, label]) => (
+              <label key={k} className="check">
+                <input type="checkbox" checked={Boolean(cell[k])} onChange={(e) => setCell(cell.key, { [k]: e.target.checked })} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="cs-prefix">Before the value</label>
+              <input id="cs-prefix" value={cell.prefix} onChange={(e) => setCell(cell.key, { prefix: e.target.value })} placeholder="e.g. +" />
+            </div>
+            <div className="field">
+              <label htmlFor="cs-suffix">After the value</label>
+              <input id="cs-suffix" value={cell.suffix} onChange={(e) => setCell(cell.key, { suffix: e.target.value })} placeholder="e.g. [rage]" />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FieldSettings({ field, draft, setField, onRemove }) {
   const hasId = draft.fields.some((f) => f.kind === 'id' && f.key !== field.key);
   return (
-    <div className="field-settings">
-      <h3>{field.label}</h3>
+    <div className="cell-settings">
+      <h3>Field</h3>
       <div className="grid-2">
         <div className="field">
-          <label htmlFor="fs-label">Label</label>
+          <label htmlFor="fs-label">Name</label>
           <input id="fs-label" value={field.label} onChange={(e) => setField(field.key, { label: e.target.value })} />
           <p className="hint">
             Stored as <code>{field.key}</code>
@@ -266,198 +525,11 @@ function FieldSettings({ field, draft, setField, setLayout, setStyle, onRemove }
           <p className="hint">If values are not full URLs, they are inserted at {'{value}'}. Leave empty when the data holds full image URLs.</p>
         </div>
       )}
-
-      {field.layout?.show && field.kind !== 'state' && (
-        <>
-          <h4>Position & size</h4>
-          <div className="grid-5">
-            {[
-              ['x', 'Left', 0, draft.cols - 1],
-              ['y', 'Top', 0, draft.rows - 1],
-              ['w', 'Width', 1, draft.cols],
-              ['h', 'Height', 1, draft.rows],
-              ['z', 'Layer', 0, 20],
-            ].map(([k, label, lo, hi]) => (
-              <div className="field" key={k}>
-                <label htmlFor={`fs-${k}`}>{label}</label>
-                <input id={`fs-${k}`} type="number" min={lo} max={hi} value={L[k] ?? 0} onChange={(e) => setLayout(field.key, { [k]: clamp(Number(e.target.value) || 0, lo, hi) })} />
-              </div>
-            ))}
-          </div>
-          {field.kind !== 'image' && (
-            <>
-              <h4>Text</h4>
-              <div className="field">
-                <label htmlFor="fs-scale">Relative size: {Number(s.fontScale).toFixed(2)}×</label>
-                <input id="fs-scale" type="range" min="0.4" max="4" step="0.05" value={s.fontScale} onChange={(e) => setStyle(field.key, { fontScale: Number(e.target.value) })} />
-              </div>
-              <div className="grid-3">
-                <div className="field">
-                  <label htmlFor="fs-font">Font</label>
-                  <select id="fs-font" value={s.font} onChange={(e) => setStyle(field.key, { font: e.target.value })}>
-                    {Object.entries(FONTS).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Align</label>
-                  <div className="seg">
-                    {['left', 'center', 'right'].map((a) => (
-                      <button key={a} type="button" className={s.align === a ? 'on' : ''} onClick={() => setStyle(field.key, { align: a })}>
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="field">
-                  <label>Vertical</label>
-                  <div className="seg">
-                    {['top', 'middle', 'bottom'].map((a) => (
-                      <button key={a} type="button" className={s.valign === a ? 'on' : ''} onClick={() => setStyle(field.key, { valign: a })}>
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="row gap wrap">
-                {[
-                  ['bold', 'Bold'],
-                  ['italic', 'Italic'],
-                  ['upper', 'Uppercase'],
-                  ['vertical', 'Rotated'],
-                  ['showLabel', 'Show label'],
-                ].map(([k, label]) => (
-                  <label key={k} className="check">
-                    <input type="checkbox" checked={Boolean(s[k])} onChange={(e) => setStyle(field.key, { [k]: e.target.checked })} />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <div className="grid-3">
-                <div className="field">
-                  <label htmlFor="fs-shape">Shape</label>
-                  <select id="fs-shape" value={s.shape} onChange={(e) => setStyle(field.key, { shape: e.target.value })}>
-                    {Object.entries(SHAPES).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="fs-bg">Background</label>
-                  <div className="row gap">
-                    <select id="fs-bg" value={s.bg in BACKGROUNDS ? s.bg : 'custom'} onChange={(e) => setStyle(field.key, { bg: e.target.value === 'custom' ? '#444444' : e.target.value })}>
-                      {Object.entries(BACKGROUNDS).map(([k, v]) => (
-                        <option key={k} value={k}>
-                          {v}
-                        </option>
-                      ))}
-                      <option value="custom">Custom color</option>
-                    </select>
-                    {!(s.bg in BACKGROUNDS) && <input type="color" value={s.bg} onChange={(e) => setStyle(field.key, { bg: e.target.value })} aria-label="Background color" />}
-                  </div>
-                </div>
-                <div className="field">
-                  <label htmlFor="fs-color">Text color</label>
-                  <div className="row gap">
-                    <input id="fs-color" type="color" value={s.color || '#ffffff'} onChange={(e) => setStyle(field.key, { color: e.target.value })} />
-                    {s.color && (
-                      <button className="link-btn small" onClick={() => setStyle(field.key, { color: '' })}>
-                        reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label htmlFor="fs-prefix">Prefix</label>
-                  <input id="fs-prefix" value={s.prefix} onChange={(e) => setStyle(field.key, { prefix: e.target.value })} placeholder="e.g. +" />
-                </div>
-                <div className="field">
-                  <label htmlFor="fs-suffix">Suffix</label>
-                  <input id="fs-suffix" value={s.suffix} onChange={(e) => setStyle(field.key, { suffix: e.target.value })} placeholder="e.g. [rage]" />
-                </div>
-              </div>
-            </>
-          )}
-        </>
-      )}
-      <button className="small danger" onClick={onRemove}>
-        <Icon name="trash" />
-        Remove field
-      </button>
-    </div>
-  );
-}
-
-/** The card preview with draggable/resizable boxes for every visible field. */
-function LayoutCanvas({ draft, sample, shorthands, selected, onSelect, onLayout }) {
-  const ref = useRef(null);
-  const drag = useRef(null);
-  const visible = draft.fields.filter((f) => f.layout?.show && f.kind !== 'state');
-
-  const start = (e, f, mode) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onSelect(f.key);
-    const rect = ref.current.getBoundingClientRect();
-    drag.current = { key: f.key, mode, x0: e.clientX, y0: e.clientY, L: { ...f.layout }, cw: rect.width / draft.cols, ch: rect.height / draft.rows };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  };
-  const move = (e) => {
-    const d = drag.current;
-    if (!d) return;
-    const dx = Math.round((e.clientX - d.x0) / d.cw);
-    const dy = Math.round((e.clientY - d.y0) / d.ch);
-    if (d.mode === 'move') onLayout(d.key, { x: clamp(d.L.x + dx, 0, draft.cols - d.L.w), y: clamp(d.L.y + dy, 0, draft.rows - d.L.h) });
-    else onLayout(d.key, { w: clamp(d.L.w + dx, 1, draft.cols - d.L.x), h: clamp(d.L.h + dy, 1, draft.rows - d.L.y) });
-  };
-  const end = () => {
-    drag.current = null;
-  };
-  const nudge = (e, f) => {
-    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    const L = f.layout;
-    if (e.shiftKey) onLayout(f.key, { w: clamp(L.w + step[0], 1, draft.cols - L.x), h: clamp(L.h + step[1], 1, draft.rows - L.y) });
-    else onLayout(f.key, { x: clamp(L.x + step[0], 0, draft.cols - L.w), y: clamp(L.y + step[1], 0, draft.rows - L.h) });
-  };
-
-  return (
-    <div className="layout-stage">
-      <div className="layout-card-wrap" style={{ '--accent': accentFor(draft, sample) }}>
-        <ComponentCard type={draft} comp={sample} shorthands={shorthands} />
-        <div
-          ref={ref}
-          className="layout-overlay"
-          style={{ gridTemplateColumns: `repeat(${draft.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${draft.rows}, minmax(0, 1fr))`, '--cols': draft.cols, '--rows': draft.rows }}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={end}
-        >
-          {visible.map((f) => (
-            <div
-              key={f.key}
-              className={`layout-box ${selected === f.key ? 'on' : ''}`}
-              style={{ gridColumn: `${f.layout.x + 1} / span ${f.layout.w}`, gridRow: `${f.layout.y + 1} / span ${f.layout.h}`, zIndex: selected === f.key ? 50 : f.layout.z ?? 1 }}
-              onPointerDown={(e) => start(e, f, 'move')}
-              onKeyDown={(e) => nudge(e, f)}
-              tabIndex={0}
-              role="button"
-              aria-label={`${f.label}: arrow keys move, shift+arrow keys resize`}
-            >
-              <span className="layout-tag">{f.label}</span>
-              <span className="layout-handle" onPointerDown={(e) => start(e, f, 'resize')} aria-hidden="true" />
-            </div>
-          ))}
-        </div>
+      <div>
+        <button className="small danger" onClick={onRemove}>
+          <Icon name="trash" />
+          Remove field
+        </button>
       </div>
     </div>
   );

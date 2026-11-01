@@ -1,10 +1,20 @@
 import DOMPurify from 'dompurify';
 
-const ALLOWED_TAGS = ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li', 'span', 'div', 'a', 'small', 'sup', 'sub', 'blockquote', 'code', 'img', 'hr', 'h4', 'h5'];
+const ALLOWED_TAGS = ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li', 'span', 'div', 'a', 'small', 'sup', 'sub', 'blockquote', 'code', 'img', 'figure', 'figcaption', 'hr', 'h4', 'h5'];
 // No `style`: suggestions come from any signed-in user, so they must not be able to restyle the page.
-const ALLOWED_ATTR = ['href', 'title', 'class', 'src', 'alt'];
+const ALLOWED_ATTR = ['href', 'title', 'class', 'src', 'alt', 'loading', 'referrerpolicy'];
 
 const sanitize = (html) => DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+
+// Images in rules and cards are externally hosted: allow only http(s) (and inline data) sources,
+// load them lazily and don't tell the image host which page they are on.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName !== 'IMG') return;
+  const src = node.getAttribute('src') || '';
+  if (src && !/^(https?:)?\/\//i.test(src) && !src.startsWith('data:image/')) node.removeAttribute('src');
+  node.setAttribute('loading', 'lazy');
+  node.setAttribute('referrerpolicy', 'no-referrer');
+});
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -34,6 +44,7 @@ export function richHtml(value, shorthands) {
 export function toPlainText(html) {
   if (!html) return '';
   const s = String(html)
+    .replace(/<\s*img\b[^>]*?\balt\s*=\s*"([^"]*)"[^>]*>/gi, (_, alt) => `[Image${alt ? `: ${alt}` : ''}]`)
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\s*li[^>]*>/gi, '\n• ')
     .replace(/<\/\s*(p|div|ul|ol|h4|h5|blockquote)\s*>/gi, '\n\n')

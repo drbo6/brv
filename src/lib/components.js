@@ -1,7 +1,7 @@
-import { collection, doc, getDoc, getDocs, increment, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, increment, serverTimestamp, setDoc as rawSetDoc } from 'firebase/firestore';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { db } from './firebase.js';
-import { commitInChunks } from './rules.js';
+import { commitInChunks, knownState, onRevert, setDoc } from './store.js';
 
 export const FIELD_KINDS = {
   id: { label: 'ID', help: 'Unique identifier. Exactly one per component type.' },
@@ -14,10 +14,6 @@ export const FIELD_KINDS = {
   state: { label: 'State', help: 'Marks this component as an alternate state (flipped, turned, upgraded…) of another component.' },
 };
 
-export const FONTS = { body: 'Body serif', display: 'Display', condensed: 'Condensed', title: 'Blackletter', sans: 'Sans' };
-export const SHAPES = { none: 'None', box: 'Rounded box', pill: 'Pill', circle: 'Filled circle', ring: 'Ring' };
-export const BACKGROUNDS = { none: 'None', accent: 'Accent color', dark: 'Dark', light: 'Light', shade: 'Fade to dark (over images)' };
-
 export const slugKey = (s) =>
   String(s || '')
     .normalize('NFKD')
@@ -28,58 +24,67 @@ export const slugKey = (s) =>
 
 export const docIdFor = (typeId, idValue) => `${typeId}__${String(idValue).trim().replace(/[/\\.#$[\]]+/g, '-').slice(0, 300)}`;
 
-export const DEFAULT_STYLE = { fontScale: 1, font: 'body', align: 'center', valign: 'middle', bold: false, italic: false, upper: false, vertical: false, shape: 'none', bg: 'none', color: '', prefix: '', suffix: '', showLabel: false };
-
 export function newField(label, kind = 'ability', existingKeys = []) {
   let key = slugKey(label);
   let n = 2;
   const base = key;
   while (existingKeys.includes(key)) key = `${base}_${n++}`;
-  return { key, label, kind, filterable: kind === 'type', urlTemplate: '', layout: { show: false, x: 2, y: 2, w: 8, h: 3, z: 1 }, style: { ...DEFAULT_STYLE } };
+  return { key, label, kind, filterable: kind === 'type', urlTemplate: '' };
 }
 
-/** A sensible starting layout: title on top, image, value badges, a type band and the ability text. */
-export function autoLayout(fields, cols, rows) {
-  const out = fields.map((f) => ({ ...f, layout: { ...f.layout, show: false }, style: { ...DEFAULT_STYLE, ...f.style } }));
-  const first = (kind) => out.find((f) => f.kind === kind);
-  const place = (f, layout, style = {}) => {
-    if (!f) return;
-    f.layout = { show: true, z: 1, ...layout };
-    f.style = { ...DEFAULT_STYLE, ...style };
+// ---------- card layout ----------
+// A card is a stack of rows, like block elements on a web page. Each row holds fields side by side,
+// like inline-flex items; `width` is a field's share of its row. One or more rows can `fill` the
+// remaining height. Text sizes are relative to the card's width, so cards look the same at any size.
+
+export const SIZES = { xs: 'Tiny', s: 'Small', m: 'Normal', l: 'Large', xl: 'Huge' };
+export const ALIGNS = ['left', 'center', 'right'];
+export const DEFAULT_CELL = { width: 1, size: 'm', align: 'left', bold: false, italic: false, muted: false, upper: false, label: false, prefix: '', suffix: '' };
+export const DEFAULT_ROW = { fill: false, band: false, divider: false };
+
+const cell = (key, style = {}) => ({ ...DEFAULT_CELL, key, ...style });
+const row = (cells, style = {}) => ({ ...DEFAULT_ROW, ...style, cells });
+
+/** A clean default: title and values on a colored band, type line, image, ability text, lore. */
+export function autoLayout(fields) {
+  const of = (kind) => fields.filter((f) => f.kind === kind);
+  const rows = [];
+  const [title] = of('title');
+  const values = of('value').slice(0, 2);
+  if (title || values.length) {
+    rows.push(
+      row(
+        [
+          ...(title ? [cell(title.key, { width: 4, size: 'l', bold: true })] : []),
+          ...values.map((f) => cell(f.key, { width: 1, size: 'l', bold: true, align: 'right' })),
+        ],
+        { band: true },
+      ),
+    );
+  }
+  const types = of('type').slice(0, 3);
+  if (types.length) rows.push(row(types.map((f) => cell(f.key, { size: 's', upper: true, muted: true }))));
+  const [image] = of('image');
+  if (image) rows.push(row([cell(image.key)], { fill: true }));
+  const [ability] = of('ability');
+  if (ability) rows.push(row([cell(ability.key)], { fill: !image, divider: Boolean(types.length && !image) }));
+  const [lore] = of('lore');
+  if (lore) rows.push(row([cell(lore.key, { size: 's', italic: true, muted: true })], { divider: true }));
+  return { rows };
+}
+
+/** The type's layout, with unknown fields dropped. Types without one get an automatic layout. */
+export function cardLayout(type) {
+  const keys = new Set((type.fields || []).filter((f) => f.kind !== 'id' && f.kind !== 'state').map((f) => f.key));
+  const source = type.layout?.rows ? type.layout : autoLayout(type.fields || []);
+  return {
+    rows: source.rows
+      .map((r) => ({ ...DEFAULT_ROW, ...r, cells: (r.cells || []).filter((c) => keys.has(c.key)).map((c) => ({ ...DEFAULT_CELL, ...c })) }))
+      .filter((r) => r.cells.length),
   };
-  const th = Math.max(2, Math.round(rows * 0.12));
-  const title = first('title');
-  place(title, { x: 0, y: 0, w: cols, h: th, z: 2 }, { font: 'display', bold: true, fontScale: 1.3 });
-  let y = title ? th : 0;
-  const image = first('image');
-  const imageTop = y;
-  if (image) {
-    const ih = Math.round(rows * 0.42);
-    place(image, { x: 0, y, w: cols, h: ih });
-    y += ih;
-  }
-  const badge = Math.max(2, Math.round(cols * 0.22));
-  out
-    .filter((f) => f.kind === 'value')
-    .slice(0, 3)
-    .forEach((f, i) => {
-      const x = [0, cols - badge, Math.round((cols - badge) / 2)][i];
-      place(f, { x, y: imageTop + (image ? 1 : 0), w: badge, h: Math.max(2, Math.round((badge * rows) / cols)), z: 4 }, { font: 'display', bold: true, fontScale: 1.6, shape: 'circle', bg: 'dark' });
-    });
-  if (!image) y = imageTop + Math.max(2, Math.round((badge * rows) / cols)) + 1;
-  const type = first('type');
-  if (type) {
-    place(type, { x: 0, y, w: cols, h: 2, z: 2 }, { font: 'condensed', upper: true, fontScale: 0.9, bg: 'dark' });
-    y += 2;
-  }
-  const lore = first('lore');
-  const loreH = lore ? Math.max(2, Math.round(rows * 0.1)) : 0;
-  place(first('ability'), { x: 0, y, w: cols, h: Math.max(2, rows - y - loreH), z: 2 }, { fontScale: 0.95 });
-  place(lore, { x: 0, y: rows - loreH, w: cols, h: loreH, z: 2 }, { italic: true, fontScale: 0.75 });
-  return out;
 }
 
-export const NEW_TYPE = { name: 'New component type', order: 99, aspect: 0.7, cols: 20, rows: 28, emptyValues: ['n/a'], accentField: '', accentColors: {}, defaultAccent: '#2b2427', fields: [] };
+export const NEW_TYPE = { name: 'New component type', order: 99, aspect: 0.7, emptyValues: ['n/a'], accentField: '', accentColors: {}, defaultAccent: '#7c1a17', fields: [], layout: { rows: [] } };
 
 export function isEmptyValue(v, type) {
   if (v == null) return true;
@@ -153,7 +158,12 @@ export async function loadComponents({ force = false } = {}) {
   return { ...result, fromCache: false };
 }
 
-export const bumpComponentsVersion = () => setDoc(doc(db, 'config', 'componentsMeta'), { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+export const bumpComponentsVersion = () => rawSetDoc(doc(db, 'config', 'componentsMeta'), { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+
+// Undoing a component change must also invalidate visitors' caches.
+onRevert((paths) => {
+  if (paths.some((p) => p.startsWith('components/') || p.startsWith('componentTypes/'))) bumpComponentsVersion().catch((e) => console.warn(e));
+});
 
 export async function saveType(type) {
   const { id, ...data } = type;
@@ -190,8 +200,14 @@ export async function importComponents(type, rows, { removeMissing = false, exis
   const idf = idField(type);
   const ids = new Set();
   const ops = [];
+  // `existing` is fresh, so the undo history can use it instead of reading every document again.
+  const before = new Map(existing.map((c) => [c.id, c]));
   for (const data of rows) {
     const id = docIdFor(type.id, data[idf.key]);
+    if (!ids.has(id)) {
+      const prev = before.get(id);
+      knownState(doc(db, 'components', id), prev ? { typeId: prev.typeId, data: prev.data } : null);
+    }
     ids.add(id);
     ops.push((b) => b.set(doc(db, 'components', id), { typeId: type.id, data, updatedAt: serverTimestamp() }));
   }
@@ -199,6 +215,7 @@ export async function importComponents(type, rows, { removeMissing = false, exis
   if (removeMissing) {
     for (const c of existing) {
       if (c.typeId === type.id && !ids.has(c.id)) {
+        knownState(doc(db, 'components', c.id), { typeId: c.typeId, data: c.data });
         ops.push((b) => b.delete(doc(db, 'components', c.id)));
         removed++;
       }
@@ -208,51 +225,3 @@ export async function importComponents(type, rows, { removeMissing = false, exis
   await bumpComponentsVersion();
   return { written: ids.size, removed };
 }
-
-// ---------- Blood Rage: Valhalla card preset ----------
-// Field keys match the column headers of the card spreadsheet, so an import maps automatically.
-
-const f = (key, label, kind, layout, style = {}, extra = {}) => ({
-  key,
-  label,
-  kind,
-  filterable: kind === 'type',
-  urlTemplate: '',
-  layout: layout ? { show: true, z: 1, ...layout } : { show: false, x: 0, y: 0, w: 6, h: 3, z: 1 },
-  style: { ...DEFAULT_STYLE, ...style },
-  ...extra,
-});
-
-export const BLOOD_RAGE_PRESET = {
-  name: 'Blood Rage: Valhalla cards',
-  order: 1,
-  aspect: 485 / 745,
-  cols: 20,
-  rows: 30,
-  emptyValues: ['n/a'],
-  accentField: 'type',
-  accentColors: { Battle: '#9e2228', Quest: '#3e6b26', Clan: '#1b1a1a', Elite: '#1b1a1a', Monster: '#1b1a1a' },
-  defaultAccent: '#2b2427',
-  fields: [
-    f('id', 'ID', 'id', null),
-    f('title', 'Title', 'title', { x: 4, y: 0, w: 16, h: 4, z: 2 }, { font: 'title', fontScale: 1.55, color: '#ffffff' }),
-    f('illustration', 'Illustration', 'image', { x: 4, y: 4, w: 16, h: 25, z: 1 }),
-    f('ability', 'Ability', 'ability', { x: 4, y: 18, w: 16, h: 11, z: 3 }, { fontScale: 1.05, bg: 'shade', valign: 'bottom', color: '#ffffff' }),
-    f('cost', 'Cost', 'value', { x: 1, y: 4, w: 5, h: 4, z: 4 }, { font: 'display', fontScale: 1.8, bold: true, shape: 'circle', bg: '#8f2a25', color: '#ffffff' }),
-    f('strength', 'Strength', 'value', { x: 8, y: 9, w: 8, h: 6, z: 4 }, { font: 'display', fontScale: 2.6, bold: true, shape: 'ring', color: '#ffffff', prefix: '+' }),
-    f('type', 'Type', 'type', { x: 0, y: 19, w: 4, h: 11, z: 2 }, { font: 'condensed', fontScale: 2.2, vertical: true, upper: true, color: '#ffffff', align: 'left' }),
-    f('subtype', 'Subtype', 'type', { x: 0, y: 12, w: 4, h: 7, z: 2 }, { font: 'condensed', fontScale: 1.25, vertical: true, upper: true, color: '#ffffff', align: 'left' }),
-    f('god', 'God', 'type', { x: 0, y: 4, w: 4, h: 7, z: 2 }, { font: 'condensed', fontScale: 1.25, vertical: true, upper: true, color: '#ffffff', align: 'right' }),
-    f('size', 'Size', 'type', null),
-    f('quantity', 'Quantity', 'value', null),
-    f('oldtitle', 'OldTitle', 'title', null),
-    f('oldability', 'OldAbility', 'lore', null),
-  ],
-};
-
-export const BLOOD_RAGE_SHORTHANDS = {
-  rage: { type: 'emoji', value: '🩸' },
-  axes: { type: 'emoji', value: '🪓' },
-  horns: { type: 'emoji', value: '📯' },
-  tribute: { type: 'emoji', value: '💀' },
-};

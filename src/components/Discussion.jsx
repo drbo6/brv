@@ -27,7 +27,7 @@ export default function Discussion({ rule, versions, shownVersion }) {
     const body = text.trim();
     if (!body) return;
     setBusy(true);
-    await requireUser((u) => attempt(() => addComment({ ruleId: rule.id, versionId: shownVersion?.id, text: body }, u)).then(() => setText('')));
+    await requireUser((u) => attempt(() => addComment({ ruleId: rule.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment').then(() => setText('')));
     setBusy(false);
   };
 
@@ -54,7 +54,7 @@ export default function Discussion({ rule, versions, shownVersion }) {
                     className="comment-edit"
                     onSubmit={async (e) => {
                       e.preventDefault();
-                      await attempt(() => editComment(c.id, editing.text.trim()));
+                      await attempt(() => editComment(c.id, editing.text.trim()), null, 'edit comment');
                       setEditing(null);
                     }}
                   >
@@ -72,14 +72,14 @@ export default function Discussion({ rule, versions, shownVersion }) {
                   <p className="comment-text" dangerouslySetInnerHTML={{ __html: plainToHtml(c.text) }} />
                 )}
                 <div className="comment-actions">
-                  <Reactions compact reactions={c.reactions} onReact={(type) => requireUser((u) => attempt(() => react('comments', c.id, u.uid, c.reactions?.[u.uid], type)))} />
+                  <Reactions compact reactions={c.reactions} onReact={(type) => requireUser((u) => attempt(() => react('comments', c.id, u.uid, c.reactions?.[u.uid], type), null, 'reaction'))} />
                   {user?.uid === c.uid && editing?.id !== c.id && (
                     <button className="link-btn small" onClick={() => setEditing({ id: c.id, text: c.text })}>
                       Edit
                     </button>
                   )}
                   {(user?.uid === c.uid || isAdmin) && (
-                    <button className="link-btn small danger" onClick={() => confirm('Delete this comment?') && attempt(() => deleteComment(c))}>
+                    <button className="link-btn small danger" onClick={() => confirm('Delete this comment?') && attempt(() => deleteComment(c), 'Comment deleted')}>
                       Delete
                     </button>
                   )}

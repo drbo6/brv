@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { autoLayout, FIELD_KINDS, idField, importComponents, newField, saveType, slugKey } from '../../lib/components.js';
-import { attempt, Icon, toast } from '../ui.jsx';
+import { attempt, Icon, toast, undoWithToast } from '../ui.jsx';
 
 const SKIP = '__skip';
 const NEW = '__new';
@@ -124,17 +124,23 @@ export default function Importer({ type, comps, onDone }) {
 
   const run = async () => {
     setBusy(true);
-    const ok = await attempt(async () => {
-      let target = type;
-      if (plan.created.length) {
-        const fields = [...type.fields, ...plan.created];
-        // A brand-new type has nothing on its card yet: start from an automatic layout.
-        target = { ...type, fields: type.fields.some((f) => f.layout?.show) ? fields : autoLayout(fields, type.cols, type.rows) };
-        await saveType(target);
-      }
-      const r = await importComponents(target, records, { removeMissing, existing: comps });
-      toast(`Imported ${r.written} components${r.removed ? `, removed ${r.removed}` : ''}`, 'ok');
-    });
+    let summary = '';
+    const ok = await attempt(
+      async () => {
+        if (plan.created.length) {
+          const fields = [...type.fields, ...plan.created];
+          // A type with an empty card starts from an automatic layout.
+          const layout = type.layout?.rows?.length ? type.layout : autoLayout(fields);
+          await saveType({ ...type, fields, layout });
+        }
+        const target = { ...type, fields: [...type.fields, ...plan.created] };
+        const r = await importComponents(target, records, { removeMissing, existing: comps });
+        summary = `Imported ${r.written} components${r.removed ? `, removed ${r.removed}` : ''}`;
+      },
+      null,
+      `import into ${type.name}`,
+    );
+    if (ok) toast(summary, 'ok', { label: 'Undo', onClick: () => undoWithToast() });
     setBusy(false);
     if (ok) {
       setBook(null);

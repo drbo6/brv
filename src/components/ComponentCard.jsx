@@ -1,87 +1,55 @@
 import { memo } from 'react';
 import { richHtml } from '../lib/html.js';
-import { imageUrl, isEmptyValue } from '../lib/components.js';
-
-const VALIGN = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
-const FIXED_BG = { dark: 'rgba(10, 8, 9, 0.88)', light: 'rgba(245, 238, 226, 0.94)' };
+import { cardLayout, imageUrl, isEmptyValue } from '../lib/components.js';
 
 export function accentFor(type, comp) {
   const key = type.accentField;
   const v = key ? comp?.data?.[key] : null;
-  return (v != null && type.accentColors?.[v]) || type.defaultAccent || '#2b2427';
+  return (v != null && type.accentColors?.[v]) || type.defaultAccent || '#7c1a17';
 }
 
-export function fieldBoxStyle(field, accent) {
-  const { x, y, w, h, z } = field.layout;
-  const s = field.style || {};
-  const bg = s.bg && s.bg !== 'none' ? (s.bg === 'accent' ? accent : s.bg === 'shade' ? undefined : FIXED_BG[s.bg] || s.bg) : undefined;
-  return {
-    gridColumn: `${x + 1} / span ${w}`,
-    gridRow: `${y + 1} / span ${h}`,
-    zIndex: z ?? 1,
-    fontSize: `calc(${s.fontScale ?? 1} * var(--u))`,
-    textAlign: s.align || 'center',
-    justifyContent: VALIGN[s.valign] || 'center',
-    alignItems: s.align === 'left' ? 'flex-start' : s.align === 'right' ? 'flex-end' : 'center',
-    color: s.color || undefined,
-    background: bg,
-    fontWeight: s.bold ? 700 : undefined,
-    fontStyle: s.italic ? 'italic' : undefined,
-    textTransform: s.upper ? 'uppercase' : undefined,
-  };
-}
-
-function FieldContent({ field, value, shorthands }) {
+function CellContent({ field, cell, value, shorthands }) {
   if (field.kind === 'image') {
     const url = imageUrl(field, value);
-    return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable="false" /> : <span className="img-missing" aria-hidden="true" />;
+    return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable="false" referrerPolicy="no-referrer" /> : <span className="img-missing" aria-hidden="true" />;
   }
-  const s = field.style || {};
   const text = String(value);
   // "+" in front of "-1" would read "+-1".
-  const prefix = s.prefix && !(/^[-+−]/.test(text) && /^[+-]/.test(s.prefix)) ? s.prefix : '';
-  const html = richHtml(`${prefix}${text}${s.suffix || ''}`, shorthands);
+  const prefix = cell.prefix && !(/^[-+−]/.test(text) && /^[+-]/.test(cell.prefix)) ? cell.prefix : '';
   return (
     <>
-      {s.showLabel && <span className="cf-label">{field.label}</span>}
-      <span className="cf-value" dangerouslySetInnerHTML={{ __html: html }} />
+      {cell.label && <span className="cc-label">{field.label}</span>}
+      <span className="cc-value" dangerouslySetInnerHTML={{ __html: richHtml(`${prefix}${text}${cell.suffix || ''}`, shorthands) }} />
     </>
   );
 }
 
 /**
- * Renders a component as a card using its type's layout. Positions are on a cols × rows grid and
- * font sizes are relative to the card width, so the same layout works at any card size.
+ * Renders a component as a card: rows of fields stacked top to bottom, fields side by side within a
+ * row. All cards of a type share one size (the type's aspect ratio); text scales with the card width.
+ * Pass `layout` to preview an unsaved layout.
  */
-function ComponentCard({ type, comp, shorthands, onClick, className = '', hasStates = false, children }) {
-  const accent = accentFor(type, comp);
-  const fields = type.fields.filter((f) => f.layout?.show && f.kind !== 'state' && !isEmptyValue(comp.data?.[f.key], type));
+function ComponentCard({ type, comp, shorthands, onClick, className = '', hasStates = false, layout, selectedKey, children }) {
+  const fields = new Map(type.fields.map((f) => [f.key, f]));
+  const rows = (layout || cardLayout(type)).rows
+    .map((r) => ({ ...r, cells: r.cells.filter((c) => fields.has(c.key) && !isEmptyValue(comp.data?.[c.key], type)) }))
+    .filter((r) => r.cells.length);
   const Tag = onClick ? 'button' : 'div';
-  const aspect = type.aspect || 0.7;
   return (
-    <Tag
-      type={onClick ? 'button' : undefined}
-      className={`ccard ${className}`}
-      style={{
-        '--accent': accent,
-        aspectRatio: aspect,
-        // Round corners: the vertical radius is a share of the height, so scale it by the aspect ratio.
-        borderRadius: `4.5% / ${4.5 * aspect}%`,
-        // minmax(0, 1fr) keeps rows from growing with their content, so the layout stays exact.
-        gridTemplateColumns: `repeat(${type.cols || 20}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${type.rows || 28}, minmax(0, 1fr))`,
-      }}
-      onClick={onClick}
-    >
-      {fields.map((f) => {
-        const s = f.style || {};
-        const cls = ['cf', `cf-${f.kind}`, `font-${s.font || 'body'}`, s.vertical ? 'vertical' : '', s.shape && s.shape !== 'none' ? `shape-${s.shape}` : '', s.bg === 'shade' ? 'bg-shade' : ''];
-        return (
-          <div key={f.key} className={cls.join(' ')} style={fieldBoxStyle(f, accent)}>
-            <FieldContent field={f} value={comp.data[f.key]} shorthands={shorthands} />
-          </div>
-        );
-      })}
+    <Tag type={onClick ? 'button' : undefined} className={`ccard ${className}`} style={{ '--accent': accentFor(type, comp), aspectRatio: type.aspect || 0.7 }} onClick={onClick}>
+      {rows.map((r, i) => (
+        <div key={i} className={['cc-row', r.fill ? 'fill' : '', r.band ? 'band' : '', r.divider ? 'divider' : ''].join(' ')}>
+          {r.cells.map((c) => {
+            const f = fields.get(c.key);
+            const cls = ['cc', `cc-${f.kind}`, `size-${c.size}`, `align-${c.align}`, c.bold && 'bold', c.italic && 'italic', c.muted && 'muted', c.upper && 'upper', selectedKey === c.key && 'selected'];
+            return (
+              <div key={c.key} className={cls.filter(Boolean).join(' ')} style={{ flexGrow: c.width || 1 }}>
+                <CellContent field={f} cell={c} value={comp.data[c.key]} shorthands={shorthands} />
+              </div>
+            );
+          })}
+        </div>
+      ))}
       {hasStates && (
         <span className="ccard-states" title="Has alternate states" aria-label="Has alternate states">
           ⟲

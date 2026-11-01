@@ -71,7 +71,11 @@ service cloud.firestore {
         && onlyChanged(['commentCount'])
         && (request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1
           || request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1));
-      allow delete: if isAdmin();
+      // Users may withdraw (or undo) their own suggested rule while nobody has discussed it.
+      allow delete: if isAdmin() || (signedIn()
+        && resource.data.createdBy == request.auth.uid
+        && resource.data.status == 'suggested'
+        && resource.data.get('commentCount', 0) == 0);
     }
 
     match /versions/{id} {

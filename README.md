@@ -2,10 +2,12 @@
 
 A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rage: Valhalla*. It's a static site hosted on GitHub Pages, with Firebase handling sign-in and data.
 
-- **Rules.** Every rule from the rulebook is a separate entry with a stable ID such as `SUM.1`. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. The rules are searchable, can be filtered, and can be exported to PDF.
+- **Rules.** Every rule from the rulebook is a separate entry with a stable ID such as `SUM.1`. The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
-- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Admins define component types and their fields, lay out the card visually, import spreadsheets, and define `[shorthand]` icons.
-- **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management and the admin list.
+- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Admins define component types and their fields, arrange them on a simple card layout, import spreadsheets, and define `[shorthand]` icons.
+- **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
+- **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
+- **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
 
 This is an unofficial fan project and is not affiliated with the game's publishers.
 
@@ -16,7 +18,7 @@ npm install
 npm run demo
 ```
 
-Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. To try the admin tools, sign in with the name **Admin**. Then go to **Admin → Rules → Import transcribed rulebook**, and to **Admin → Components → Add Blood Rage card type → Import spreadsheet**.
+Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. To try the admin tools, sign in with the name **Admin**. Then go to **Admin → Backup & import** and import [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json).
 
 ## Set up for real
 
@@ -58,10 +60,21 @@ In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions
 
 ### 6. Load the content
 
-- **Rules.** Go to **Admin → Rules → Import transcribed rulebook**. This adds 138 rules in 30 sections, transcribed verbatim from the rulebook. Run it once.
-- **Cards.** Go to **Admin → Components** and choose **Add Blood Rage card type**. Then use **Import spreadsheet** with the card `.xlsx`. The preset's fields match the spreadsheet's columns, so they map automatically.
-- **Icons.** Under **Shorthands**, choose **Add Blood Rage icons** and then **Save**. This makes `[rage]`, `[axes]`, `[horns]` and `[tribute]` render as emoji. You can replace these with image URLs.
-- **Card art.** The spreadsheet's `Illustration` column holds file names, not URLs. If you host the art somewhere, open the *Illustration* field in **Fields & layout** and set its **URL template**, for example `https://example.com/art/{value}.jpg`.
+Go to **Admin → Backup & import**, choose [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) and import it in **Merge** mode. It contains:
+
+- the rulebook, transcribed verbatim: 138 rules in 30 sections;
+- a *Blood Rage: Valhalla cards* component type with a card layout, and the 132 cards from the card spreadsheet;
+- the `[rage]`, `[axes]`, `[horns]` and `[tribute]` shorthands, shown as emoji (replace them with image URLs if you like).
+
+The file uses fixed document IDs, so importing it again updates the same documents instead of adding duplicates. If you loaded the rulebook with an earlier version of the site, its rules have different IDs: import the file in **Replace** mode for the rule collections (sections, rules, versions) to avoid duplicates. You can undo an import.
+
+**Card art.** The spreadsheet's `Illustration` column holds file names, not URLs. If you host the art somewhere, open the *Illustration* field in **Admin → Components → Fields & layout**, set its **URL template** (for example `https://example.com/art/{value}.jpg`) and place it on the card.
+
+**Regenerating the file.** The import is built from [imports/blood-rage/rulebook.json](imports/blood-rage/rulebook.json) and the card spreadsheet:
+
+```bash
+node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
+```
 
 ## How it works
 
@@ -87,10 +100,22 @@ Suggested rules from the community get a temporary `SUG-XXXX` ID until an admin 
 
 ### Card layout
 
-- Each component type has a grid of columns × rows (20 × 30 for the Blood Rage cards). Every field sits in a rectangle on that grid, with a layer order.
-- Font sizes are relative to the card's width, so the same layout works at any card size.
-- Field styling covers font, alignment, rotation, shapes (circle or ring badges), backgrounds, and prefixes or suffixes (for example `+` before a strength value).
-- A *Type* field can set the card's color. The Blood Rage preset uses this to make Battle cards red and Quest cards green.
+Cards are clean web cards, not replicas of the printed ones. Each component type has a layout made of **rows**, stacked top to bottom like blocks on a web page. Fields in a row sit side by side, and each field has a **share** of its row's width.
+
+- **Rows** can *fill* the remaining height (long text fades out at the bottom), be *highlighted* with the accent color, or have a *line* above them.
+- **Fields on the card** have a text size (XS–XL), alignment, bold, italic, subdued, capitals, an optional field name, and text before or after the value (for example `+` before a strength, or `[rage]` after a cost).
+- All cards of a type share one shape (width ÷ height) and text scales with the card, so the grid stays uniform at any card size.
+- An optional *Type* field picks the accent color per value, for example red for Battle cards and green for Quest cards.
+
+Fields that are not on the card still appear in the component's details. In the editor, drag fields between rows or use the buttons under the selected field. The editor has its own undo for unsaved changes.
+
+### Undo
+
+Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, every document it touches is read once before its first write. Undo restores whole documents for sets and deletes, and only the changed fields for updates, so a user's undo stays within what the security rules allow them to do. Undoing is recorded as well, which is how redo works. The history is kept per browser tab and cleared on sign-out.
+
+### Backups
+
+**Admin → Backup & import** exports any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`) and imports such files in *Merge* or *Replace* mode. Admins, user profiles and admin chat are left out of imports unless you tick them, and *Replace* never deletes your own admin entry.
 
 ### Field kinds
 
@@ -123,8 +148,6 @@ Suggested rules from the community get a temporary `SUG-XXXX` ID until an admin 
 | `users/{uid}` | Display name and photo |
 | `adminChat` | Admin messages |
 
-**Backups:** use **Admin → Rules → Download JSON backup**.
-
 ## Development
 
 ```bash
@@ -133,4 +156,4 @@ npm run demo       # against the in-browser fake
 npm run build      # production build into dist/
 ```
 
-The rulebook transcription lives in [src/data/rulebook-seed.json](src/data/rulebook-seed.json).
+Game content lives in [imports/](imports/), not in the app: the site itself is game-agnostic apart from its name and welcome text.

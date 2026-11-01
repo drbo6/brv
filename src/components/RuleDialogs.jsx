@@ -1,10 +1,90 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { escapeHtml } from '../lib/html.js';
 import { createRule, createVersion, KINDS, LABELS, nextCode, updateRule, updateVersion } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
-import { attempt, Modal, RichText } from './ui.jsx';
+import { attempt, Icon, Modal, RichText } from './ui.jsx';
+
+/** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
+function insertAtCursor(el, before, after = '', placeholder = '') {
+  el.focus();
+  const { selectionStart: a, selectionEnd: b, value } = el;
+  const middle = value.slice(a, b) || placeholder;
+  const text = `${before}${middle}${after}`;
+  if (!document.execCommand?.('insertText', false, text)) {
+    el.setRangeText(text, a, b, 'end');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  // Select the placeholder so it can be typed over.
+  if (middle) el.setSelectionRange(a + before.length, a + before.length + middle.length);
+}
+
+function ImageForm({ onInsert, onCancel }) {
+  const [url, setUrl] = useState('');
+  const [alt, setAlt] = useState('');
+  const [caption, setCaption] = useState('');
+  const [broken, setBroken] = useState(false);
+  const valid = /^https:\/\/\S+$/i.test(url.trim());
+  const submit = () => {
+    if (!valid) return;
+    const img = `<img src="${escapeHtml(url.trim())}" alt="${escapeHtml(alt.trim())}">`;
+    // Blank lines around it make the image its own paragraph in plain-text rules.
+    onInsert(caption.trim() ? `\n\n<figure>${img}<figcaption>${escapeHtml(caption.trim())}</figcaption></figure>\n\n` : `\n\n${img}\n\n`);
+  };
+  const onKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    submit();
+  };
+  return (
+    <div className="image-form" onKeyDown={onKeyDown}>
+      <div className="image-form-fields">
+        <div className="field">
+          <label htmlFor="img-url">Image address (https://…)</label>
+          <input
+            id="img-url"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setBroken(false);
+            }}
+            placeholder="https://i.imgur.com/example.png"
+            autoFocus
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="img-alt">Description (for screen readers)</label>
+          <input id="img-alt" value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="e.g. Board with three clans in Midgard" />
+        </div>
+        <div className="field">
+          <label htmlFor="img-cap">Caption (optional)</label>
+          <input id="img-cap" value={caption} onChange={(e) => setCaption(e.target.value)} />
+        </div>
+      </div>
+      <div className="image-form-preview">
+        {valid && !broken ? <img src={url.trim()} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : <span className="muted small">{broken ? 'That image could not be loaded.' : 'Preview'}</span>}
+      </div>
+      <div className="row gap">
+        <button type="button" className="small" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="small primary" onClick={submit} disabled={!valid}>
+          Insert image
+        </button>
+      </div>
+      <p className="hint">The image stays on its own host (Imgur, BoardGameGeek, a public cloud link…). Use https addresses.</p>
+    </div>
+  );
+}
 
 function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
   const [preview, setPreview] = useState(false);
+  const [imageForm, setImageForm] = useState(false);
+  const ref = useRef(null);
+  const wrap = (before, after, placeholder) => ref.current && insertAtCursor(ref.current, before, after, placeholder);
+  const addLink = () => {
+    const url = prompt('Link address (https://…)');
+    if (url && /^https?:\/\//i.test(url.trim())) wrap(`<a href="${escapeHtml(url.trim())}">`, '</a>', 'link text');
+  };
   return (
     <div className="field">
       <div className="field-label-row">
@@ -19,20 +99,69 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
         </div>
       </div>
       {preview ? (
-        <RichText html={value || '<p class="muted">Nothing to preview.</p>'} className="preview-box rule-text" />
+        <RichText html={normalizeText(value) || '<p class="muted">Nothing to preview.</p>'} className="preview-box rule-text" />
       ) : (
-        <textarea id="rule-text" value={value} onChange={(e) => onChange(e.target.value)} rows={rows} required />
+        <>
+          <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
+            <button type="button" className="icon-btn" title="Bold" aria-label="Bold" onClick={() => wrap('<b>', '</b>', 'bold text')}>
+              <Icon name="bold" />
+            </button>
+            <button type="button" className="icon-btn" title="Italic" aria-label="Italic" onClick={() => wrap('<i>', '</i>', 'italic text')}>
+              <Icon name="italic" />
+            </button>
+            <button type="button" className="icon-btn" title="Bulleted list" aria-label="Bulleted list" onClick={() => wrap('\n<ul>\n  <li>', '</li>\n</ul>\n', 'item')}>
+              <Icon name="list" />
+            </button>
+            <button type="button" className="icon-btn" title="Link" aria-label="Link" onClick={addLink}>
+              <Icon name="link" />
+            </button>
+            <button
+              type="button"
+              className={`icon-btn ${imageForm ? 'on' : ''}`}
+              title="Insert an image from a web address"
+              aria-label="Insert image"
+              aria-expanded={imageForm}
+              onClick={() => setImageForm((o) => !o)}
+            >
+              <Icon name="image" />
+              <span>Image</span>
+            </button>
+          </div>
+          {imageForm && (
+            <ImageForm
+              onCancel={() => setImageForm(false)}
+              onInsert={(html) => {
+                setImageForm(false);
+                if (ref.current) insertAtCursor(ref.current, html);
+                else onChange(`${value}${html}`);
+              }}
+            />
+          )}
+          <textarea ref={ref} id="rule-text" value={value} onChange={(e) => onChange(e.target.value)} rows={rows} required />
+        </>
       )}
       <p className="hint">
-        Basic HTML works: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;ul&gt;&lt;li&gt;</code>, <code>&lt;p&gt;</code>. Shorthands like <code>[rage]</code> are
-        replaced with icons. Plain line breaks become paragraphs.
+        Basic HTML works: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;ul&gt;&lt;li&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;img&gt;</code>. Shorthands like{' '}
+        <code>[rage]</code> are replaced with icons. Plain line breaks become paragraphs.
       </p>
     </div>
   );
 }
 
 /** Plain text typed without HTML tags gets paragraphs, so it renders like the rulebook. */
-const normalizeText = (t) => (/<\/?[a-z][\s\S]*>/i.test(t) ? t.trim() : t.trim().split(/\n\s*\n/).map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join(''));
+// Blocks separated by blank lines become paragraphs, unless they already start with a block tag.
+const BLOCK_START = /^<(p|ul|ol|div|blockquote|figure|h4|h5|hr)\b/i;
+const normalizeText = (t) => {
+  const s = t.trim();
+  // Fully structured HTML (e.g. the transcribed rulebook) is kept exactly as is.
+  if (BLOCK_START.test(s) && !/\n\s*\n/.test(s)) return s;
+  return s
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => (BLOCK_START.test(p) ? p : `<p>${p.replace(/\n/g, '<br>')}</p>`))
+    .join('');
+};
 
 /** Suggest (or, for admins, add) a new version of an existing rule — or edit one. */
 export function VersionDialog({ rule, version, onClose }) {

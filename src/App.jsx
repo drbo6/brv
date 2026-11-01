@@ -1,9 +1,10 @@
-import { Component, lazy, Suspense, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { configured, isDemo } from './lib/firebase.js';
 import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
-import { SessionProvider, useSession } from './lib/session.jsx';
-import { Avatar, Icon, Spinner } from './components/ui.jsx';
+import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
+import { useHistory, useUndoKeys } from './lib/history.js';
+import { Avatar, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
 import SetupNeeded from './components/SetupNeeded.jsx';
 import RulesPage from './pages/RulesPage.jsx';
@@ -24,7 +25,10 @@ export default function App() {
 
 function Shell() {
   const route = useRoute();
-  const { user, isAdmin } = useSession();
+  const { user, isAdmin, realUser, realRole, role, previewing, setViewAs } = useSession();
+  const history = useHistory();
+  useUndoKeys(useCallback((kind, label) => toast(`${kind === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'ok'), []));
+  const lowerRoles = Object.keys(ROLES).slice(Object.keys(ROLES).indexOf(realRole));
   const [welcomeSeen, setWelcomeSeen] = useLocalStorage('brv-welcome-seen', false);
   const [showWelcome, setShowWelcome] = useState(!welcomeSeen);
 
@@ -68,6 +72,37 @@ function Shell() {
           ))}
         </nav>
         <div className="header-actions">
+          {realUser && (
+            <div className="history-btns" role="group" aria-label="Undo history">
+              <button
+                className="icon-btn"
+                onClick={() => undoWithToast()}
+                disabled={!history.undo || history.busy}
+                title={history.undo ? `Undo: ${history.undo.label} (Ctrl+Z)` : 'Nothing to undo'}
+                aria-label={history.undo ? `Undo: ${history.undo.label}` : 'Nothing to undo'}
+              >
+                <Icon name="undo" size={18} />
+              </button>
+              {history.redo && (
+                <button className="icon-btn" onClick={() => redoWithToast()} disabled={history.busy} title={`Redo: ${history.redo.label} (Ctrl+Shift+Z)`} aria-label={`Redo: ${history.redo.label}`}>
+                  <Icon name="redo" size={18} />
+                </button>
+              )}
+            </div>
+          )}
+          {lowerRoles.length > 1 && (
+            <label className={`view-as ${previewing ? 'on' : ''}`} title="See the site as someone with less access">
+              <Icon name="eye" />
+              <span className="sr-only">View the site as</span>
+              <select value={role} onChange={(e) => setViewAs(e.target.value === realRole ? null : e.target.value)}>
+                {lowerRoles.map((r) => (
+                  <option key={r} value={r}>
+                    {r === realRole ? `${ROLES[r]} (you)` : `View as ${ROLES[r].toLowerCase()}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="icon-btn" onClick={() => setShowWelcome(true)} title="About this site" aria-label="About this site">
             <Icon name="info" size={18} />
           </button>
@@ -77,6 +112,17 @@ function Shell() {
           </a>
         </div>
       </header>
+      {previewing && (
+        <div className="preview-banner" role="status">
+          <Icon name="eye" />
+          <span>
+            Previewing the site as {role === 'visitor' ? 'a visitor who is not signed in' : 'a signed-in user without admin rights'}.
+          </span>
+          <button className="small" onClick={() => setViewAs(null)}>
+            Stop previewing
+          </button>
+        </div>
+      )}
       {isDemo && (
         <div className="demo-banner">
           Demo mode — data is stored only in this browser. Sign in with the name “Admin” to try the admin tools.

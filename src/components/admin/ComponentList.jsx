@@ -35,7 +35,7 @@ export default function ComponentList({ type, comps, editId, onChanged }) {
           <button
             className="small danger"
             disabled={!comps.length}
-            onClick={() => confirm(`Delete ALL ${comps.length} “${type.name}” components? This cannot be undone.`) && attempt(() => deleteComponents(comps.map((c) => c.id)), 'Deleted').then(onChanged)}
+            onClick={() => confirm(`Delete ALL ${comps.length} “${type.name}” components?`) && attempt(() => deleteComponents(comps.map((c) => c.id)), 'Deleted').then(onChanged)}
           >
             <Icon name="trash" />
             Delete all

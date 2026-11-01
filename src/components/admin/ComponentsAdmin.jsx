@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
-import { BLOOD_RAGE_PRESET, BLOOD_RAGE_SHORTHANDS, loadComponents, NEW_TYPE, saveType } from '../../lib/components.js';
+import { onRevert, setDoc } from '../../lib/store.js';
+import { loadComponents, NEW_TYPE, saveType } from '../../lib/components.js';
 import { href, navigate } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner } from '../ui.jsx';
@@ -21,6 +22,14 @@ export default function ComponentsAdmin({ route }) {
   useEffect(() => {
     reload().catch((e) => setData({ error: e }));
   }, [reload]);
+  // Undo/redo changes components behind this page's back: reload when that happens.
+  useEffect(
+    () =>
+      onRevert((paths) => {
+        if (paths.some((p) => p.startsWith('components/') || p.startsWith('componentTypes/'))) reload();
+      }),
+    [reload],
+  );
 
   if (!data) return <Spinner />;
   if (data.error) return <p className="error">{data.error.message}</p>;
@@ -30,8 +39,8 @@ export default function ComponentsAdmin({ route }) {
   const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || (route.params.get('edit') ? 'list' : 'layout');
   const comps = type ? data.components.filter((c) => c.typeId === type.id) : [];
 
-  const createType = async (preset) => {
-    const id = await attempt(() => saveType({ ...(preset || NEW_TYPE), order: data.types.length + 1 }), 'Component type created');
+  const createType = async () => {
+    const id = await attempt(() => saveType({ ...NEW_TYPE, order: data.types.length + 1 }), 'Component type created');
     if (id) {
       await reload();
       navigate('admin', ['components', id]);
@@ -57,12 +66,6 @@ export default function ComponentsAdmin({ route }) {
             <Icon name="plus" />
             New type
           </button>
-          {!data.types.some((t) => t.name === BLOOD_RAGE_PRESET.name) && (
-            <button className="primary" onClick={() => createType(BLOOD_RAGE_PRESET)} title="Fields and card layout matching the Blood Rage: Valhalla card spreadsheet">
-              <Icon name="layers" />
-              Add Blood Rage card type
-            </button>
-          )}
         </div>
         <ShorthandsEditor />
       </aside>
@@ -75,11 +78,9 @@ export default function ComponentsAdmin({ route }) {
               Pick a component type, or create one. A type defines the data fields of a component (card, tile, board…) and how they are laid out when rendered.
             </p>
             <ol className="steps">
-              <li>
-                Create a type — the <b>Blood Rage card type</b> button sets up fields and a layout matching the card spreadsheet.
-              </li>
-              <li>Import the spreadsheet (.xlsx or .csv) and map its columns to fields.</li>
-              <li>Fine-tune the layout and shorthands, such as [rage] → 🩸.</li>
+              <li>Create a type, or load prepared content under Admin → Backup &amp; import.</li>
+              <li>Import a spreadsheet (.xlsx or .csv) and map its columns to fields.</li>
+              <li>Arrange the card layout and define shorthands, such as [rage] → 🩸.</li>
             </ol>
           </section>
         ) : (
@@ -143,11 +144,6 @@ function ShorthandsEditor() {
           <Icon name="plus" />
           Add
         </button>
-        {!rows.some((r) => r.key === 'rage') && (
-          <button className="small" onClick={() => setRows([...rows, ...Object.entries(BLOOD_RAGE_SHORTHANDS).map(([key, v]) => ({ key, ...v }))])}>
-            Add Blood Rage icons
-          </button>
-        )}
         <button className="small primary" onClick={() => save(rows)}>
           Save
         </button>
