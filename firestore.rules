@@ -192,7 +192,8 @@ service cloud.firestore {
     // and changes it. Editors may open one by id (shared ones name it in `homebrewId`) and, when
     // turning a shared one down, hand it back with a reason.
     match /homebrew/{id} {
-      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      // A missing document reveals nothing (saving one is checked against it first).
+      allow read: if signedIn() && (resource == null || resource.data.ownerUid == request.auth.uid);
       allow get: if isEditor();
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid

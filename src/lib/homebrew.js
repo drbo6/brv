@@ -1,7 +1,7 @@
 import { collection, deleteField, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { HB, nextVersionNumber } from './rules.js';
-import { deleteDoc, writeBatch } from './store.js';
+import { deleteDoc, knownState, writeBatch } from './store.js';
 
 // Homebrew: anyone signed in can change any rule or card, or write a new rule, for themselves.
 // homebrew/{id} → { ownerUid, ownerName, kind, …, note, sharedId, sharedVersionId, declineReason }
@@ -98,6 +98,8 @@ const author = (user) => ({ createdBy: user.uid, createdByName: user.displayName
 /** Create a homebrew; returns its id. */
 export async function createHomebrew(fields, user) {
   const ref = doc(collection(db, 'homebrew'));
+  // It's new: no need to read it first (and reading a missing homebrew is not allowed).
+  knownState(ref, null);
   const batch = writeBatch();
   batch.set(ref, { ...fields, note: fields.note || '', ...owner(user), sharedId: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   await batch.commit();
