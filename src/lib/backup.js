@@ -26,8 +26,8 @@ export const COLLECTIONS = [
   { id: 'homebrew', label: 'Members’ homebrew' },
 ];
 
-// People and their private data: left out of an import unless the owner ticks them.
-export const SENSITIVE = new Set(['admins', 'users', 'usernames', 'roles', 'modlog', 'subscribers', 'adminChat', 'homebrew']);
+// People: left out of an import unless the owner ticks them.
+export const SENSITIVE = new Set(['admins', 'users', 'usernames', 'roles', 'modlog']);
 
 export const FORMAT = 'brv-backup';
 
