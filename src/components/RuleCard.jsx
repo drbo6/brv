@@ -62,6 +62,11 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
     <article id={`rule-${rule.id}`} className={classes.join(' ')} aria-label={ruleName(rule)} style={hasKind && kind.color ? { '--kind': kind.color } : undefined}>
       <div className="rule-read" onClick={onBodyClick}>
         <header className="rule-head">
+          <h3 className="rule-title">
+            <button type="button" className="rule-toggle" onClick={() => onToggle(rule.id)} aria-expanded={open} title={open ? 'Hide tools' : 'Show versions, reactions and discussion'}>
+              {rule.title}
+            </button>
+          </h3>
           {brewRule ? (
             <span className="rule-code is-homebrew" title="Your homebrew rule: only you see it">
               <Icon name="flask" size={13} />
@@ -71,11 +76,6 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
               {rule.sid}
             </span>
           )}
-          <h3 className="rule-title">
-            <button type="button" className="rule-toggle" onClick={() => onToggle(rule.id)} aria-expanded={open} title={open ? 'Hide tools' : 'Show versions, reactions and discussion'}>
-              {rule.title}
-            </button>
-          </h3>
           {hasKind && (
             <span className="kind-tag" title={`Kind: ${kind.label}. Filter by kind in the toolbar.`}>
               {kind.label}

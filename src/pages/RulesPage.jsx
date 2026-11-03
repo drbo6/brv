@@ -55,6 +55,17 @@ export default function RulesPage({ route }) {
   // One rule at a time shows its tools; a linked rule starts open.
   const [openId, setOpenId] = useState(null);
   const onToggle = useCallback((ruleId) => setOpenId((id) => (id === ruleId ? null : ruleId)), []);
+  // Clicking outside the rules closes the open one. Rules handle clicks on themselves, and dialogs,
+  // menus and notices opened from a rule don't count as outside.
+  useEffect(() => {
+    if (!openId) return;
+    const onClick = (e) => {
+      if (!e.target.isConnected || e.target.closest('article.rule, .modal, .dialog, .modal-backdrop, [role="dialog"], [role="menu"], [role="listbox"], .toast')) return;
+      setOpenId(null);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [openId]);
   const onShowVersion = useCallback((ruleId, vid) => setViewVersion((m) => ({ ...m, [ruleId]: vid })), []);
   // Changing a rule's version or leaving it out is an unsaved change to the active ruleset.
   const baseRef = useRef(baseEntries);
@@ -272,7 +283,7 @@ export default function RulesPage({ route }) {
               title={isEditor ? 'Add a rule to the rulebook' : 'Write a rule of your own: only you see it until you share it'}
             >
               <Icon name={isEditor ? 'plus' : 'flask'} />
-              {isEditor ? 'Add rule' : 'Homebrew rule'}
+              {isEditor ? 'Add rule' : 'Add homebrew rule'}
             </button>
             <button
               className={`icon-btn pin-btn ${pinned ? 'on' : ''}`}

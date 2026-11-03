@@ -176,7 +176,7 @@ const TOPICS = [
         <ol>
           <li>
             <b>Homebrew</b> <Icon name="flask" size={14} /> on an open rule (or in a card's details) writes your own version, starting from the text on screen.{' '}
-            <b>Homebrew rule</b> in the toolbar adds a new rule to one of the rulebook's sections. Your homebrew is labeled{' '}
+            <b>Add homebrew rule</b> in the toolbar adds a new rule to one of the rulebook's sections. Your homebrew is labeled{' '}
             <span className="label l-homebrew">Homebrew</span> and <b>only you see it</b>. It goes straight into the ruleset you are using, which must be one of your own
             (you are asked to switch, or make your own copy, if it isn't); it prints in your PDF too.
           </li>

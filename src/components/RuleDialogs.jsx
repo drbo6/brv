@@ -301,7 +301,9 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   const { isEditor, user, kinds } = useSession();
   const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
-  const brew = Boolean(homebrew) || (!isEditor && !rule);
+  // Editors adding a rule choose: a rule of the rulebook, or homebrew of their own.
+  const [asHomebrew, setAsHomebrew] = useState(false);
+  const brew = Boolean(homebrew) || (!rule && (!isEditor || asHomebrew));
   const editing = Boolean(rule) && !brew;
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(hb?.sectionId || rule?.sectionId || firstSection);
@@ -352,6 +354,26 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   return (
     <Modal title={brew ? (hb ? 'Edit your homebrew rule' : 'Homebrew: a rule of your own') : editing ? `Edit rule ${ruleName(rule)}` : 'Add a rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
+        {isEditor && !rule && !homebrew && (
+          <div className="field">
+            <label>Add it to</label>
+            <div className="seg">
+              <button type="button" className={!asHomebrew ? 'on' : ''} onClick={() => setAsHomebrew(false)}>
+                The rulebook (everyone)
+              </button>
+              <button
+                type="button"
+                className={asHomebrew ? 'on' : ''}
+                onClick={() => setAsHomebrew(true)}
+                disabled={!rs.brewSet}
+                title={rs.brewSet ? `Only you see it; it goes into “${rs.selectedSet.name}”` : 'Switch to a private ruleset of your own to add homebrew'}
+              >
+                <Icon name="flask" size={14} /> My homebrew (only me)
+              </button>
+            </div>
+            {!rs.brewSet && <p className="small muted">To add it as homebrew, first switch to a private ruleset of your own.</p>}
+          </div>
+        )}
         {brew && !hb && <p className="muted">Add a rule your table plays with, in one of the rulebook's sections. {HOMEBREW_INTRO}</p>}
         {hb?.sharedId && <p className="muted">This homebrew is shared for review: the shared copy changes too.</p>}
         <div className="grid-2">
