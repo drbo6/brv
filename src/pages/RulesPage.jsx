@@ -267,7 +267,7 @@ export default function RulesPage({ route }) {
           </label>
           <div className="toolbar-end">
             <button
-              onClick={() => requireUser(() => setDialog('newRule'))}
+              onClick={() => (isEditor ? requireUser(() => setDialog('newRule')) : rs.startHomebrew(() => setDialog('newRule')))}
               disabled={!tree.ordered.length}
               title={isEditor ? 'Add a rule to the rulebook' : 'Write a rule of your own: only you see it until you share it'}
             >

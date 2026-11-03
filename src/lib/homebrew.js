@@ -95,13 +95,17 @@ export async function privateHomebrewCount(set) {
 const owner = (user) => ({ ownerUid: user.uid, ownerName: user.displayName || 'Anonymous' });
 const author = (user) => ({ createdBy: user.uid, createdByName: user.displayName || 'Anonymous' });
 
-/** Create a homebrew; returns its id. */
-export async function createHomebrew(fields, user) {
+/** Where a homebrew goes in a ruleset: the rule (or card) it stands in for. */
+const setField = (h, id) => (h.kind === 'card' ? `cards.${h.componentId}` : `entries.${h.kind === 'rule' ? HB + id : h.ruleId}`);
+
+/** Create a homebrew and use it in the reader's ruleset `rulesetId`, in one step; returns its id. */
+export async function createHomebrew(fields, user, rulesetId) {
   const ref = doc(collection(db, 'homebrew'));
   // It's new: no need to read it first (and reading a missing homebrew is not allowed).
   knownState(ref, null);
   const batch = writeBatch();
   batch.set(ref, { ...fields, note: fields.note || '', ...owner(user), sharedId: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  if (rulesetId) batch.update(doc(db, 'rulesets', rulesetId), { [setField(fields, ref.id)]: HB + ref.id, updatedAt: serverTimestamp() });
   await batch.commit();
   return ref.id;
 }

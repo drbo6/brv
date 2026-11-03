@@ -132,7 +132,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   <span>{commentCount(current.id)}</span>
                   <span className="hide-sm">Discuss</span>
                 </button>
-                <button className="chip" onClick={() => requireUser(() => setDialog('brew'))} title="Change this card your own way. Only you see your homebrew; share it when you want others to consider it.">
+                <button className="chip" onClick={() => rs.startHomebrew(() => setDialog('brew'))} title="Change this card your own way. Only you see your homebrew; share it when you want others to consider it.">
                   <Icon name="flask" />
                   <span className="hide-sm">Homebrew</span>
                 </button>
@@ -237,6 +237,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
  */
 function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, onSaved }) {
   const { user } = useSession();
+  const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
   const brew = Boolean(homebrew);
   const editable = type.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state');
@@ -255,9 +256,10 @@ function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, 
     if (brew) {
       const id = hb
         ? await attempt(() => updateHomebrew(hb, { data, note: note.trim() }), 'Homebrew saved')
-        : await attempt(() => createHomebrew({ kind: 'card', componentId: comp.id, typeId: comp.typeId, data, note: note.trim() }, user), 'Homebrew saved: only you see it');
+        : await attempt(() => createHomebrew({ kind: 'card', componentId: comp.id, typeId: comp.typeId, data, note: note.trim() }, user, rs.selectedSet.id), `Homebrew saved and used in “${rs.selectedSet.name}”: only you see it`);
       setBusy(false);
       if (id === undefined) return;
+      if (!hb) rs.homebrewUsed('cards', comp.id);
       if (!hb) onSaved(HB + id);
       return onClose();
     }
@@ -284,7 +286,7 @@ function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, 
       <form className="form" onSubmit={submit}>
         {brew && !hb && (
           <p className="muted">
-            Change the values the way your table plays this card. Your homebrew is private: only you see it, and you can use it in your own rulesets. Share it when you would like
+            Change the values the way your table plays this card. Your homebrew is private: only you see it, and saving it puts it straight into the ruleset you are using. Share it when you would like
             the community and the admins to consider it.
           </p>
         )}

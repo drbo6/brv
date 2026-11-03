@@ -19,7 +19,7 @@ import { notify, ruleTarget } from '../lib/inbox.js';
 function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersion, onSetActive, onUseVersion, onMove, canMoveUp, canMoveDown, tree, rules }) {
   const { isEditor, requireUser, user, kinds } = useSession();
   const { rule, vs, active, activeVersion, shown } = item;
-  const { myHomebrew } = useActiveRuleset();
+  const { myHomebrew, startHomebrew } = useActiveRuleset();
   // A homebrew rule of the reader's own, not shared: only they see it.
   const brewRule = rule.status === 'homebrew';
   // The reader's homebrew behind the version on screen: private, or the public copy they shared.
@@ -163,7 +163,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 </button>
               )}
               {!brewRule && (
-                <button className="chip" onClick={() => requireUser(() => setDialog('brew'))} title="Write this rule your own way. Only you see your homebrew; share it when you want others to consider it.">
+                <button className="chip" onClick={() => startHomebrew(() => setDialog('brew'))} title="Write this rule your own way. Only you see your homebrew; share it when you want others to consider it.">
                   <Icon name="flask" />
                   <span className="hide-sm">Homebrew</span>
                 </button>

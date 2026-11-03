@@ -109,6 +109,23 @@ export function ActiveRulesetProvider({ route, children }) {
       }
     });
 
+  // Homebrew goes straight into the reader's own private ruleset, so they can play it at once.
+  // (Not a public set: others would see it without the homebrew.)
+  const brewSet = Boolean(!selectedSet.builtIn && user && selectedSet.ownerUid === user.uid && selectedSet.visibility !== 'public');
+  const startHomebrew = (open) =>
+    requireUser(async () => {
+      if (brewSet) return open();
+      const own = await confirmDialog({
+        title: 'Homebrew needs a ruleset of your own',
+        message: `Your homebrew goes into the ruleset you are using, so you can play it right away. “${selectedSet.name}” isn't yours to change. Switch to one of your own rulesets in the ruleset bar, or make your own copy of this one, then choose Homebrew again.`,
+        confirmLabel: 'Make my own copy',
+        cancelLabel: 'Not now',
+      });
+      if (own) setSaveAs(true);
+    });
+  /** After a homebrew went into the set: it is saved there, so it is no longer an unsaved change. */
+  const homebrewUsed = (kind, id) => change(kind, id, null, null);
+
   const [saveAs, setSaveAs] = useState(false);
   const saveAsNew = ({ name, description }) =>
     requireUser(async (u) => {
@@ -242,6 +259,9 @@ export function ActiveRulesetProvider({ route, children }) {
   const value = {
     choice,
     myHomebrew,
+    brewSet,
+    startHomebrew,
+    homebrewUsed,
     privateHomebrewIn,
     copySetLink,
     exportPdf,

@@ -5,6 +5,7 @@ import { createHomebrew, updateHomebrew } from '../lib/homebrew.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 import { confirmDialog, promptDialog } from './dialogs.jsx';
+import { useActiveRuleset } from './ActiveRuleset.jsx';
 import { autoFollow, notify, ruleTarget } from '../lib/inbox.js';
 
 /** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
@@ -170,7 +171,7 @@ const normalizeText = (t) => {
     .join('');
 };
 
-const HOMEBREW_INTRO = 'Your homebrew is private: only you see it, and you can use it in your own rulesets. Share it when you would like the community and the admins to consider it.';
+const HOMEBREW_INTRO = 'Your homebrew is private: only you see it, and saving it puts it straight into the ruleset you are using. Share it when you would like the community and the admins to consider it.';
 
 /**
  * A new version of a rule, or edit one. Everyone writes homebrew (`homebrew`: true for a new one, or
@@ -178,6 +179,7 @@ const HOMEBREW_INTRO = 'Your homebrew is private: only you see it, and you can u
  */
 export function VersionDialog({ rule, version, homebrew, startText = '', onClose, onSaved }) {
   const { isEditor, user } = useSession();
+  const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
   const brew = Boolean(homebrew);
   const source = hb || (brew ? null : version);
@@ -193,9 +195,12 @@ export function VersionDialog({ rule, version, homebrew, startText = '', onClose
   const saveHomebrew = async () => {
     setBusy(true);
     const data = { text: normalizeText(text), note: note.trim() };
-    const id = hb ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved') : await attempt(() => createHomebrew({ kind: 'version', ruleId: rule.id, ...data }, user), 'Homebrew saved: only you see it');
+    const id = hb
+      ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved')
+      : await attempt(() => createHomebrew({ kind: 'version', ruleId: rule.id, ...data }, user, rs.selectedSet.id), `Homebrew saved and used in “${rs.selectedSet.name}”: only you see it`);
     setBusy(false);
     if (id === undefined) return;
+    if (!hb) rs.homebrewUsed('rules', rule.id);
     onClose();
     if (!hb) onSaved?.(HB + id);
     else if (hb.sharedId) {
@@ -294,6 +299,7 @@ export function VersionDialog({ rule, version, homebrew, startText = '', onClose
  */
 export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onClose, onCreated }) {
   const { isEditor, user, kinds } = useSession();
+  const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
   const brew = Boolean(homebrew) || (!isEditor && !rule);
   const editing = Boolean(rule) && !brew;
@@ -311,7 +317,7 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   const saveHomebrew = async () => {
     setBusy(true);
     const data = { sectionId, title: title.trim(), text: normalizeText(text), note: note.trim() };
-    const id = hb ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved') : await attempt(() => createHomebrew({ kind: 'rule', ...data }, user), 'Homebrew rule saved: only you see it');
+    const id = hb ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved') : await attempt(() => createHomebrew({ kind: 'rule', ...data }, user, rs.selectedSet.id), `Homebrew rule saved and used in “${rs.selectedSet.name}”: only you see it`);
     setBusy(false);
     if (id === undefined) return;
     if (!hb) onCreated?.(HB + id);

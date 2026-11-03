@@ -1773,8 +1773,8 @@ img.sh {
 .toast {
   position: fixed;
   left: 50%;
-  top: calc(var(--header-h) + 14px);
-  transform: translate(-50%, -12px);
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 12px);
   opacity: 0;
   z-index: 500;
   padding: 10px 18px;
