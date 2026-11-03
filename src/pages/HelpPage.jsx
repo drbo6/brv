@@ -247,6 +247,11 @@ const TOPICS = [
           <i>Suggestion</i> versions. React 👍 👎 ❓, discuss, and use <b>Suggest change</b> in the card details to propose new values. The selected ruleset decides which version of
           each card is shown.
         </p>
+        <h4>For editors</h4>
+        <p>
+          Editors work on cards right where they read them, like rules: <b>Add</b> in the toolbar creates a card, and a card's details have <b>Edit card</b> and{' '}
+          <b>Delete card</b>. Card types, fields, layout and spreadsheets stay in Admin → Components.
+        </p>
       </>
     ),
   },
@@ -394,11 +399,12 @@ const TOPICS = [
     body: (
       <>
         <p>
-          In <b>Admin → Components</b>, pick a component type (or create one) and use its three tabs:
+          Single cards are added and edited on the Components page itself. <b>Admin → Components</b> is for structure and bulk work: pick a component type (or create one)
+          and use its three tabs:
         </p>
         <ol>
           <li>
-            <b>Components:</b> the list of all components of that type. Search, edit, add or delete them. Use <i>Columns</i> to choose which fields are shown in the list.
+            <b>Table:</b> all components of that type in a sortable table, for bulk work: search, edit, add or delete, and use <i>Columns</i> to choose which fields are shown.
           </li>
           <li>
             <b>Fields &amp; layout:</b> the type's fields and how its card looks.

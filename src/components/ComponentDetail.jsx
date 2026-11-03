@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
-import { displayTitle, FIELD_KINDS, imageUrl, isEmptyValue } from '../lib/components.js';
+import { deleteComponents, displayTitle, FIELD_KINDS, imageUrl, isEmptyValue } from '../lib/components.js';
+import ComponentForm from './ComponentForm.jsx';
 import { LABEL_CLASS } from '../lib/rules.js';
-import { absoluteLink, href } from '../lib/router.js';
+import { absoluteLink, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from './ComponentCard.jsx';
 import { RulesetChoiceRow, useActiveRuleset } from './ActiveRuleset.jsx';
@@ -16,7 +17,7 @@ import { autoFollow, cardTarget, notify, rulesetTarget, SUGGESTIONS } from '../l
  * A component in detail: its card, all its data, alternate states, and its versions with
  * reactions and discussion, the same way rules work.
  */
-export default function ComponentDetail({ type, comp, states, versionsOf, metaOf, commentCount, onClose }) {
+export default function ComponentDetail({ type, comp, states, versionsOf, metaOf, commentCount, allComps, onChanged, onClose }) {
   const { shorthands, isEditor, user, requireUser } = useSession();
   const { byIdValue, statesOf, idf, sf } = states;
   // The family: the base component plus all its alternate states.
@@ -190,10 +191,27 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 </button>
               )}
               {isEditor && (
-                <a className="chip btn" href={href('admin', ['components', type.id], { tab: 'list', edit: current.id })} title="Edit the printed card's data">
+                <button className="chip" onClick={() => setDialog('printed')} title="Edit the card's own (printed) data">
                   <Icon name="edit" />
-                  Edit printed card
-                </a>
+                  Edit card
+                </button>
+              )}
+              {isEditor && (
+                <button
+                  className="chip danger"
+                  title="Delete this card (you can undo this)"
+                  onClick={async () => {
+                    if (!(await confirmDialog({ title: 'Delete card', message: `Delete “${displayTitle(type, current)}” with its data? Its versions and discussion stay, but nothing links to them.`, confirmLabel: 'Delete card', danger: true }))) return;
+                    const ok = await attempt(() => deleteComponents([current.id]), `Deleted ${displayTitle(type, current)}`);
+                    if (ok) {
+                      onClose();
+                      onChanged?.();
+                    }
+                  }}
+                >
+                  <Icon name="trash" />
+                  Delete card
+                </button>
               )}
             </div>
           )}
@@ -201,7 +219,20 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
           {discuss && <Discussion target={{ field: 'componentId', id: current.id, name }} follow={follow} versions={vs} shownVersion={shown} />}
         </div>
       </div>
-      {dialog && (
+      {dialog === 'printed' && (
+        <ComponentForm
+          type={type}
+          comp={current}
+          comps={allComps}
+          onClose={() => setDialog(null)}
+          onSaved={async (id) => {
+            await onChanged?.();
+            // A changed ID gives the card a new address.
+            if (id && id !== current.id) navigate('components', [type.id, id], {}, { replace: true });
+          }}
+        />
+      )}
+      {dialog && dialog !== 'printed' && (
         <CardVersionDialog
           type={type}
           comp={current}

@@ -12,7 +12,7 @@ import Importer, { SpreadsheetExport } from './Importer.jsx';
 import ComponentList from './ComponentList.jsx';
 
 const SUBTABS = [
-  { id: 'list', label: 'Components', tip: 'Browse, edit, add and delete the components of this type' },
+  { id: 'list', label: 'Table', tip: 'All components of this type as a table, for bulk work. Single cards can also be added and edited on the Components page.' },
   { id: 'layout', label: 'Fields & layout', tip: 'Define the data fields and arrange them on the card' },
   { id: 'import', label: 'Spreadsheet', tip: 'Import components from, or export them to, an .xlsx or .csv file' },
 ];

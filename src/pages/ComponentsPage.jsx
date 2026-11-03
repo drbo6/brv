@@ -11,6 +11,7 @@ import { href, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from '../components/ComponentCard.jsx';
 import ComponentDetail from '../components/ComponentDetail.jsx';
+import ComponentForm from '../components/ComponentForm.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
 import { Empty, Icon, Spinner } from '../components/ui.jsx';
 
@@ -42,7 +43,7 @@ export default function ComponentsPage({ route }) {
 
   const load = useCallback((force = false) => {
     setState((s) => ({ ...s, loading: true }));
-    loadComponents({ force })
+    return loadComponents({ force })
       .then((r) => setState({ ...r, loading: false }))
       .catch((error) => setState({ loading: false, error }));
   }, []);
@@ -103,6 +104,7 @@ export default function ComponentsPage({ route }) {
   const [sortDir, setSortDir] = useState(1);
   const [cardWidth, setCardWidth] = useLocalStorage('brv-card-width', 210);
   const [showStates, setShowStates] = useState(false);
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     setFilters({});
     setSortKey('');
@@ -234,6 +236,12 @@ export default function ComponentsPage({ route }) {
           <Icon name="grid" />
           <input type="range" min="130" max="360" step="10" value={cardWidth} onChange={(e) => setCardWidth(Number(e.target.value))} aria-label="Card size" />
         </label>
+        {isEditor && states.idf && (
+          <button className="primary" onClick={() => setAdding(true)} title={`Add a new ${type.name.toLowerCase()} by hand`}>
+            <Icon name="plus" />
+            Add
+          </button>
+        )}
       </section>
 
       {visible.length === 0 ? (
@@ -268,7 +276,20 @@ export default function ComponentsPage({ route }) {
           versionsOf={(id) => versionsByComp.get(id) || []}
           metaOf={(id) => metaById.get(id)}
           commentCount={(id) => commentsByComp.get(id) || 0}
+          allComps={printedComps}
+          onChanged={() => load(true)}
           onClose={() => navigate('components', [type.id])}
+        />
+      )}
+      {adding && (
+        <ComponentForm
+          type={type}
+          comps={printedComps}
+          onClose={() => setAdding(false)}
+          onSaved={async (id) => {
+            await load(true);
+            if (id) navigate('components', [type.id, id]);
+          }}
         />
       )}
     </div>
