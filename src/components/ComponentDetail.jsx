@@ -132,10 +132,12 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   <span>{commentCount(current.id)}</span>
                   <span className="hide-sm">Discuss</span>
                 </button>
-                <button className="chip" onClick={() => rs.startHomebrew(() => setDialog('brew'))} title="Change this card your own way. Only you see your homebrew; share it when you want others to consider it.">
-                  <Icon name="flask" />
-                  <span className="hide-sm">Homebrew</span>
-                </button>
+                {user && (
+                  <button className="chip" onClick={() => rs.startHomebrew(() => setDialog('brew'))} title="Change this card your own way. Only you see your homebrew; share it when you want others to consider it.">
+                    <Icon name="flask" />
+                    <span className="hide-sm">Homebrew</span>
+                  </button>
+                )}
                 <FollowButton target={follow} what={`${follow.label} (its discussion and versions)`} />
                 <button
                   className="chip"

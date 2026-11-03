@@ -4,7 +4,7 @@ import { db } from '../lib/firebase.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { autoFollow, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
 import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
 import { useLive } from '../lib/hooks.js';
 import { compareValues, displayTitle, idField, loadComponents } from '../lib/components.js';
@@ -158,7 +158,6 @@ export function ActiveRulesetProvider({ route, children }) {
       const [secSnap, ruleSnap, verSnap] = await Promise.all(['sections', 'rules', 'versions'].map((c) => getDocs(collection(db, c))));
       const docs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const tree = sectionTree(docs(secSnap));
-      const sids = shortIds(docs(ruleSnap));
       // The reader's own homebrew prints too: it's their ruleset.
       const { rules, versions } = withHomebrew(myHomebrew, docs(ruleSnap), docs(verSnap));
       const vByRule = groupVersions(versions);
@@ -170,8 +169,6 @@ export function ActiveRulesetProvider({ route, children }) {
         if (!v) continue;
         if (!bySection.has(r.sectionId)) bySection.set(r.sectionId, []);
         bySection.get(r.sectionId).push({
-          sid: sids.get(r.id) || '',
-          ref: v.num && v.label !== 'Rulebook' ? `${sids.get(r.id)}.${v.num}` : '',
           title: r.title,
           label: v.label,
           kindLabel: r.kind && r.kind !== 'rule' ? kindInfo(kinds, r.kind).label : '',
@@ -214,7 +211,6 @@ export function ActiveRulesetProvider({ route, children }) {
           const type = types.find((t) => t.id === comp.typeId);
           const label = (key) => type?.fields.find((f) => f.key === key)?.label || key;
           cardRules.push({
-            sid: '',
             title: displayTitle(type, comp),
             label: v.label,
             html: Object.entries(v.data || {})

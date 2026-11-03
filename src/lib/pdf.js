@@ -116,7 +116,7 @@ const CELL_LH = { l: 1.15, xl: 1.1, xxl: 1.05 };
 
 /**
  * Export the active ruleset as a PDF: its rules, then (optionally) all its cards.
- * groups: [{ heading, depth, rules: [{ sid, ref, title, label, kindLabel, inactive, html }] }]
+ * groups: [{ heading, depth, rules: [{ title, label, kindLabel, inactive, html }] }] (no rule ids: the PDF is for reading)
  * cardTypes: [{ type, cards: [{ comp, data, label }] }]: every card in the version the ruleset uses
  * (label is the version's label, or null when printed).
  * options: { format: 'letter' | 'a4' | 'custom', paperW, paperH, unit: 'mm' | 'in', perSheet: 1 | 2,
@@ -188,7 +188,7 @@ export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = []
     for (const r of g.rules) {
       ensure(48 * scale);
       const tags = [r.label, r.kindLabel, r.inactive ? 'not in ruleset' : null].filter(Boolean).join(' | ');
-      write(`${r.title || ''}${r.sid ? `  ${r.sid}` : ''}${r.ref ? `  (${r.ref})` : ''}`, { size: 10.5, style: 'bold', gap: 1, color: r.inactive ? LIGHT : DARK });
+      write(r.title || '', { size: 10.5, style: 'bold', gap: 1, color: r.inactive ? LIGHT : DARK });
       if (tags) write(tags, { size: 8, color: GREY, gap: 2 });
       write(shText(r.html), { size: 10, gap: 10, color: r.inactive ? LIGHT : DARK });
     }

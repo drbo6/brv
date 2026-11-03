@@ -163,7 +163,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                   <span className="hide-sm">Discuss</span>
                 </button>
               )}
-              {!brewRule && (
+              {!brewRule && user && (
                 <button className="chip" onClick={() => startHomebrew(() => setDialog('brew'))} title="Write this rule your own way. Only you see your homebrew; share it when you want others to consider it.">
                   <Icon name="flask" />
                   <span className="hide-sm">Homebrew</span>
