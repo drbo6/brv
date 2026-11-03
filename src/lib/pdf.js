@@ -23,6 +23,7 @@ export const PAGE_SIZES = {
 /** Card sizes for the card overview (or a custom size). Mini is Blood Rage's own card size. */
 export const CARD_SIZES = {
   s: { label: 'Mini', w: 41, h: 63.5 },
+  p: { label: 'Poker', w: 63, h: 88 },
 };
 
 const MM = 72 / 25.4;
@@ -43,7 +44,10 @@ export function paperOf(o) {
 /** The chosen card size in points: { w, h }. options: { cardSize, cardW, cardH, unit } */
 export function cardSizeOf(o) {
   const mini = CARD_SIZES.s;
-  if (o.cardSize !== 'custom') return { w: mini.w * MM, h: mini.h * MM };
+  if (o.cardSize !== 'custom') {
+    const s = CARD_SIZES[o.cardSize] || mini;
+    return { w: s.w * MM, h: s.h * MM };
+  }
   const k = UNITS[o.unit]?.pt || MM;
   return { w: clamp(o.cardW * k, 20 * MM, 300 * MM, mini.w * MM), h: clamp(o.cardH * k, 20 * MM, 400 * MM, mini.h * MM) };
 }

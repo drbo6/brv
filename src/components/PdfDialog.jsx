@@ -81,7 +81,7 @@ export default function PdfDialog({ setName, onExport, onClose }) {
   const [saved, setSaved] = useLocalStorage('brv-pdf-options', DEFAULTS);
   const [o, setO] = useState(() => {
     const x = { ...DEFAULTS, ...saved };
-    // Sizes that no longer exist (Poker, Large) fall back to Mini.
+    // Sizes that no longer exist (the old Large) fall back to Mini.
     return x.cardSize in CARD_SIZES || x.cardSize === 'custom' ? x : { ...x, cardSize: 's' };
   });
   const set = (patch) => setO((x) => ({ ...x, ...patch }));
