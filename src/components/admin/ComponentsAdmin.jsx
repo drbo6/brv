@@ -12,8 +12,8 @@ import Importer, { SpreadsheetExport } from './Importer.jsx';
 import ComponentList from './ComponentList.jsx';
 
 const SUBTABS = [
-  { id: 'list', label: 'Table', tip: 'All components of this type as a table, for bulk work. Single cards can also be added and edited on the Components page.' },
   { id: 'layout', label: 'Fields & layout', tip: 'Define the data fields and arrange them on the card' },
+  { id: 'list', label: 'Table', tip: 'All components of this type as a table, for bulk work. Single cards can also be added and edited on the Components page.' },
   { id: 'import', label: 'Spreadsheet', tip: 'Import components from, or export them to, an .xlsx or .csv file' },
 ];
 
@@ -42,7 +42,7 @@ export default function ComponentsAdmin({ route }) {
 
   const typeId = route.parts[1];
   const type = data.types.find((t) => t.id === typeId);
-  const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || 'list';
+  const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || (route.params.get('edit') ? 'list' : 'layout');
   const comps = type ? data.components.filter((c) => c.typeId === type.id) : [];
 
   const createType = async () => {

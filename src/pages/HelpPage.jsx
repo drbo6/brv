@@ -404,10 +404,10 @@ const TOPICS = [
         </p>
         <ol>
           <li>
-            <b>Table:</b> all components of that type in a sortable table, for bulk work: search, edit, add or delete, and use <i>Columns</i> to choose which fields are shown.
+            <b>Fields &amp; layout:</b> the type's fields and how its card looks.
           </li>
           <li>
-            <b>Fields &amp; layout:</b> the type's fields and how its card looks.
+            <b>Table:</b> all components of that type in a sortable table, for bulk work: search, edit, add or delete, and use <i>Columns</i> to choose which fields are shown.
           </li>
           <li>
             <b>Spreadsheet:</b> import an <code>.xlsx</code> or <code>.csv</code> file (map its columns to fields; rows are matched by ID), or export all components to{' '}
