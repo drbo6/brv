@@ -5,16 +5,16 @@ import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
-import { plainToHtml } from '../lib/html.js';
-import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
+import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset } from '../lib/rules.js';
+import { plainToHtml, toPlainText } from '../lib/html.js';
+import { acceptSuggestion, declineSuggestion, privateHomebrewCount } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 import RulesTable from '../components/admin/RulesTable.jsx';
 import DiscussionsAdmin, { discussionsQuery } from '../components/admin/DiscussionsAdmin.jsx';
 import FollowButton from '../components/FollowButton.jsx';
-import { cardTarget, notify, ruleTarget, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
+import { cardTarget, notify, notifyUser, ruleTarget, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
 const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
@@ -201,35 +201,93 @@ function RulesAdmin({ route }) {
 }
 
 /** Community suggestions for rules and cards, newest first. */
+/** Accept a shared suggestion (optionally straight into a public ruleset), or turn it down. */
+function ReviewActions({ publicSets, onAccept, onDecline }) {
+  const [setId, setSetId] = useState('');
+  return (
+    <div className="review-actions">
+      <button className="small ok" onClick={() => onAccept('Community', setId)} title="Make it a public Community version">
+        <Icon name="check" />
+        Accept as Community
+      </button>
+      <button className="small" onClick={() => onAccept('Official Ruling', setId)} title="Make it an Official Ruling">
+        Accept as Official Ruling
+      </button>
+      {publicSets.length > 0 && (
+        <label className="review-set small">
+          <span className="muted">and use it in</span>
+          <select value={setId} onChange={(e) => setSetId(e.target.value)} aria-label="Also use it in a public ruleset">
+            <option value="">no ruleset</option>
+            {publicSets.map((rs) => (
+              <option key={rs.id} value={rs.id}>
+                {rs.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <button className="small danger" onClick={onDecline} title="Turn it down with a reason: it goes back to its author's homebrew">
+        <Icon name="x" />
+        Turn down…
+      </button>
+    </div>
+  );
+}
+
 function SuggestionsAdmin() {
   const { user } = useSession();
-  const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
   const cardSuggestions = useLive(() => query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')), []);
-  const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
+  const sets = useLive(() => query(collection(db, 'rulesets'), where('visibility', '==', 'public')), []);
+  const publicSets = useMemo(() => [...(sets.data || [])].sort((x, y) => x.name.localeCompare(y.name)), [sets.data]);
   const ruleById = useMemo(() => {
     const sids = shortIds(rules.data || []);
     return new Map((rules.data || []).map((r) => [r.id, { ...r, sid: sids.get(r.id) }]));
   }, [rules.data]);
+  const who = user.displayName || 'An admin';
+  const what = (v) => (v.homebrewId ? 'shared homebrew' : 'suggestion');
 
-  const suggestedRules = (rules.data || []).filter((r) => r.status === 'suggested');
+  /** Accepting tells the author, everyone following the rule or card, and followers of the ruleset it joins. */
+  const accept = async ({ col, v, rule, target }, label, setId) => {
+    const set = publicSets.find((x) => x.id === setId);
+    const ok = await attempt(() => acceptSuggestion({ col, version: v, rule }, label, setId), set ? `Accepted as ${label}, and used in “${set.name}”` : `Accepted as ${label}`);
+    if (!ok) return;
+    const text = col === 'versions' ? v.text : `Changes: ${Object.keys(v.data || {}).join(', ')}`;
+    const inSet = set ? ` and added it to the public ruleset “${set.name}”` : '';
+    notifyUser(v.createdBy, target.key, user, { type: 'accepted', title: `${who} accepted your ${what(v)} for ${target.label} as ${label}${inSet}`, text, link: target.link });
+    notify(target.key, user, { type: 'adopted', title: `${who} accepted a suggestion for ${target.label} as ${label}`, text, link: target.link }, { skip: [v.createdBy] });
+    if (set) {
+      const st = rulesetTarget(set);
+      notify(st.key, user, { type: 'ruleset', title: `${who} added ${target.label} (${label}) to the ruleset “${set.name}”`, text: '', link: st.link }, { skip: [v.createdBy] });
+    }
+  };
 
-  // Adopting a suggestion tells everyone following that rule or card, including its author.
-  const relabelRuleVersion = (v, label) =>
-    attempt(() => updateVersion(v.id, { label }), `Labeled ${label}`).then((ok) => {
-      const r = ruleById.get(v.ruleId);
-      if (!ok || !r) return;
-      const t = ruleTarget(r);
-      notify(t.key, user, { type: 'adopted', title: `${user.displayName || 'An admin'} marked a suggestion for ${t.label} as ${label}`, text: v.text, link: t.link });
+  /** Turning down removes the public copy and hands a homebrew back to its author, with the reason. */
+  const decline = async ({ col, v, rule, target }) => {
+    const reason = await promptDialog({
+      title: 'Turn down',
+      message: v.homebrewId
+        ? 'The public copy and its discussion are removed, and it goes back to its author as private homebrew. They see your reason.'
+        : 'The suggestion is removed. Its author sees your reason.',
+      label: 'Reason',
+      placeholder: 'e.g. It changes the balance of the Ragnarök phase too much',
+      confirmLabel: 'Turn down',
+      danger: true,
     });
-  const relabelCardVersion = (v, label) =>
-    attempt(() => updateCardVersion(v.id, { label }), `Labeled ${label}`).then((ok) => {
-      if (!ok) return;
-      const t = cardTarget({ id: v.componentId, typeId: v.typeId }, v.data?.title || v.componentId.split('__').pop());
-      notify(t.key, user, { type: 'adopted', title: `${user.displayName || 'An admin'} marked a suggestion for ${t.label} as ${label}`, text: `Changes: ${Object.keys(v.data || {}).join(', ')}`, link: t.link });
-    });
-  const queue = [...(suggestions.data || [])].sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+    if (reason == null) return;
+    const ok = await attempt(() => declineSuggestion({ col, version: v, rule }, reason.trim(), user), v.homebrewId ? 'Turned down: it is back in its author’s homebrew' : 'Suggestion removed');
+    // A suggested new rule is gone now; its author finds it again among their homebrew.
+    const link = rule?.status === 'suggested' ? { page: 'rules', parts: [] } : target.link;
+    if (ok) notifyUser(v.createdBy, target.key, user, { type: 'declined', title: `${who} turned down your ${what(v)} for ${target.label}`, text: reason.trim(), link });
+  };
+
+  const ruleQueue = [...(suggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
+  const cardQueue = [...(cardSuggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
+  const counts = (v) => {
+    const c = reactionCounts(v.reactions);
+    return `👍 ${c.up} 👎 ${c.down} ❓ ${c.q}`;
+  };
 
   return (
     <div className="admin-grid">
@@ -238,90 +296,68 @@ function SuggestionsAdmin() {
           <h2>Suggestions queue</h2>
           <FollowButton target={SUGGESTIONS} what="new suggestions from the community" className="small" />
         </div>
-        <p className="small muted">New rules and versions suggested by the community. Relabel a version to adopt it, or open the rule to discuss.</p>
-        {suggestions.loading ? (
+        <p className="small muted">
+          Homebrew that people shared for review. Open one to read its discussion. <b>Accept</b> makes it a public Community version or Official Ruling (a new rule becomes
+          active), optionally in a public ruleset right away. <b>Turn down</b> gives it back to its author as private homebrew, with your reason. Authors hear either way.
+        </p>
+        {suggestions.loading || rules.loading ? (
           <Spinner />
-        ) : queue.length === 0 ? (
-          <p className="muted">Nothing waiting. 🎉</p>
+        ) : ruleQueue.length === 0 ? (
+          <p className="muted">No rules waiting. 🎉</p>
         ) : (
           <ul className="queue">
-            {queue.map((v) => {
+            {ruleQueue.map((v) => {
               const r = ruleById.get(v.ruleId);
-              const c = reactionCounts(v.reactions);
+              const item = { col: 'versions', v, rule: r, target: r ? ruleTarget(r) : { key: `rule_${v.ruleId}`, label: 'a deleted rule', link: { page: 'rules', parts: [] } } };
               return (
                 <li key={v.id}>
                   <div className="queue-head">
                     {r ? (
-                      <a href={href('rules', [r.sid])}>
+                      <a href={href('rules', [`${r.sid}.${v.n || ''}`.replace(/\.$/, '')])} title="Open it on the Rules page, with its discussion">
                         <b className="rule-code">{r.sid}</b> {r.title}
                       </a>
                     ) : (
                       <span className="muted">Deleted rule</span>
                     )}
-                    {r?.status === 'suggested' && <span className="tag t-suggestion">New rule</span>}
+                    {r?.status === 'suggested' ? <span className="tag t-suggestion">New rule</span> : <span className="tag t-suggestion">New version</span>}
                   </div>
+                  <p className="queue-text small">{toPlainText(v.text).slice(0, 280)}</p>
                   <p className="small muted">
-                    by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
+                    by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · {counts(v)}
+                    {v.note && ` · “${v.note}”`}
                   </p>
-                  <div className="row gap wrap">
-                    <button className="small" onClick={() => relabelRuleVersion(v, 'Community')}>
-                      Mark Community
-                    </button>
-                    <button className="small" onClick={() => relabelRuleVersion(v, 'Official Ruling')}>
-                      Mark Official Ruling
-                    </button>
-                    <button className="small danger" onClick={async () => (await confirmDialog({ title: 'Delete suggestion', message: 'Delete this suggested version?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'versions', v.id)), 'Suggestion deleted')}>
-                      Delete
-                    </button>
-                  </div>
+                  <ReviewActions publicSets={publicSets} onAccept={(label, setId) => accept(item, label, setId)} onDecline={() => decline(item)} />
                 </li>
               );
             })}
           </ul>
         )}
-        {suggestedRules.length > 0 && <p className="small muted">{suggestedRules.length} suggested new rule(s) — approve them from the rule card on the Rules page (turn on “Show inactive”).</p>}
-        <h3 className="queue-title">Card suggestions</h3>
+        <h3 className="queue-title">Cards</h3>
         {cardSuggestions.loading ? (
           <Spinner />
-        ) : !cardSuggestions.data?.length ? (
-          <p className="muted small">No card suggestions waiting.</p>
+        ) : !cardQueue.length ? (
+          <p className="muted small">No cards waiting.</p>
         ) : (
           <ul className="queue">
-            {[...cardSuggestions.data]
-              .sort((a, b) => millis(b.createdAt) - millis(a.createdAt))
-              .map((v) => {
-                const c = reactionCounts(v.reactions);
-                return (
-                  <li key={v.id}>
-                    <div className="queue-head">
-                      <a href={href('components', [v.typeId, v.componentId])} title="Open the card to compare versions and discuss">
-                        <b>{v.componentId.split('__').pop()}</b> {v.data?.title || ''}
-                      </a>
-                      <span className="small muted">changes {Object.keys(v.data || {}).join(', ')}</span>
-                    </div>
-                    <p className="small muted">
-                      by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}
-                      {v.note && ` · “${v.note}”`}
-                    </p>
-                    <div className="row gap wrap">
-                      <button className="small" onClick={() => relabelCardVersion(v, 'Community')}>
-                        Mark Community
-                      </button>
-                      <button className="small" onClick={() => relabelCardVersion(v, 'Official Ruling')}>
-                        Mark Official Ruling
-                      </button>
-                      <button
-                        className="small danger"
-                        onClick={async () =>
-                          (await confirmDialog({ title: 'Delete suggestion', message: 'Delete this suggested card version?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteCardVersion(v.id), 'Suggestion deleted')
-                        }
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
+            {cardQueue.map((v) => {
+              const name = v.data?.title || v.componentId.split('__').pop();
+              const item = { col: 'componentVersions', v, target: cardTarget({ id: v.componentId, typeId: v.typeId }, name) };
+              return (
+                <li key={v.id}>
+                  <div className="queue-head">
+                    <a href={href('components', [v.typeId, v.componentId])} title="Open the card to compare versions and discuss">
+                      <b>{v.componentId.split('__').pop()}</b> {v.data?.title || ''}
+                    </a>
+                    <span className="small muted">changes {Object.keys(v.data || {}).join(', ')}</span>
+                  </div>
+                  <p className="small muted">
+                    by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · {counts(v)}
+                    {v.note && ` · “${v.note}”`}
+                  </p>
+                  <ReviewActions publicSets={publicSets} onAccept={(label, setId) => accept(item, label, setId)} onDecline={() => decline(item)} />
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -609,9 +645,20 @@ function RulesetsAdmin() {
                     <input
                       type="checkbox"
                       checked={s.visibility === 'public'}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         if (!e.target.checked && site.defaultRulesetId === s.id) return alertDialog({ title: 'This is the default', message: 'Choose another default ruleset before making this one private.' });
                         const pub = e.target.checked;
+                        // Private homebrew in it would be missing for everyone but its author.
+                        const hidden = pub ? await privateHomebrewCount(s).catch(() => 0) : 0;
+                        if (
+                          hidden &&
+                          !(await confirmDialog({
+                            title: 'This ruleset uses private homebrew',
+                            message: `${hidden === 1 ? 'One rule or card' : `${hidden} rules or cards`} in “${s.name}” ${hidden === 1 ? 'is' : 'are'} its owner's private homebrew, which nobody else can see. Ask them to share ${hidden === 1 ? 'it' : 'them'} for review first, or make the ruleset public without ${hidden === 1 ? 'it' : 'them'}.`,
+                            confirmLabel: 'Make public without them',
+                          }))
+                        )
+                          return;
                         attempt(() => updateRuleset(s.id, { visibility: pub ? 'public' : 'private' }), pub ? 'Ruleset made public' : 'Ruleset made private').then((ok) => {
                           const t = rulesetTarget(s);
                           if (ok) notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'An admin'} made the ruleset “${s.name}” ${pub ? 'public: everyone can now pick it' : 'private'}`, text: '', link: t.link });
@@ -647,8 +694,8 @@ function RulesetsAdmin() {
 const RIGHTS = [
   ['Read everything: rules, versions, discussions, rulesets, cards', true, true, true, true, true],
   ['React, comment, follow, inbox, save own rulesets', false, true, true, true, true],
-  ['Suggest rules, rule versions and card changes', false, true, true, true, true],
-  ['Edit rules and versions, approve and adopt suggestions', false, false, true, true, true],
+  ['Write private homebrew (rules, versions, cards) and share it for review', false, true, true, true, true],
+  ['Edit rules and versions, accept or turn down shared homebrew', false, false, true, true, true],
   ['Sections, rule kinds, component types, card layouts, shorthands', false, false, true, true, true],
   ['Add, edit and delete cards; publish rulesets and pick the default', false, false, true, true, true],
   ['Staff chat and the suggestions queue', false, false, true, true, true],
@@ -701,7 +748,7 @@ function RightsGuide() {
         </dd>
         <dt>Restrictions</dt>
         <dd>
-          For users and editors who misbehave: <b>No suggestions</b> keeps them from proposing rules, versions or card changes (they can still comment and react);{' '}
+          For users and editors who misbehave: <b>No sharing</b> keeps them from sharing homebrew for review (they can still write private homebrew, comment and react);{' '}
           <b>Silenced</b> makes them read-only. They see the reason you give. Admins can't be restricted; take away their admin role instead.
         </dd>
         <dt>Undo and log</dt>

@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { escapeHtml } from '../lib/html.js';
-import { createRule, createVersion, LABELS, ruleName, updateRule, updateVersion } from '../lib/rules.js';
+import { createRule, createVersion, HB, LABELS, ruleName, updateRule, updateVersion } from '../lib/rules.js';
+import { createHomebrew, updateHomebrew } from '../lib/homebrew.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 import { confirmDialog, promptDialog } from './dialogs.jsx';
-import { autoFollow, notify, ruleTarget, SUGGESTIONS } from '../lib/inbox.js';
+import { autoFollow, notify, ruleTarget } from '../lib/inbox.js';
 
 /** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
 function insertAtCursor(el, before, after = '', placeholder = '') {
@@ -169,20 +170,43 @@ const normalizeText = (t) => {
     .join('');
 };
 
-/** Suggest (or, for admins, add) a new version of an existing rule — or edit one. */
-export function VersionDialog({ rule, version, onClose }) {
+const HOMEBREW_INTRO = 'Your homebrew is private: only you see it, and you can use it in your own rulesets. Share it when you would like the community and the admins to consider it.';
+
+/**
+ * A new version of a rule, or edit one. Everyone writes homebrew (`homebrew`: true for a new one, or
+ * the homebrew to edit), starting from `startText`; admins also add and edit public versions.
+ */
+export function VersionDialog({ rule, version, homebrew, startText = '', onClose, onSaved }) {
   const { isEditor, user } = useSession();
-  const editing = Boolean(version);
-  const [label, setLabel] = useState(version?.label || (isEditor ? 'Community' : 'Suggestion'));
-  const [text, setText] = useState(version?.text || '');
-  const [note, setNote] = useState(version?.note || '');
+  const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
+  const brew = Boolean(homebrew);
+  const source = hb || (brew ? null : version);
+  const editing = Boolean(source);
+  const [label, setLabel] = useState(version?.label || 'Community');
+  const [text, setText] = useState(source?.text ?? startText);
+  const [note, setNote] = useState(source?.note || '');
   const [busy, setBusy] = useState(false);
   // Versions update live: notice when someone else saves this one while it is open here.
-  const [openedWith, setOpenedWith] = useState(() => (version ? version.text + version.note : ''));
-  const changedElsewhere = editing && version.text + version.note !== openedWith;
+  const [openedWith, setOpenedWith] = useState(() => (source ? source.text + source.note : ''));
+  const changedElsewhere = editing && !brew && source.text + source.note !== openedWith;
+
+  const saveHomebrew = async () => {
+    setBusy(true);
+    const data = { text: normalizeText(text), note: note.trim() };
+    const id = hb ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved') : await attempt(() => createHomebrew({ kind: 'version', ruleId: rule.id, ...data }, user), 'Homebrew saved: only you see it');
+    setBusy(false);
+    if (id === undefined) return;
+    onClose();
+    if (!hb) onSaved?.(HB + id);
+    else if (hb.sharedId) {
+      const t = ruleTarget(rule);
+      notify(t.key, user, { type: 'version', title: `${user.displayName || 'Someone'} edited their shared homebrew for ${t.label}`, text: data.text, link: t.link });
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
+    if (brew) return saveHomebrew();
     if (changedElsewhere) {
       const ok = await confirmDialog({
         title: 'Someone else changed this version',
@@ -193,10 +217,8 @@ export function VersionDialog({ rule, version, onClose }) {
       if (!ok) return;
     }
     setBusy(true);
-    const data = { label: isEditor ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
-    const ok = editing
-      ? await attempt(() => updateVersion(version.id, isEditor ? data : { text: data.text, note: data.note }), 'Version saved')
-      : await attempt(() => createVersion({ ruleId: rule.id, ...data }, user), isEditor ? 'Version added' : 'Thanks! Your suggestion was added.');
+    const data = { label, text: normalizeText(text), note: note.trim() };
+    const ok = editing ? await attempt(() => updateVersion(version.id, data), 'Version saved') : await attempt(() => createVersion({ ruleId: rule.id, ...data }, user), 'Version added');
     setBusy(false);
     if (ok === undefined) return;
     onClose();
@@ -205,16 +227,17 @@ export function VersionDialog({ rule, version, onClose }) {
     if (editing) {
       notify(t.key, user, { type: 'version', title: `${who} edited the ${data.label} version of ${t.label}`, text: data.text, link: t.link });
     } else {
-      // Suggesting follows the rule, so the author hears about reactions to it in the discussion.
       autoFollow(t.key, user.uid, t);
-      const title = isEditor ? `${who} added a ${data.label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
-      notify(t.key, user, { type: 'version', title, text: data.text, link: t.link });
-      if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: data.text, link: t.link });
+      notify(t.key, user, { type: 'version', title: `${who} added a ${data.label} version of ${t.label}`, text: data.text, link: t.link });
     }
   };
 
   return (
-    <Modal title={editing ? `Edit version of ${ruleName(rule)}` : isEditor ? `New version of ${ruleName(rule)}` : `Suggest a change to ${ruleName(rule)}`} onClose={onClose} wide>
+    <Modal
+      title={brew ? (hb ? `Edit your homebrew of ${ruleName(rule)}` : `Homebrew: your version of ${ruleName(rule)}`) : editing ? `Edit version of ${ruleName(rule)}` : `New version of ${ruleName(rule)}`}
+      onClose={onClose}
+      wide
+    >
       {changedElsewhere && (
         <div className="conflict-bar" role="alert">
           <Icon name="info" />
@@ -233,8 +256,9 @@ export function VersionDialog({ rule, version, onClose }) {
         </div>
       )}
       <form onSubmit={submit} className="form">
-        {!editing && !isEditor && <p className="muted">Propose new wording or a clarification. It will appear as a “Suggestion” version that others can react to and discuss.</p>}
-        {isEditor && (
+        {brew && !hb && <p className="muted">Write this rule the way your table plays it. {HOMEBREW_INTRO}</p>}
+        {hb?.sharedId && <p className="muted">This homebrew is shared for review: the shared copy changes too.</p>}
+        {isEditor && !brew && (
           <div className="field">
             <label>Label</label>
             <div className="seg">
@@ -256,7 +280,7 @@ export function VersionDialog({ rule, version, onClose }) {
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy || !text.trim()}>
-            {editing ? 'Save' : isEditor ? 'Add version' : 'Submit suggestion'}
+            {brew ? 'Save homebrew' : editing ? 'Save' : 'Add version'}
           </button>
         </div>
       </form>
@@ -264,23 +288,39 @@ export function VersionDialog({ rule, version, onClose }) {
   );
 }
 
-/** Create a new rule (users: as a suggestion) or edit an existing rule's details (admins). */
-export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCreated }) {
+/**
+ * Create a rule or edit a rule's details (admins), or write a homebrew rule of your own (everyone
+ * else, or `homebrew`: the homebrew rule to edit). Homebrew rules go in an existing section.
+ */
+export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onClose, onCreated }) {
   const { isEditor, user, kinds } = useSession();
-  const editing = Boolean(rule);
+  const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
+  const brew = Boolean(homebrew) || (!isEditor && !rule);
+  const editing = Boolean(rule) && !brew;
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
-  const [sectionId, setSectionId] = useState(rule?.sectionId || firstSection);
-  const [title, setTitle] = useState(rule?.title || '');
+  const [sectionId, setSectionId] = useState(hb?.sectionId || rule?.sectionId || firstSection);
+  const [title, setTitle] = useState(hb?.title || rule?.title || '');
   const [kind, setKind] = useState(rule?.kind || 'rule');
   const [page, setPage] = useState(rule?.page ?? '');
   const [status, setStatus] = useState(rule?.status || 'active');
   const [label, setLabel] = useState('Community');
-  const [text, setText] = useState('');
-  const [note, setNote] = useState('');
+  const [text, setText] = useState(hb?.text || '');
+  const [note, setNote] = useState(hb?.note || '');
   const [busy, setBusy] = useState(false);
+
+  const saveHomebrew = async () => {
+    setBusy(true);
+    const data = { sectionId, title: title.trim(), text: normalizeText(text), note: note.trim() };
+    const id = hb ? await attempt(() => updateHomebrew(hb, data), 'Homebrew saved') : await attempt(() => createHomebrew({ kind: 'rule', ...data }, user), 'Homebrew rule saved: only you see it');
+    setBusy(false);
+    if (id === undefined) return;
+    if (!hb) onCreated?.(HB + id);
+    onClose();
+  };
 
   const submit = async (e) => {
     e.preventDefault();
+    if (brew) return saveHomebrew();
     setBusy(true);
     const siblings = rules.filter((r) => r.sectionId === sectionId && r.id !== rule?.id);
     const order = siblings.reduce((m, r) => Math.max(m, r.order ?? 0), 0) + 1;
@@ -290,16 +330,13 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
       if (sectionId !== rule.sectionId) patch.order = order;
       ok = await attempt(() => updateRule(rule.id, patch), 'Rule saved');
     } else {
-      const meta = isEditor
-        ? { sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status }
-        : { sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
-      const version = { label: isEditor ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
-      ok = await attempt(() => createRule(meta, version, user), isEditor ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
+      const meta = { sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status };
+      const version = { label, text: normalizeText(text), note: note.trim() };
+      ok = await attempt(() => createRule(meta, version, user), 'Rule added');
       if (ok) {
         onCreated?.(ok);
         const t = ruleTarget({ id: ok, title: meta.title });
         autoFollow(t.key, user.uid, t);
-        if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
       }
     }
     setBusy(false);
@@ -307,13 +344,10 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
   };
 
   return (
-    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : isEditor ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
+    <Modal title={brew ? (hb ? 'Edit your homebrew rule' : 'Homebrew: a rule of your own') : editing ? `Edit rule ${ruleName(rule)}` : 'Add a rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
-        {!editing && !isEditor && (
-          <p className="muted">
-            Suggested rules are visible to everyone (turn on “Show inactive”) and can be discussed. Admins may adopt them into the official FAQ.
-          </p>
-        )}
+        {brew && !hb && <p className="muted">Add a rule your table plays with, in one of the rulebook's sections. {HOMEBREW_INTRO}</p>}
+        {hb?.sharedId && <p className="muted">This homebrew is shared for review: the shared copy changes too.</p>}
         <div className="grid-2">
           <div className="field">
             <label htmlFor="r-section">Section</label>
@@ -331,7 +365,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
             <input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="e.g. Summoning at 0 Rage" />
           </div>
         </div>
-        {isEditor && (
+        {isEditor && !brew && (
           <div className="grid-3">
             <div className="field">
               <label htmlFor="r-kind">Kind</label>
@@ -360,7 +394,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
         )}
         {!editing && (
           <>
-            {isEditor && (
+            {!brew && (
               <div className="field">
                 <label>Label of the first version</label>
                 <div className="seg">
@@ -384,7 +418,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy || !title.trim() || (!editing && !text.trim())}>
-            {editing ? 'Save' : isEditor ? 'Add rule' : 'Submit suggestion'}
+            {brew ? 'Save homebrew' : editing ? 'Save' : 'Add rule'}
           </button>
         </div>
       </form>

@@ -6,8 +6,11 @@ import { autoFollow, notify, ruleTarget } from '../lib/inbox.js';
 import { addComment, deleteComment, editComment, millis, react } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
-import { attempt, Reactions, Spinner, timeAgo, UserAvatar, UserName } from './ui.jsx';
+import { attempt, Icon, Reactions, Spinner, timeAgo, UserAvatar, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
+
+/** A homebrew shared for review has its own thread, apart from the rule's or card's general discussion. */
+const inReview = (v) => Boolean(v?.homebrewId && v.label === 'Suggestion');
 
 /**
  * Comment thread for a rule, or for a component (`target={{ field: 'componentId', id, name }}`).
@@ -22,7 +25,14 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  const sorted = useMemo(() => [...(comments.data || [])].sort((a, b) => (millis(a.createdAt) || Infinity) - (millis(b.createdAt) || Infinity)), [comments.data]);
+  // On a shared homebrew: only its own comments. Elsewhere: everything but those review threads.
+  const review = inReview(shownVersion) ? shownVersion : null;
+  const sorted = useMemo(() => {
+    const reviewIds = new Set(versions.filter(inReview).map((v) => v.id));
+    return [...(comments.data || [])]
+      .filter((c) => (review ? c.versionId === review.id : !reviewIds.has(c.versionId)))
+      .sort((a, b) => (millis(a.createdAt) || Infinity) - (millis(b.createdAt) || Infinity));
+  }, [comments.data, versions, review]);
 
   const versionTag = (vid) => {
     const i = versions.findIndex((v) => v.id === vid);
@@ -37,7 +47,9 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
     if (!body) return;
     setBusy(true);
     await requireUser(async (u) => {
-      const ok = await attempt(() => addComment({ [target.field]: target.id, versionId: shownVersion?.id, text: body }, u), null, 'post comment');
+      // Private homebrew has no public id to remember.
+      const versionId = shownVersion && !shownVersion.homebrew ? shownVersion.id : null;
+      const ok = await attempt(() => addComment({ [target.field]: target.id, versionId, text: body }, u), null, 'post comment');
       if (!ok) return;
       setText('');
       // Commenting follows the discussion, and tells everyone else who follows it.
@@ -49,10 +61,17 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
 
   return (
     <section className="discussion" aria-label={`Discussion of ${target.name}`}>
+      {review && (
+        <p className="discussion-scope small">
+          <Icon name="share" size={14} />
+          Discussion of this shared homebrew. Tell its author and the admins what you think, for instance whether it should become the default. The general discussion is on the
+          other versions.
+        </p>
+      )}
       {comments.loading ? (
         <Spinner label="Loading discussion…" />
       ) : sorted.length === 0 ? (
-        <p className="muted small">No comments yet. Start the discussion!</p>
+        <p className="muted small">{review ? 'No comments on this shared homebrew yet.' : 'No comments yet. Start the discussion!'}</p>
       ) : (
         <ol className="comments">
           {sorted.map((c) => (
@@ -114,7 +133,7 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={`Discuss ${target.name}${shownVersion ? ` (${shownVersion.label} version)` : ''}…`}
+            placeholder={review ? 'Discuss this shared homebrew…' : `Discuss ${target.name}${shownVersion && !shownVersion.homebrew ? ` (${shownVersion.label} version)` : ''}…`}
             rows={2}
             maxLength={5000}
             aria-label="Write a comment"

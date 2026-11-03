@@ -527,6 +527,13 @@ select {
   border-color: rgba(176, 125, 210, 0.5);
 }
 
+.l-homebrew,
+.t-homebrew {
+  background: rgba(88, 178, 150, 0.13);
+  color: #8fd8bf;
+  border-color: rgba(88, 178, 150, 0.5);
+}
+
 .t-muted {
   color: var(--muted);
   border-color: var(--border);
@@ -3738,6 +3745,99 @@ select.is-unsaved {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* ---------- homebrew ---------- */
+
+.homebrew-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(88, 178, 150, 0.45);
+  border-radius: var(--radius-sm);
+  background: rgba(88, 178, 150, 0.08);
+  font-size: 0.88rem;
+}
+
+.homebrew-bar > .icon {
+  color: #8fd8bf;
+  flex: none;
+}
+
+.homebrew-bar.is-shared {
+  border-color: rgba(176, 125, 210, 0.5);
+  background: rgba(176, 125, 210, 0.08);
+}
+
+.homebrew-bar.is-shared > .icon {
+  color: #d6b1f0;
+}
+
+.homebrew-bar-text {
+  flex: 1 1 240px;
+}
+
+.homebrew-declined {
+  color: #f0c27f;
+}
+
+.homebrew-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rule-code.is-homebrew {
+  display: inline-flex;
+  align-items: center;
+  color: #8fd8bf;
+  border-color: rgba(88, 178, 150, 0.5);
+}
+
+.rule.is-homebrew-rule {
+  border-left-color: rgba(88, 178, 150, 0.7);
+}
+
+.discussion-scope {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(176, 125, 210, 0.08);
+  color: var(--text-2);
+}
+
+.discussion-scope .icon {
+  flex: none;
+  margin-top: 2px;
+  color: #d6b1f0;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.review-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-set select {
+  max-width: 220px;
+}
+
+.queue-text {
+  margin: 4px 0;
+  color: var(--text-2);
 }
 
 .rules-top .ruleset-status {

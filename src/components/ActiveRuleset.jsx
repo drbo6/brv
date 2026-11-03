@@ -2,9 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { collection, deleteField, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
-import { autoFollow, notify, rulesetTarget } from '../lib/inbox.js';
+import { autoFollow, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, kindInfo, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
+import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
+import { useLive } from '../lib/hooks.js';
 import { displayTitle, loadComponents } from '../lib/components.js';
 import { exportRulesPdf } from '../lib/pdf.js';
 import { useSession } from '../lib/session.jsx';
@@ -29,6 +31,9 @@ export function ActiveRulesetProvider({ route, children }) {
   const choice = useRulesetChoice(route.params.get('set'));
   const { selectedSet, setStoredSetId } = choice;
   const ownsSet = Boolean(!selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor));
+  // The reader's own homebrew: shown only to them, usable in their rulesets.
+  const homebrew = useLive(() => myHomebrewQuery(user?.uid), [user?.uid]);
+  const myHomebrew = useMemo(() => homebrew.data || [], [homebrew.data]);
 
   // null when nothing changed; each change is one undo step (Ctrl+Z works too).
   const [draft, setDraft, history] = useDraftHistory(null, 0);
@@ -132,19 +137,20 @@ export function ActiveRulesetProvider({ route, children }) {
       const [secSnap, ruleSnap, verSnap] = await Promise.all(['sections', 'rules', 'versions'].map((c) => getDocs(collection(db, c))));
       const docs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const tree = sectionTree(docs(secSnap));
-      const rules = docs(ruleSnap);
-      const sids = shortIds(rules);
-      const vByRule = groupVersions(docs(verSnap));
+      const sids = shortIds(docs(ruleSnap));
+      // The reader's own homebrew prints too: it's their ruleset.
+      const { rules, versions } = withHomebrew(myHomebrew, docs(ruleSnap), docs(verSnap));
+      const vByRule = groupVersions(versions);
       const entries = apply(selectedSet.builtIn ? rulebookEntries(rules, vByRule) : selectedSet.entries || {}, 'rules');
 
       const bySection = new Map();
       for (const r of sortRules(rules)) {
-        const v = (vByRule.get(r.id) || []).find((x) => x.id === entries[r.id]);
+        const v = findVersion(vByRule.get(r.id) || [], entryFor(entries, r));
         if (!v) continue;
         if (!bySection.has(r.sectionId)) bySection.set(r.sectionId, []);
         bySection.get(r.sectionId).push({
-          sid: sids.get(r.id),
-          ref: v.label !== 'Rulebook' ? `${sids.get(r.id)}.${v.num}` : '',
+          sid: sids.get(r.id) || '',
+          ref: v.num && v.label !== 'Rulebook' ? `${sids.get(r.id)}.${v.num}` : '',
           title: r.title,
           label: v.label,
           kindLabel: r.kind && r.kind !== 'rule' ? kindInfo(kinds, r.kind).label : '',
@@ -162,7 +168,11 @@ export function ActiveRulesetProvider({ route, children }) {
       const cards = apply(selectedSet.cards, 'cards');
       if (Object.keys(cards).length) {
         const [{ types, components }, cvSnap] = await Promise.all([loadComponents(), getDocs(collection(db, 'componentVersions'))]);
-        const cvs = new Map(docs(cvSnap).map((v) => [v.id, v]));
+        const cvs = new Map();
+        for (const v of withCardHomebrew(myHomebrew, docs(cvSnap))) {
+          cvs.set(v.id, v);
+          if (v.homebrewId) cvs.set(HB + v.homebrewId, v);
+        }
         const cardRules = [];
         for (const [compId, vid] of Object.entries(cards)) {
           const comp = components.find((c) => c.id === compId);
@@ -193,8 +203,47 @@ export function ActiveRulesetProvider({ route, children }) {
       });
     });
 
+  // Homebrew of the reader's that this ruleset uses but nobody else can see.
+  const privateHomebrewIn = useCallback(
+    (set) => {
+      const refs = homebrewRefs(set);
+      return myHomebrew.filter((h) => refs.has(h.id) && !h.sharedId);
+    },
+    [myHomebrew],
+  );
+
+  /** Copy a link to the ruleset; first offer to share any private homebrew in it, or the link shows it without them. */
+  const copySetLink = async (page) => {
+    const hidden = privateHomebrewIn(selectedSet);
+    if (hidden.length) {
+      const n = hidden.length;
+      const share = await confirmDialog({
+        title: 'This ruleset uses your homebrew',
+        message: `${n === 1 ? 'One homebrew' : `${n} homebrews`} in “${selectedSet.name}” ${n === 1 ? 'is' : 'are'} private: others opening the link won't see ${n === 1 ? 'it' : 'them'}, and the ruleset can't be made public. Share ${n === 1 ? 'it' : 'them'} for review? Everyone can then see and discuss ${n === 1 ? 'it' : 'them'}.`,
+        confirmLabel: n === 1 ? 'Share it and copy the link' : `Share ${n} and copy the link`,
+        cancelLabel: 'Copy the link without them',
+      });
+      if (share) {
+        const ok = await requireUser(
+          (u) =>
+            attempt(async () => {
+              for (const h of hidden) await shareHomebrew(h, u);
+              return true;
+            }, `Shared ${n === 1 ? 'your homebrew' : `${n} homebrews`} for review`),
+          'suggest',
+        );
+        if (ok) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} shared ${n === 1 ? 'a homebrew' : `${n} homebrews`} from the ruleset “${selectedSet.name}”`, text: '', link: SUGGESTIONS.link });
+      }
+    }
+    await copyText(absoluteLink(page, [], { set: selectedSet.id }));
+    toast('Ruleset link copied', 'ok');
+  };
+
   const value = {
     choice,
+    myHomebrew,
+    privateHomebrewIn,
+    copySetLink,
     exportPdf,
     selectedSet,
     ownsSet,
@@ -328,10 +377,7 @@ export function RulesetBar({ page }) {
                   className="icon-btn"
                   title="Copy a link to this ruleset"
                   aria-label="Copy a link to this ruleset"
-                  onClick={async () => {
-                    await copyText(absoluteLink(page, [], { set: selectedSet.id }));
-                    toast('Ruleset link copied', 'ok');
-                  }}
+                  onClick={() => rs.copySetLink(page)}
                 >
                   <Icon name="link" />
                 </button>

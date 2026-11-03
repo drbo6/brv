@@ -2,7 +2,7 @@
 
 A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rage: Valhalla*. It's a static site hosted on GitHub Pages, with Firebase handling sign-in and data.
 
-- **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
+- **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓ and discuss. Anyone signed in can write **homebrew**: their own version of any rule or card, or a rule of their own. Homebrew is private to its author and usable in their rulesets; sharing it makes it a public *Suggestion* with its own discussion, which admins accept (as *Community* or *Official Ruling*, optionally straight into a public ruleset) or turn down with a reason, handing it back as private homebrew. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Editors add and edit components in place; admins define component types and their fields, arrange them on a simple card layout, and define `[shorthand]` icons.
 - **Admin.** Staff chat, a suggestions queue, a discussions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup.
@@ -67,14 +67,14 @@ From then on, give other people roles in **Admin → People**. You find them by 
 
 | Role | Can do |
 | --- | --- |
-| User | Read, react, comment, suggest, follow, save rulesets (everyone who signs in) |
+| User | Read, react, comment, write and share homebrew, follow, save rulesets (everyone who signs in) |
 | Editor | Everything about content: rules, versions, sections, kinds, rulesets, components, backups, staff chat |
 | Admin | Everything an editor can, plus roles and restrictions for other people |
 | Owner | Everything an admin can; can't be demoted or restricted from the site |
 
 Table access (Admin → Rules → Table and the component tables) is a separate permission, off by default even for admins: tick **Tables** for an editor or admin. The owner always has it. *Who can do what* at the top of People explains every right.
 
-Admins can also restrict a user or editor (not an admin) with **No suggestions** (they can still comment and react) or **Silenced** (read only), with a reason that user sees. Role and restriction changes can be undone and are listed in the moderation log. The security rules enforce all of this.
+Admins can also restrict a user or editor (not an admin) with **No sharing** (they can still write private homebrew, comment and react) or **Silenced** (read only), with a reason that user sees. Role and restriction changes can be undone and are listed in the moderation log. The security rules enforce all of this.
 
 ### 6. Load the content
 
@@ -174,13 +174,14 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | Collection | Contents |
 | --- | --- |
 | `sections` | `title`, `parent`, `order` |
-| `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
-| `versions` | `ruleId`, `label`, `text` (HTML), `note`, `reactions` {uid: `up` / `down` / `q`} |
+| `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount`, and `homebrewId` for a shared homebrew rule |
+| `versions` | `ruleId`, `label`, `text` (HTML), `n` (version number), `note`, `reactions` {uid: `up` / `down` / `q`}, and `homebrewId` for shared homebrew |
+| `homebrew` | Private to its `ownerUid`: `kind` (`version` {ruleId, text} / `rule` {sectionId, title, text} / `card` {componentId, typeId, data}), `note`, `sharedId` (its public copy while shared), `declineReason` once turned down. Rulesets refer to it as `hb:<id>`. Not in the backup: only its owner can list it |
 | `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions`, and `handled` once staff have dealt with it in the discussions queue |
-| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId}, `ownerUid`, `visibility` |
+| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId} (a homebrew is `hb:<id>`), `ownerUid`, `visibility` |
 | `componentTypes` | Field definitions, layout and colors |
 | `components` | `typeId` and `data` {fieldKey: value}: the printed card |
-| `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions` |
+| `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions`, and `homebrewId` for shared homebrew |
 | `componentMeta` | `reactions` on a card's printed version |
 | `componentRules` | `rules` [ruleId, …]: the rules attached to a card, shown beside it in its details |
 | `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}] |

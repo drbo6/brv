@@ -2,7 +2,9 @@ import { collection, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { deleteRuleset, millis, updateRuleset } from '../lib/rules.js';
+import { deleteRuleset, millis, shortIds, updateRuleset } from '../lib/rules.js';
+import { myHomebrewQuery } from '../lib/homebrew.js';
+import { homebrewState } from '../components/Homebrew.jsx';
 import { ROLES, useSession } from '../lib/session.jsx';
 import { useTheme } from '../lib/theme.js';
 import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../components/ui.jsx';
@@ -20,7 +22,7 @@ export default function AccountPage() {
       <div className="page narrow">
         <section className="login-card">
           <h1>Log in</h1>
-          <p>Log in to react to rules, join discussions, suggest new rules and save your own rulesets. Browsing is open to everyone.</p>
+          <p>Log in to react to rules, join discussions, write your own homebrew and share it, and save your own rulesets. Browsing is open to everyone.</p>
           <button className="primary big google-btn" onClick={signIn}>
             <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
               <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z" />
@@ -124,11 +126,13 @@ export default function AccountPage() {
         )}
       </section>
 
+      <MyHomebrew uid={user.uid} />
+
       {block !== 'none' && (
         <section className="panel restricted-note" role="status">
           <h2>Your account is restricted</h2>
           <p>
-            {block === 'silence' ? 'You can read everything, but can’t comment, react or suggest changes.' : 'You can comment and react, but can’t suggest rules, versions or card changes.'}
+            {block === 'silence' ? 'You can read everything and write private homebrew, but can’t comment, react or share.' : 'You can comment, react and write private homebrew, but can’t share it for review.'}
             {blockReason && <> Reason given: “{blockReason}”.</>} Contact an admin if you think this is a mistake.
           </p>
         </section>
@@ -152,5 +156,66 @@ export default function AccountPage() {
         </div>
       </details>
     </div>
+  );
+}
+
+const HB_STATE = { private: ['Private', 't-homebrew'], shared: ['Shared for review', 't-suggestion'], accepted: ['Accepted', 't-community'] };
+
+/** Everything the reader made their own: where it is, and whether it is private, shared or accepted. */
+function MyHomebrew({ uid }) {
+  const mine = useLive(() => myHomebrewQuery(uid), [uid]);
+  const rules = useLive(() => collection(db, 'rules'), []);
+  const shared = useLive(() => query(collection(db, 'versions'), where('homebrewId', '!=', null)), []);
+  const sharedCards = useLive(() => query(collection(db, 'componentVersions'), where('homebrewId', '!=', null)), []);
+  if (mine.loading) return null;
+  const list = [...(mine.data || [])].sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt));
+  const sids = shortIds(rules.data || []);
+  const ruleById = new Map((rules.data || []).map((r) => [r.id, r]));
+  const pubOf = new Map([...(shared.data || []), ...(sharedCards.data || [])].map((v) => [v.homebrewId, v]));
+
+  const describe = (h) => {
+    if (h.kind === 'card') return { kind: 'Card', name: h.data?.title || h.componentId.split('__').pop(), link: href('components', [h.typeId, h.componentId]) };
+    if (h.kind === 'rule') {
+      const pub = pubOf.get(h.id);
+      return { kind: 'New rule', name: h.title, link: pub ? href('rules', [sids.get(pub.ruleId)]) : href('rules') };
+    }
+    const r = ruleById.get(h.ruleId);
+    return { kind: 'Rule', name: r ? `${sids.get(r.id)} ${r.title}` : 'A deleted rule', link: r ? href('rules', [sids.get(r.id)]) : null };
+  };
+
+  return (
+    <section className="panel">
+      <h2>My homebrew</h2>
+      {list.length === 0 ? (
+        <p className="muted">
+          No homebrew yet. Open any rule or card and choose <b>Homebrew</b> to write it your own way. Only you see it until you share it.
+        </p>
+      ) : (
+        <ul className="set-list">
+          {list.map((h) => {
+            const d = describe(h);
+            const [label, cls] = HB_STATE[homebrewState(pubOf.get(h.id))];
+            return (
+              <li key={h.id}>
+                <div>
+                  {d.link ? (
+                    <a href={d.link}>
+                      <b>{d.name}</b>
+                    </a>
+                  ) : (
+                    <b className="muted">{d.name}</b>
+                  )}{' '}
+                  <span className={`tag ${cls}`}>{label === 'Accepted' ? `Accepted as ${pubOf.get(h.id).label}` : label}</span>
+                  <p className="small muted">
+                    {d.kind} · updated {timeAgo(h.updatedAt)}
+                    {h.declinedAt && !h.sharedId && <> · turned down{h.declineReason ? `: “${h.declineReason}”` : ''}</>}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

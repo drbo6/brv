@@ -1,6 +1,7 @@
 rules_version = '2';
 
-// Everyone can read. Signed-in users can react, comment, suggest and save their own rulesets.
+// Everyone can read (except private homebrew). Signed-in users can react, comment, write homebrew,
+// share it for review and save their own rulesets.
 // Roles: editors change content; admins also manage people; the owner (config/owner) is an admin
 // nobody can demote. roles/{uid} holds a person's role and any restriction (block) on them.
 // A document at admins/{uid} (the original setup) still counts as admin.
@@ -157,12 +158,17 @@ service cloud.firestore {
       allow update: if isEditor() || (signedIn()
         && onlyChanged(['commentCount'])
         && (request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1
-          || request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1));
-      // Users may withdraw (or undo) their own suggested rule while nobody has discussed it.
+          || request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1))
+        // The author of a shared homebrew rule keeps its title and section in step while it is under review.
+        || (signedIn()
+          && resource.data.createdBy == request.auth.uid
+          && resource.data.status == 'suggested'
+          && onlyChanged(['title', 'sectionId'])
+          && shortText('title', 200));
+      // Users may withdraw their own suggested rule while it is under review.
       allow delete: if isEditor() || (signedIn()
         && resource.data.createdBy == request.auth.uid
-        && resource.data.status == 'suggested'
-        && resource.data.get('commentCount', 0) == 0);
+        && resource.data.status == 'suggested');
     }
 
     match /versions/{id} {
@@ -180,6 +186,30 @@ service cloud.firestore {
           && onlyChanged(['text', 'note', 'updatedAt'])
           && shortText('text', 20000));
       allow delete: if isEditor() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
+    }
+
+    // Private homebrew: a changed rule, a rule of one's own or a changed card. Only its owner reads
+    // and changes it. Editors may open one by id (shared ones name it in `homebrewId`) and, when
+    // turning a shared one down, hand it back with a reason.
+    match /homebrew/{id} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow get: if isEditor();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.kind in ['version', 'rule', 'card']
+        && request.resource.data.get('text', '') is string
+        && request.resource.data.get('text', '').size() <= 20000
+        && request.resource.data.get('title', '').size() <= 200
+        && request.resource.data.get('data', {}) is map
+        && request.resource.data.get('data', {}).size() <= 50;
+      allow update: if (signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.get('text', '').size() <= 20000
+          && request.resource.data.get('data', {}).size() <= 50)
+        || (isEditor() && onlyChanged(['sharedId', 'sharedVersionId', 'declineReason', 'declinedBy', 'declinedAt']));
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /comments/{id} {

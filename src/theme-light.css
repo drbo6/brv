@@ -125,6 +125,37 @@
   border-color: rgba(124, 66, 166, 0.45);
 }
 
+:root[data-theme='light'] .l-homebrew,
+:root[data-theme='light'] .t-homebrew {
+  background: rgba(29, 122, 94, 0.1);
+  color: #17664e;
+  border-color: rgba(29, 122, 94, 0.45);
+}
+
+:root[data-theme='light'] .homebrew-bar {
+  border-color: rgba(29, 122, 94, 0.4);
+  background: rgba(29, 122, 94, 0.06);
+}
+
+:root[data-theme='light'] .homebrew-bar > .icon,
+:root[data-theme='light'] .rule-code.is-homebrew {
+  color: #17664e;
+}
+
+:root[data-theme='light'] .homebrew-bar.is-shared {
+  border-color: rgba(124, 66, 166, 0.4);
+  background: rgba(124, 66, 166, 0.06);
+}
+
+:root[data-theme='light'] .homebrew-bar.is-shared > .icon,
+:root[data-theme='light'] .discussion-scope .icon {
+  color: #6a3596;
+}
+
+:root[data-theme='light'] .homebrew-declined {
+  color: #7f520a;
+}
+
 :root[data-theme='light'] .t-warn {
   background: rgba(154, 100, 14, 0.1);
   color: #7f520a;

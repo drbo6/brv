@@ -5,7 +5,17 @@ import { commitInChunks, deleteDoc, setDoc, updateDoc, writeBatch } from './stor
 export { commitInChunks };
 
 export const LABELS = ['Rulebook', 'Official Ruling', 'Community', 'Suggestion'];
-export const LABEL_CLASS = { Rulebook: 'rulebook', 'Official Ruling': 'official', Community: 'community', Suggestion: 'suggestion' };
+export const LABEL_CLASS = { Rulebook: 'rulebook', 'Official Ruling': 'official', Community: 'community', Suggestion: 'suggestion', Homebrew: 'homebrew' };
+
+// A reader's private homebrew is referred to as "hb:<homebrew id>" in their rulesets. Once shared,
+// the public copy carries `homebrewId`, so the same reference finds it.
+export const HB = 'hb:';
+
+/** The version a ruleset refers to by id (or by homebrew reference). */
+export const findVersion = (vs, vid) => (vid ? vs.find((v) => v.id === vid || (v.homebrewId && HB + v.homebrewId === vid)) : undefined);
+
+/** A ruleset's entry for a rule; a shared homebrew rule may still be listed under its homebrew reference. */
+export const entryFor = (entries, rule) => entries[rule.id] ?? (rule.homebrewId ? entries[HB + rule.homebrewId] : undefined);
 
 /** Rule kinds until an admin edits the list (Admin → Rules → Rule kinds; stored in config/site). */
 export const DEFAULT_KINDS = [
@@ -117,6 +127,8 @@ function numberVersions(list) {
   const byAge = [...list].sort((a, b) => millis(a.createdAt) - millis(b.createdAt) || (a.n ?? 0) - (b.n ?? 0));
   const nums = new Map();
   for (const v of byAge) {
+    // Private homebrew isn't numbered: it can't be cited.
+    if (v.homebrew) continue;
     const num = v.n ?? next;
     nums.set(v.id, num);
     next = Math.max(next, num + 1);
@@ -155,11 +167,15 @@ export function react(col, id, uid, current, type) {
   return updateDoc(doc(db, col, id), { [`reactions.${uid}`]: current === type ? deleteField() : type });
 }
 
-export async function createVersion({ ruleId, label, text, note }, user) {
-  // The next version number of this rule, kept with the version so it never changes.
+/** The next version number of a rule, kept with the version so it never changes. */
+export async function nextVersionNumber(ruleId) {
   const existing = await getDocs(query(collection(db, 'versions'), where('ruleId', '==', ruleId)));
   const nums = numberVersions(existing.docs.map((d) => ({ id: d.id, ...d.data() })));
-  const n = Math.max(0, ...nums.values()) + 1;
+  return Math.max(0, ...nums.values()) + 1;
+}
+
+export async function createVersion({ ruleId, label, text, note }, user) {
+  const n = await nextVersionNumber(ruleId);
   const ref = doc(collection(db, 'versions'));
   await setDoc(ref, { ruleId, label, text, n, note: note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
   return ref.id;

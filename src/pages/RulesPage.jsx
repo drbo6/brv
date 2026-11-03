@@ -3,7 +3,8 @@ import { collection } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { navigate } from '../lib/router.js';
-import { groupVersions, kindInfo, LABELS, moveRule, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
+import { entryFor, findVersion, groupVersions, HB, LABELS, moveRule, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
+import { HOMEBREW, withHomebrew } from '../lib/homebrew.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import RuleCard from '../components/RuleCard.jsx';
@@ -12,23 +13,25 @@ import { RuleDialog } from '../components/RuleDialogs.jsx';
 import { attempt, Empty, Icon, Spinner } from '../components/ui.jsx';
 
 export default function RulesPage({ route }) {
-  const { isEditor, shorthands, requireUser, kinds } = useSession();
+  const { isEditor, requireUser, kinds, user } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const versions = useLive(() => collection(db, 'versions'), []);
 
   // ----- the active ruleset (shared with the Components page, shown in the site-wide bar) -----
   const rs = useActiveRuleset();
-  const { selectedSet, unsaved, customizing } = rs;
+  const { selectedSet, unsaved, customizing, myHomebrew } = rs;
 
   // ----- derived rule data -----
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
-  const vByRule = useMemo(() => groupVersions(versions.data || []), [versions.data]);
-  // Every rule carries its short, permanent id (sid).
+  // The reader's own homebrew rules and versions show in place, for them only.
+  const merged = useMemo(() => withHomebrew(myHomebrew, rules.data || [], versions.data || []), [myHomebrew, rules.data, versions.data]);
+  const vByRule = useMemo(() => groupVersions(merged.versions), [merged.versions]);
+  // Every rule carries its short, permanent id (sid); homebrew rules have none until shared.
   const allRules = useMemo(() => {
     const sids = shortIds(rules.data || []);
-    return sortRules(rules.data || []).map((r) => ({ ...r, sid: sids.get(r.id) }));
-  }, [rules.data]);
+    return sortRules(merged.rules).map((r) => ({ ...r, sid: sids.get(r.id) }));
+  }, [rules.data, merged.rules]);
   const rulebook = useMemo(() => rulebookEntries(allRules, vByRule), [allRules, vByRule]);
   const index = useMemo(
     () =>
@@ -126,20 +129,22 @@ export default function RulesPage({ route }) {
     const tokens = q.split(/\s+/).filter(Boolean);
     return index
       .map(({ rule, vs, searchText }) => {
-        const activeVersion = vs.find((v) => v.id === entries[rule.id]);
-        const shown = vs.find((v) => v.id === viewVersion[rule.id]) || activeVersion || vs.find((v) => v.label === 'Rulebook') || vs[0];
+        const activeVersion = findVersion(vs, entryFor(entries, rule));
+        const shown = findVersion(vs, viewVersion[rule.id]) || activeVersion || vs.find((v) => v.label === 'Rulebook') || vs[0];
         return { rule, vs, searchText, active: Boolean(activeVersion), activeVersion, shown };
       })
       .filter((it) => {
         if (it.rule.id === focusId) return true;
         if (it.rule.status === 'rejected' && !(isEditor && showInactive)) return false;
         // While customizing a ruleset, inactive rules stay visible so they can be switched back on.
-        if (!it.active && !showInactive && !editing) return false;
+        // Your own homebrew rules always show, shared or not, so you can find them.
+        const mine = it.rule.homebrew || (it.rule.homebrewId && it.rule.status === 'suggested' && it.rule.createdBy === user?.uid);
+        if (!it.active && !showInactive && !editing && !mine) return false;
         if (labelFilter && !it.vs.some((v) => v.label === labelFilter)) return false;
         if (kindFilter && (it.rule.kind || 'rule') !== kindFilter) return false;
         return tokens.every((t) => it.searchText.includes(t));
       });
-  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isEditor, focusId, editing]);
+  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isEditor, focusId, editing, user?.uid]);
 
   const groups = useMemo(() => {
     const bySection = new Map();
@@ -241,9 +246,9 @@ export default function RulesPage({ route }) {
           </div>
           <select value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by version label">
             <option value="">Any label</option>
-            {LABELS.map((l) => (
+            {[...LABELS, ...(myHomebrew.length ? [HOMEBREW] : [])].map((l) => (
               <option key={l} value={l}>
-                Has {l === 'Official Ruling' ? 'an' : 'a'} {l}
+                {l === HOMEBREW ? 'Has your Homebrew' : `Has ${l === 'Official Ruling' ? 'an' : 'a'} ${l}`}
               </option>
             ))}
           </select>
@@ -261,9 +266,13 @@ export default function RulesPage({ route }) {
             <span>Show inactive</span>
           </label>
           <div className="toolbar-end">
-            <button onClick={() => requireUser(() => setDialog('newRule'), isEditor ? null : 'suggest')} disabled={!tree.ordered.length}>
-              <Icon name="plus" />
-              {isEditor ? 'Add rule' : 'Suggest rule'}
+            <button
+              onClick={() => requireUser(() => setDialog('newRule'))}
+              disabled={!tree.ordered.length}
+              title={isEditor ? 'Add a rule to the rulebook' : 'Write a rule of your own: only you see it until you share it'}
+            >
+              <Icon name={isEditor ? 'plus' : 'flask'} />
+              {isEditor ? 'Add rule' : 'Homebrew rule'}
             </button>
             <button
               className={`icon-btn pin-btn ${pinned ? 'on' : ''}`}
@@ -360,8 +369,10 @@ export default function RulesPage({ route }) {
           rules={allRules}
           onClose={() => setDialog(null)}
           onCreated={(id) => {
-            if (!isEditor) setShowInactive(true);
-            setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
+            if (!id.startsWith(HB)) return setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
+            // A homebrew rule has no link of its own: open it where it landed.
+            setOpenId(id);
+            setTimeout(() => document.getElementById(`rule-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
           }}
         />
       )}

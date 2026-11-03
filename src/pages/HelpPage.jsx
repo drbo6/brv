@@ -36,10 +36,10 @@ const TOPICS = [
             <b>Visitors</b> can read everything: rules, versions, discussions, rulesets and cards.
           </li>
           <li>
-            <b>Signed-in members</b> can react, discuss, suggest changes and save their own rulesets.
+            <b>Signed-in members</b> can react, discuss, write their own homebrew, share it for review and save their own rulesets.
           </li>
           <li>
-            <b>Admins</b> curate the content: they adopt suggestions, publish rulesets, manage cards and keep backups.
+            <b>Admins</b> curate the content: they review shared homebrew, publish rulesets, manage cards and keep backups.
           </li>
         </ul>
         <p className="muted small">This is a fan project and is not affiliated with the game's publishers.</p>
@@ -55,7 +55,7 @@ const TOPICS = [
         <p>The Rules page reads like a book. Each rule shows its ID, title and text; nothing else gets in the way.</p>
         <ul>
           <li>
-            <b>Click a rule</b> (its text or title) to open its tools: versions, reactions, discussion, suggestions and the link button. Click again to close it. One rule is open at a
+            <b>Click a rule</b> (its text or title) to open its tools: versions, reactions, discussion, homebrew and the link button. Click again to close it. One rule is open at a
             time.
           </li>
           <li>
@@ -110,7 +110,11 @@ const TOPICS = [
           <dt>
             <span className="label l-suggestion">Suggestion</span>
           </dt>
-          <dd>A proposal by a member, open for reactions and discussion.</dd>
+          <dd>A member's homebrew, shared for review: open for reactions and its own discussion while admins decide.</dd>
+          <dt>
+            <span className="label l-homebrew">Homebrew</span>
+          </dt>
+          <dd>Your own private version. Only you see it.</dd>
         </dl>
         <p>
           The version you see first is the one your ruleset uses. If you browse to another one, it is tagged <span className="tag t-warn">Not in …</span> so you always know which
@@ -163,21 +167,31 @@ const TOPICS = [
     ),
   },
   {
-    id: 'suggesting',
-    title: 'Suggesting changes',
-    icon: 'bulb',
+    id: 'homebrew',
+    title: 'Homebrew and sharing',
+    icon: 'flask',
     body: (
       <>
-        <ul>
+        <p>Play it your way: change any rule or card, or write a rule of your own. It starts out private, and you decide whether to share it.</p>
+        <ol>
           <li>
-            <b>Suggest change</b> on an open rule adds your wording as a new <i>Suggestion</i> version. Add a rationale or source so others understand why.
+            <b>Homebrew</b> <Icon name="flask" size={14} /> on an open rule (or in a card's details) writes your own version, starting from the text on screen.{' '}
+            <b>Homebrew rule</b> in the toolbar adds a new rule to one of the rulebook's sections. Your homebrew is labeled{' '}
+            <span className="label l-homebrew">Homebrew</span> and <b>only you see it</b>. Use it in your own rulesets like any other version; it prints in your PDF too.
           </li>
           <li>
-            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It gets its permanent id right away, so it can be discussed by id while admins consider it.
-            Turn on <i>Show inactive</i> to see suggested rules.
+            <b>Share</b> sends it for review. It becomes a public <span className="label l-suggestion">Suggestion</span> with <b>its own discussion</b>, where everyone can
+            react and say what they think, for example that it should become the default. You can keep editing it, and <b>Withdraw</b> it while it is under review.
           </li>
-          <li>You can edit your own suggestions at any time, and withdraw a suggested rule as long as nobody has commented on it.</li>
-        </ul>
+          <li>
+            Admins then <b>accept</b> it as a <i>Community</i> version or <i>Official Ruling</i>, sometimes straight into a public ruleset, or <b>turn it down</b>. Turned down,
+            it comes back to you as private homebrew, with their reason. You get a notice either way.
+          </li>
+        </ol>
+        <p>
+          Your homebrew is listed under <b>Account → My homebrew</b>. A ruleset that uses private homebrew works for you, but others opening its link see it without your
+          homebrew; copying the link offers to share it first.
+        </p>
         <h4>The text editor</h4>
         <p>
           Type plain text: blank lines become paragraphs. The toolbar adds <b>bold</b>, <i>italic</i>, bulleted lists and links. <b>Image</b> <Icon name="image" size={14} />{' '}
@@ -246,7 +260,7 @@ const TOPICS = [
         <h4>Versions, reactions and discussion</h4>
         <p>
           Cards work just like rules. Each card can have versions: the <span className="label l-rulebook">Printed</span> card plus <i>Official Ruling</i>, <i>Community</i> and{' '}
-          <i>Suggestion</i> versions. React 👍 👎 ❓, discuss, and use <b>Suggest change</b> in the card details to propose new values. The selected ruleset decides which version of
+          <i>Suggestion</i> versions. React 👍 👎 ❓, discuss, and use <b>Homebrew</b> in the card details to play it with your own values (see Homebrew and sharing). The selected ruleset decides which version of
           each card is shown.
         </p>
         <h4>For editors</h4>
@@ -312,12 +326,12 @@ const TOPICS = [
           <b>Follow</b> a rule (in its tools), a card (in its details) or a ruleset (in the ruleset bar). You then get a notice in your <b>Inbox</b> when someone comments,
           adds or changes a version, or updates the ruleset.
         </li>
-        <li>Commenting on something or suggesting a change to it follows it automatically, so you hear about replies and whether your suggestion was adopted.</li>
+        <li>Commenting on something or sharing a homebrew of it follows it automatically, so you hear about replies. You always hear whether your shared homebrew was accepted or turned down.</li>
         <li>
           The bell in the header shows how many notices are unread. In the Inbox you can open a notice, mark notices read or unread, and clear old ones. The <b>Following</b> tab
           lists everything you follow, with an Unfollow button.
         </li>
-        <li>Staff can follow the suggestion feed (Admin → Suggestions) to hear about every new suggestion.</li>
+        <li>Staff can follow the suggestion feed (Admin → Suggestions) to hear whenever someone shares a homebrew.</li>
         <li>On the Rules page, the ruleset and search bars stay pinned at the top while you scroll. The pin button at the end of the search bar turns that off.</li>
       </ul>
     ),
@@ -377,8 +391,10 @@ const TOPICS = [
         <p>A private chat for editors and admins. Enter sends, Shift+Enter starts a new line.</p>
         <h4>Suggestions</h4>
         <p>
-          All waiting rule and card suggestions, with their count on the tab. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to
-          discuss, or delete it. Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>). Follow the feed to get a notice for each new suggestion.
+          Homebrew that members shared for review, with the count on the tab. Open one to read its own discussion. <b>Accept</b> it as <i>Community</i> or{' '}
+          <i>Official Ruling</i> (a new rule becomes active), optionally using it in a public ruleset right away, or <b>Turn down</b> with a reason: it goes back to its author as
+          private homebrew. The author is told either way. Follow the feed to get a notice whenever something is shared. Making a ruleset public warns you if it relies on
+          someone's private homebrew.
         </p>
         <h4>Discussions</h4>
         <p>
@@ -501,7 +517,7 @@ const TOPICS = [
         <p>
           Admins only. Everyone who has chosen a username is listed; find people by name, or show only staff or restricted users. <i>Who can do what</i> at the top
           explains every right. For each person choose a <b>role</b> (User, Editor, Admin), whether they get the bulk <b>Tables</b> (off by default, also for admins),
-          and, for users and editors, a <b>restriction</b>: <i>No suggestions</i> (they can still comment and react) or <i>Silenced</i> (read only), with a reason they will
+          and, for users and editors, a <b>restriction</b>: <i>No sharing</i> (they can still write private homebrew, comment and react) or <i>Silenced</i> (read only), with a reason they will
           see. Admins can't be restricted. Changes can be undone and are listed in the <b>moderation log</b>. If the site has no owner yet, an admin from the original setup can
           claim it here once.
         </p>
@@ -570,8 +586,8 @@ const TOPICS = [
         </dd>
         <dt>Who can change what?</dt>
         <dd>
-          Visitors read. Signed-in members react, comment, suggest rules and versions, edit their own suggestions and comments, and save their own rulesets. Admins can change
-          everything else.
+          Visitors read. Signed-in members react, comment, write homebrew versions of rules and cards and homebrew rules of their own, share them for review, and save their own
+          rulesets. They can't change sections, kinds or other structure. Editors and admins change everything else.
         </dd>
         <dt>My change disappeared. Can I get it back?</dt>
         <dd>If you made it in this tab, use Undo. Admins can also restore content from a backup.</dd>

@@ -128,7 +128,7 @@ function Following({ uid }) {
     <section className="panel">
       <h2>Following {list.length ? `(${list.length})` : ''}</h2>
       <p className="small muted">
-        You get a notice when someone comments, adds or changes a version, or updates a ruleset you follow. Commenting on or suggesting a change to something follows it automatically.
+        You get a notice when someone comments, adds or changes a version, or updates a ruleset you follow. Commenting on something, or sharing a homebrew of it, follows it automatically.
       </p>
       {list.length === 0 ? (
         <p className="muted">You don't follow anything yet. Use the Follow button on a rule, card or ruleset.</p>

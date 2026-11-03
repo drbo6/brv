@@ -3,7 +3,8 @@ import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { groupVersions, LABEL_CLASS, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
+import { findVersion, groupVersions, LABEL_CLASS, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
+import { withHomebrew } from '../lib/homebrew.js';
 import { setDoc } from '../lib/store.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
@@ -26,7 +27,8 @@ export default function AttachedRules({ compId, name }) {
   const [picking, setPicking] = useState(false);
 
   const ids = attached.data?.rules || [];
-  const vByRule = useMemo(() => groupVersions(versions.data || []), [versions.data]);
+  // The reader's homebrew versions count too, when their ruleset uses them.
+  const vByRule = useMemo(() => groupVersions(withHomebrew(rs.myHomebrew, [], versions.data || []).versions), [rs.myHomebrew, versions.data]);
   const all = useMemo(() => {
     const sids = shortIds(rules.data || []);
     return (rules.data || []).map((r) => ({ ...r, sid: sids.get(r.id) }));
@@ -65,7 +67,7 @@ export default function AttachedRules({ compId, name }) {
       {!list.length && <p className="small muted">No rules attached yet. Attach the rules that explain or clarify this card.</p>}
       {list.map((r, i) => {
         const vs = vByRule.get(r.id) || [];
-        const v = vs.find((x) => x.id === entries[r.id]);
+        const v = findVersion(vs, entries[r.id]);
         const shown = v || vs.find((x) => x.label === 'Rulebook') || vs[0];
         return (
           <article key={r.id} className="attached-rule">

@@ -41,31 +41,44 @@ const snippet = (text) => {
  * Deliver a notice to everyone following `key`, except the person who caused it.
  * event: { type, title, text, link } — link is { page, parts, params } for the router.
  */
-export async function notify(key, actor, event) {
+export async function notify(key, actor, event, { skip = [] } = {}) {
   try {
     const subs = await getDoc(doc(db, 'subscribers', key));
-    const uids = Object.keys(subs.exists() ? subs.data().uids || {} : {}).filter((u) => u !== actor.uid);
-    if (!uids.length) return;
-    for (let i = 0; i < uids.length; i += 400) {
-      const batch = rawBatch(db);
-      for (const uid of uids.slice(i, i + 400)) {
-        batch.set(doc(collection(db, 'inbox', uid, 'items')), {
-          type: event.type,
-          key,
-          title: event.title.slice(0, 200),
-          text: snippet(event.text),
-          link: event.link || null,
-          actorUid: actor.uid,
-          actorName: actor.displayName || 'Someone',
-          read: false,
-          createdAt: serverTimestamp(),
-        });
-      }
-      await batch.commit();
-    }
+    const uids = Object.keys(subs.exists() ? subs.data().uids || {} : {}).filter((u) => u !== actor.uid && !skip.includes(u));
+    await deliver(uids, key, actor, event);
   } catch (e) {
     // A failed notice must never break the action that caused it.
     console.warn('Could not deliver notices for', key, e);
+  }
+}
+
+/** Deliver a notice straight to one person (say, the author of a homebrew an admin reviewed). */
+export async function notifyUser(uid, key, actor, event) {
+  if (!uid || uid === actor.uid) return;
+  try {
+    await deliver([uid], key, actor, event);
+  } catch (e) {
+    console.warn('Could not deliver a notice to', uid, e);
+  }
+}
+
+async function deliver(uids, key, actor, event) {
+  for (let i = 0; i < uids.length; i += 400) {
+    const batch = rawBatch(db);
+    for (const uid of uids.slice(i, i + 400)) {
+      batch.set(doc(collection(db, 'inbox', uid, 'items')), {
+        type: event.type,
+        key,
+        title: event.title.slice(0, 200),
+        text: snippet(event.text),
+        link: event.link || null,
+        actorUid: actor.uid,
+        actorName: actor.displayName || 'Someone',
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
   }
 }
 

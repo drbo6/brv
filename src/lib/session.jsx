@@ -16,11 +16,11 @@ export const DEFAULT_SITE = { defaultRulesetId: 'rulebook' };
 export const ROLES = { owner: 'Owner', admin: 'Admin', editor: 'Editor', user: 'Signed-in user', visitor: 'Visitor' };
 
 /** Restrictions admins can put on a user. */
-export const BLOCKS = { none: 'No restriction', suggest: 'No suggestions', silence: 'Silenced (read only)' };
+export const BLOCKS = { none: 'No restriction', suggest: 'No sharing', silence: 'Silenced (read only)' };
 
 // Messages shown when a restricted user tries something they can't do.
 const BLOCKED = {
-  suggest: 'Your account can’t suggest changes at the moment.',
+  suggest: 'Your account can’t share homebrew for review at the moment.',
   talk: 'Your account can’t comment or react at the moment.',
 };
 

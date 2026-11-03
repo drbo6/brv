@@ -4,7 +4,8 @@ import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { compareValues, displayTitle, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
 import { dataIn } from '../lib/cardVersions.js';
-import { LABEL_CLASS } from '../lib/rules.js';
+import { findVersion, LABEL_CLASS } from '../lib/rules.js';
+import { withCardHomebrew } from '../lib/homebrew.js';
 import { toPlainText } from '../lib/html.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { href, navigate } from '../lib/router.js';
@@ -61,14 +62,17 @@ export default function ComponentsPage({ route }) {
   const cardVersionDocs = useLive(() => collection(db, 'componentVersions'), []);
   const cardMeta = useLive(() => collection(db, 'componentMeta'), []);
   const cardComments = useLive(() => query(collection(db, 'comments'), where('componentId', '!=', null)), []);
+  const rs = useActiveRuleset();
+  // The reader's private card homebrew shows as versions of those cards, for them only.
+  const allCardVersions = useMemo(() => withCardHomebrew(rs.myHomebrew, cardVersionDocs.data || []), [rs.myHomebrew, cardVersionDocs.data]);
   const versionsByComp = useMemo(() => {
     const m = new Map();
-    for (const v of cardVersionDocs.data || []) {
+    for (const v of allCardVersions) {
       if (!m.has(v.componentId)) m.set(v.componentId, []);
       m.get(v.componentId).push(v);
     }
     return m;
-  }, [cardVersionDocs.data]);
+  }, [allCardVersions]);
   const metaById = useMemo(() => new Map((cardMeta.data || []).map((d) => [d.id, d])), [cardMeta.data]);
   const commentsByComp = useMemo(() => {
     const m = new Map();
@@ -76,7 +80,6 @@ export default function ComponentsPage({ route }) {
     return m;
   }, [cardComments.data]);
 
-  const rs = useActiveRuleset();
   const cardChoices = useMemo(() => rs.apply(rs.selectedSet.cards, 'cards'), [rs.apply, rs.selectedSet.cards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const types = state.types || [];
@@ -98,14 +101,13 @@ export default function ComponentsPage({ route }) {
 
   // Each component as the selected ruleset shows it (a chosen card version replaces fields).
   const comps = useMemo(() => {
-    const byId = new Map((cardVersionDocs.data || []).map((v) => [v.id, v]));
     return (state.components || [])
       .filter((c) => typeById.has(c.typeId) && (!filterType || c.typeId === filterType))
       .map((c) => {
-        const v = byId.get(cardChoices[c.id]);
-        return v && v.componentId === c.id ? { ...c, data: dataIn(c, v), version: v } : c;
+        const v = findVersion(versionsByComp.get(c.id) || [], cardChoices[c.id]);
+        return v ? { ...c, data: dataIn(c, v), version: v } : c;
       });
-  }, [state.components, typeById, filterType, cardChoices, cardVersionDocs.data]);
+  }, [state.components, typeById, filterType, cardChoices, versionsByComp]);
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
