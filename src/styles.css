@@ -1117,19 +1117,19 @@ select {
   scrollbar-width: thin;
 }
 
-.toc-details summary {
+.toc-heading {
+  margin: 0;
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--gold);
-  cursor: pointer;
   padding: 6px 8px;
-  list-style: none;
 }
 
-.toc-details summary::-webkit-details-marker {
+/* Phones only: the contents as a menu in the search bar. */
+.toc-jump {
   display: none;
 }
 
@@ -2942,7 +2942,7 @@ button.ccard:hover:not(:disabled) {
 
 @media (max-width: 720px) {
   /* On phones a pinned, scrolled area keeps only the ruleset picker and search. */
-  .rules-top.stuck .toolbar > select,
+  .rules-top.stuck .toolbar > select:not(.toc-jump),
   .rules-top.stuck .toolbar > .switch,
   .rules-top.stuck .toolbar-end > button:not(.pin-btn),
   .rules-top.stuck .ruleset-status-actions {
@@ -2963,6 +2963,11 @@ button.ccard:hover:not(:disabled) {
 
   .rules-top.stuck .toolbar .search {
     flex: 1;
+  }
+
+  .rules-top.stuck .toc-jump {
+    flex: 1 1 40%;
+    min-width: 0;
   }
 
   .rules-top.stuck .toolbar-end {
@@ -3756,17 +3761,12 @@ select.is-unsaved {
   }
 
   .toc {
-    position: static;
-    max-height: none;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 4px 6px;
+    display: none;
   }
 
-  .toc nav {
-    max-height: 50vh;
-    overflow-y: auto;
+  .toc-jump {
+    display: block;
+    flex: 1 1 100%;
   }
 
   .ruleset-bar {

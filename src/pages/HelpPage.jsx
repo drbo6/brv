@@ -76,7 +76,7 @@ const TOPICS = [
             <b>Show inactive</b> also lists rules that are not part of the current ruleset, greyed out, and suggested new rules.
           </li>
           <li>
-            The <b>Contents</b> list jumps to any section. On phones it starts collapsed above the rules.
+            The <b>Contents</b> list beside the rules jumps to any section. On phones it is the <i>Jump to section</i> menu in the search bar.
           </li>
           <li>
             <b>PDF</b> <Icon name="download" size={14} /> downloads exactly the rules currently shown, with your ruleset, search and filters applied. Images in rules appear as{' '}

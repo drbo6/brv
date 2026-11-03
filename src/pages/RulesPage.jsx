@@ -187,8 +187,7 @@ export default function RulesPage({ route }) {
   );
 
   const [dialog, setDialog] = useState(null);
-  // The contents list starts collapsed on narrow screens, where it sits above the rules.
-  const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
+  const jumpTo = (sectionId) => document.getElementById(`sec-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const exportPdf = () => {
     const pdfGroups = groups.map(({ section, items: its }) => ({
@@ -223,32 +222,46 @@ export default function RulesPage({ route }) {
   return (
     <div className={`rules-layout ${customizing ? 'is-editing' : ''}`}>
       <aside className="toc" aria-label="Contents">
-        <details open={tocOpen} className="toc-details">
-          <summary>Contents</summary>
-          <nav>
-            {groups.map(({ section, total }) => (
-              <a
-                key={section.id}
-                href={`#sec-${section.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  document.getElementById(`sec-${section.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className={`toc-item depth-${section.depth}`}
-              >
-                <span className="toc-num">{section.number}</span>
-                <span className="toc-title">{section.title}</span>
-                <span className="toc-count">{total}</span>
-              </a>
-            ))}
-          </nav>
-        </details>
+        <h2 className="toc-heading">Contents</h2>
+        <nav>
+          {groups.map(({ section, total }) => (
+            <a
+              key={section.id}
+              href={`#sec-${section.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                jumpTo(section.id);
+              }}
+              className={`toc-item depth-${section.depth}`}
+            >
+              <span className="toc-num">{section.number}</span>
+              <span className="toc-title">{section.title}</span>
+              <span className="toc-count">{total}</span>
+            </a>
+          ))}
+        </nav>
       </aside>
 
       <div className="rules-main">
         <div ref={sentinelRef} className="rules-top-sentinel" aria-hidden="true" />
         <div ref={topRef} className={`rules-top ${pinned ? 'pinned' : ''} ${pinned && stuck ? 'stuck' : ''}`}>
         <section className="toolbar" aria-label="Search and filters">
+          <select
+            className="toc-jump"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) jumpTo(e.target.value);
+            }}
+            aria-label="Jump to section"
+          >
+            <option value="">Jump to section…</option>
+            {groups.map(({ section }) => (
+              <option key={section.id} value={section.id}>
+                {'\u00a0\u00a0'.repeat(section.depth)}
+                {section.number} {section.title}
+              </option>
+            ))}
+          </select>
           <div className="search">
             <Icon name="search" />
             <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rules, IDs and versions…" aria-label="Search rules" />
