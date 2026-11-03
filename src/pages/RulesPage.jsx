@@ -10,7 +10,7 @@ import { useSession } from '../lib/session.jsx';
 import RuleCard from '../components/RuleCard.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
 import { RuleDialog } from '../components/RuleDialogs.jsx';
-import { attempt, Empty, Icon, Spinner } from '../components/ui.jsx';
+import { attempt, Disclaimer, Empty, Icon, Spinner } from '../components/ui.jsx';
 
 export default function RulesPage({ route }) {
   const { isEditor, requireUser, kinds, user } = useSession();
@@ -229,6 +229,9 @@ export default function RulesPage({ route }) {
             </a>
           ))}
         </nav>
+        <p className="toc-disclaimer">
+          <Disclaimer />
+        </p>
       </aside>
 
       <div className="rules-main">

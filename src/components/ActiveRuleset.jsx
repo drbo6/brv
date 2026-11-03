@@ -7,8 +7,10 @@ import { absoluteLink, navigate } from '../lib/router.js';
 import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
 import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
 import { useLive } from '../lib/hooks.js';
-import { displayTitle, loadComponents } from '../lib/components.js';
-import { exportRulesPdf } from '../lib/pdf.js';
+import { compareValues, displayTitle, idField, loadComponents } from '../lib/components.js';
+import { dataIn } from '../lib/cardVersions.js';
+import { exportRulesetPdf } from '../lib/pdf.js';
+import PdfDialog from './PdfDialog.jsx';
 import { useSession } from '../lib/session.jsx';
 import FollowButton from './FollowButton.jsx';
 import RulesetSelect, { useRulesetChoice } from './RulesetSelect.jsx';
@@ -148,8 +150,10 @@ export function ActiveRulesetProvider({ route, children }) {
       return id;
     });
 
-  /** The whole active ruleset as a PDF: its rules in the versions it uses, then the cards it changes. */
-  const exportPdf = () =>
+  /** The whole active ruleset as a PDF: its rules in the versions it uses, then its cards. Asks how first. */
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const exportPdf = () => setPdfOpen(true);
+  const makePdf = (options) =>
     attempt(async () => {
       const [secSnap, ruleSnap, verSnap] = await Promise.all(['sections', 'rules', 'versions'].map((c) => getDocs(collection(db, c))));
       const docs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -181,15 +185,27 @@ export function ActiveRulesetProvider({ route, children }) {
       }
       const groups = tree.ordered.filter((sec) => total.get(sec.id) > 0).map((sec) => ({ heading: `${sec.number}  ${sec.title}`, depth: sec.depth, rules: bySection.get(sec.id) || [] }));
 
-      // Cards the ruleset plays in another version than printed.
+      // Every card, in the version the ruleset plays it in (printed unless it says otherwise).
       const cards = apply(selectedSet.cards, 'cards');
-      if (Object.keys(cards).length) {
-        const [{ types, components }, cvSnap] = await Promise.all([loadComponents(), getDocs(collection(db, 'componentVersions'))]);
-        const cvs = new Map();
-        for (const v of withCardHomebrew(myHomebrew, docs(cvSnap))) {
-          cvs.set(v.id, v);
-          if (v.homebrewId) cvs.set(HB + v.homebrewId, v);
-        }
+      const [{ types, components }, cvSnap] = await Promise.all([loadComponents(), getDocs(collection(db, 'componentVersions'))]);
+      const cvs = new Map();
+      for (const v of withCardHomebrew(myHomebrew, docs(cvSnap))) {
+        cvs.set(v.id, v);
+        if (v.homebrewId) cvs.set(HB + v.homebrewId, v);
+      }
+      const cardTypes = types.map((type) => {
+        const idf = idField(type);
+        const cardsOf = components.filter((c) => c.typeId === type.id).sort((a, b) => (idf ? compareValues(a.data[idf.key], b.data[idf.key], type) : 0) || a.id.localeCompare(b.id));
+        return {
+          type,
+          cards: cardsOf.map((comp) => {
+            const v = cards[comp.id] ? cvs.get(cards[comp.id]) : null;
+            return { comp, data: dataIn(comp, v), label: v ? v.label : null, changed: v?.data || {} };
+          }),
+        };
+      });
+      // Without the card overview, the cards the ruleset changes are listed after the rules.
+      if (options.cards === 'none' && Object.keys(cards).length) {
         const cardRules = [];
         for (const [compId, vid] of Object.entries(cards)) {
           const comp = components.find((c) => c.id === compId);
@@ -211,14 +227,17 @@ export function ActiveRulesetProvider({ route, children }) {
 
       const name = `${selectedSet.name}${unsaved ? ' (unsaved changes)' : ''}`;
       const count = groups.reduce((n, g) => n + (g.heading === 'Card changes' ? 0 : g.rules.length), 0);
-      await exportRulesPdf({
+      await exportRulesetPdf({
         title: 'Blood Rage: Valhalla - Living Rulebook',
         subtitle: `Ruleset: ${name} · ${count} rules · exported ${new Date().toLocaleDateString()}`,
         groups,
+        cardTypes,
         shorthands,
+        options,
         filename: `brv-${name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.pdf`,
       });
-    });
+      return true;
+    }, 'PDF downloaded');
 
   // Homebrew of the reader's that this ruleset uses but nobody else can see.
   const privateHomebrewIn = useCallback(
@@ -289,6 +308,7 @@ export function ActiveRulesetProvider({ route, children }) {
   return (
     <Ctx.Provider value={value}>
       {children}
+      {pdfOpen && <PdfDialog setName={selectedSet.name} onExport={makePdf} onClose={() => setPdfOpen(false)} />}
       {saveAs && (
         <SaveRulesetDialog
           initialName={selectedSet.builtIn ? '' : `${selectedSet.name} (copy)`}

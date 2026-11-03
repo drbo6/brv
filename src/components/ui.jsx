@@ -321,3 +321,13 @@ export async function attempt(fn, success, label) {
     return undefined;
   }
 }
+
+/** The site's disclaimer, in the footer and beside the rules. */
+export function Disclaimer() {
+  return (
+    <>
+      A fan-made, community-maintained resource. Not affiliated with or endorsed by the publishers of Blood Rage or Blood Rage: Valhalla.{' '}
+      <span className="nowrap">Rules text © its respective owners.</span>
+    </>
+  );
+}

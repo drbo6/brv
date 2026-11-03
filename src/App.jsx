@@ -4,7 +4,7 @@ import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
 import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
 import { useHistory, useUndoKeys } from './lib/history.js';
-import { Avatar, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
+import { Avatar, Disclaimer, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
 import { ActiveRulesetProvider, RulesetBar } from './components/ActiveRuleset.jsx';
 import { DialogHost } from './components/dialogs.jsx';
@@ -162,7 +162,7 @@ function Shell() {
       </ActiveRulesetProvider>
       <footer className="site-footer">
         <p>
-          A fan-made, community-maintained resource. Not affiliated with or endorsed by the publishers of Blood Rage or Blood Rage: Valhalla. Rules text © its respective owners.
+          <Disclaimer />
         </p>
         <button className="link-btn" onClick={() => setShowWelcome(true)}>
           About this site

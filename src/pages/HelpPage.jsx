@@ -79,8 +79,9 @@ const TOPICS = [
             The <b>Contents</b> list beside the rules jumps to any section. On phones it is the <i>Jump to section</i> menu in the search bar.
           </li>
           <li>
-            <b>PDF</b> <Icon name="download" size={14} /> downloads exactly the rules currently shown, with your ruleset, search and filters applied. Images in rules appear as{' '}
-            <i>[Image: description]</i>.
+            <b>PDF</b> <Icon name="download" size={14} /> in the ruleset bar downloads the active ruleset: its rules in the versions it uses, then all its cards. You choose
+            Letter or A4, one or two rule pages per sheet, and whether the cards appear as cards (in a size you pick), as a table, or not at all. Cards the ruleset plays in
+            another version are marked. Images in rules appear as <i>[Image: description]</i>.
           </li>
         </ul>
         <Tip>Small hints next to a closed rule tell you when it has more versions or comments, so you know where the discussion is.</Tip>
