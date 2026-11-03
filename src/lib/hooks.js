@@ -8,25 +8,29 @@ const toDocs = (snap) => (snap.docs ? snap.docs.map((d) => ({ id: d.id, ...d.dat
  * Returns { data, error, loading }; `data` is an array for queries, an object/null for docs.
  */
 export function useLive(makeRef, deps) {
-  const [state, setState] = useState({ data: undefined, error: null });
+  // Data is tagged with the deps it was loaded for: right after the deps change (say, a user signs
+  // in) the previous answer is not reported as the new one, only as "still loading".
+  const key = JSON.stringify(deps);
+  const [state, setState] = useState({ data: undefined, error: null, key });
   useEffect(() => {
     const ref = makeRef();
     if (!ref) {
-      setState({ data: null, error: null });
+      setState({ data: null, error: null, key });
       return undefined;
     }
-    setState((s) => ({ ...s, data: undefined }));
+    setState({ data: undefined, error: null, key });
     return onSnapshot(
       ref,
-      (snap) => setState({ data: toDocs(snap), error: null }),
+      (snap) => setState({ data: toDocs(snap), error: null, key }),
       (error) => {
         console.error(error);
-        setState({ data: null, error });
+        setState({ data: null, error, key });
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
-  return { ...state, loading: state.data === undefined };
+  const current = state.key === key;
+  return { data: current ? state.data : undefined, error: current ? state.error : null, loading: !current || state.data === undefined };
 }
 
 export function useLocalStorage(key, initial) {
