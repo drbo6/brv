@@ -1,11 +1,49 @@
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from '../lib/hooks.js';
 import { loadComponents } from '../lib/components.js';
-import { CARD_SIZES, cardGrid, PAGE_SIZES } from '../lib/pdf.js';
+import { CARD_SIZES, cardGrid, cardWidthOf, PAGE_SIZES, paperOf, UNITS } from '../lib/pdf.js';
 import { Icon, Modal } from './ui.jsx';
 
 const usLike = () => /^en-(US|CA)|^es-(MX|US)|^fr-CA/i.test(navigator.language || '');
-const DEFAULTS = { format: usLike() ? 'letter' : 'a4', perSheet: 1, cards: 'cards', cardSize: 'm' };
+const US = usLike();
+const DEFAULTS = {
+  format: US ? 'letter' : 'a4',
+  perSheet: 1,
+  cards: 'cards',
+  cardSize: 'm',
+  // Custom sizes, in `unit`.
+  unit: US ? 'in' : 'mm',
+  paperW: US ? 5.5 : 148,
+  paperH: US ? 8.5 : 210,
+  cardW: US ? 2.5 : 63,
+};
+
+// Rounded for display in a number field.
+const round = (v, unit) => Math.round(v * (unit === 'in' ? 100 : 10)) / (unit === 'in' ? 100 : 10);
+
+/** Number fields for a custom size, in the chosen unit. */
+function SizeFields({ fields, unit, onUnit }) {
+  return (
+    <div className="pdf-custom">
+      {fields.map((f, i) => (
+        <span key={f.label} className="pdf-custom-field">
+          {i > 0 && <span className="muted">×</span>}
+          <label>
+            <span className="small muted">{f.label}</span>
+            <input type="number" min="0" step={unit === 'in' ? 0.05 : 1} value={f.value} onChange={(e) => f.onChange(e.target.value)} required />
+          </label>
+        </span>
+      ))}
+      <div className="seg" role="group" aria-label="Unit">
+        {Object.entries(UNITS).map(([u, x]) => (
+          <button key={u} type="button" className={unit === u ? 'on' : ''} onClick={() => onUnit(u)}>
+            {x.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** One question: a row of choices, each with a short explanation. */
 function Choice({ legend, value, options, onChange }) {
@@ -40,8 +78,18 @@ const Sheet = ({ landscape, halves, grid, table }) => (
 /** Asks how the ruleset PDF should look, then hands the choices to `onExport`. */
 export default function PdfDialog({ setName, onExport, onClose }) {
   const [saved, setSaved] = useLocalStorage('brv-pdf-options', DEFAULTS);
-  const [o, setO] = useState(() => ({ ...DEFAULTS, ...saved }));
+  const [o, setO] = useState(() => {
+    const x = { ...DEFAULTS, ...saved };
+    return x.cardSize in CARD_SIZES || x.cardSize === 'custom' ? x : { ...x, cardSize: 'm' };
+  });
   const set = (patch) => setO((x) => ({ ...x, ...patch }));
+  // Switching units converts the custom sizes, so they stay the same size.
+  const setUnit = (unit) =>
+    setO((x) => {
+      if (x.unit === unit) return x;
+      const k = UNITS[x.unit].pt / UNITS[unit].pt;
+      return { ...x, unit, paperW: round(x.paperW * k, unit), paperH: round(x.paperH * k, unit), cardW: round(x.cardW * k, unit) };
+    });
   const [cards, setCards] = useState(null); // { count, aspect }
   const [busy, setBusy] = useState(false);
 
@@ -64,7 +112,12 @@ export default function PdfDialog({ setName, onExport, onClose }) {
     if (ok) onClose();
   };
 
-  const size = PAGE_SIZES[o.format];
+  const paper = paperOf(o);
+  const paperName = o.format === 'custom' ? 'page' : `${PAGE_SIZES[o.format].label} page`;
+  const fit = (cardSize, cardW) => {
+    const g = cardGrid(paper, cards.aspect, cardWidthOf({ ...o, cardSize, cardW }));
+    return `${g.perPage} per ${paperName}, about ${Math.ceil(cards.count / g.perPage)} pages`;
+  };
   return (
     <Modal title="Export as PDF" onClose={onClose} wide className="pdf-dialog">
       <form className="form" onSubmit={submit}>
@@ -75,8 +128,18 @@ export default function PdfDialog({ setName, onExport, onClose }) {
           legend="Paper"
           value={o.format}
           onChange={(format) => set({ format })}
-          options={Object.entries(PAGE_SIZES).map(([value, p]) => ({ value, label: p.label, hint: p.hint }))}
+          options={[...Object.entries(PAGE_SIZES).map(([value, p]) => ({ value, label: p.label, hint: p.hint })), { value: 'custom', label: 'Custom', hint: 'Any width and height' }]}
         />
+        {o.format === 'custom' && (
+          <SizeFields
+            unit={o.unit}
+            onUnit={setUnit}
+            fields={[
+              { label: 'Width', value: o.paperW, onChange: (paperW) => set({ paperW }) },
+              { label: 'Height', value: o.paperH, onChange: (paperH) => set({ paperH }) },
+            ]}
+          />
+        )}
         <Choice
           legend="Rules"
           value={o.perSheet}
@@ -103,11 +166,14 @@ export default function PdfDialog({ setName, onExport, onClose }) {
                 legend="Card size"
                 value={o.cardSize}
                 onChange={(cardSize) => set({ cardSize })}
-                options={Object.entries(CARD_SIZES).map(([value, s]) => {
-                  const g = cardGrid(o.format, cards.aspect, value);
-                  return { value, label: `${s.label} · ${s.mm} mm wide`, hint: `${g.perPage} per ${size.label} page, about ${Math.ceil(cards.count / g.perPage)} pages` };
-                })}
+                options={[
+                  ...Object.entries(CARD_SIZES).map(([value, s]) => ({ value, label: `${s.label} · ${s.mm} mm wide`, hint: fit(value) })),
+                  { value: 'custom', label: 'Custom', hint: o.cardSize === 'custom' ? fit('custom', o.cardW) : 'Any width; the height follows the card shape' },
+                ]}
               />
+            )}
+            {o.cards === 'cards' && o.cardSize === 'custom' && (
+              <SizeFields unit={o.unit} onUnit={setUnit} fields={[{ label: 'Card width', value: o.cardW, onChange: (cardW) => set({ cardW }) }]} />
             )}
           </>
         )}

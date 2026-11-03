@@ -20,24 +20,44 @@ export const PAGE_SIZES = {
   a4: { label: 'A4', hint: '210 × 297 mm', w: 595.28, h: 841.89 },
 };
 
-/** Card widths for the card overview. */
+/** Card widths for the card overview (or a custom width). */
 export const CARD_SIZES = {
-  s: { label: 'Small', mm: 50 },
-  m: { label: 'Standard', mm: 63 },
-  l: { label: 'Large', mm: 80 },
+  // Mini is the size of Blood Rage's own cards (41 × 63.5 mm).
+  s: { label: 'Mini', mm: 41 },
+  m: { label: 'Poker', mm: 63 },
 };
 
 const MM = 72 / 25.4;
+export const UNITS = { mm: { label: 'mm', pt: MM }, in: { label: 'in', pt: 72 } };
+
+// Custom sizes are kept within what makes sense on paper.
+const clamp = (v, lo, hi, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.min(hi, Math.max(lo, Number(v))) : fallback);
+
+/** The chosen paper in points, portrait: { w, h }. options: { format, paperW, paperH, unit } */
+export function paperOf(o) {
+  if (o.format !== 'custom') return PAGE_SIZES[o.format] || PAGE_SIZES.letter;
+  const k = UNITS[o.unit]?.pt || MM;
+  const a = clamp(o.paperW * k, 100 * MM, 1000 * MM, PAGE_SIZES.letter.w);
+  const b = clamp(o.paperH * k, 100 * MM, 1000 * MM, PAGE_SIZES.letter.h);
+  return { w: Math.min(a, b), h: Math.max(a, b) };
+}
+
+/** The chosen card width in points. options: { cardSize, cardW, unit } */
+export function cardWidthOf(o) {
+  if (o.cardSize !== 'custom') return (CARD_SIZES[o.cardSize] || CARD_SIZES.m).mm * MM;
+  return clamp(o.cardW * (UNITS[o.unit]?.pt || MM), 25 * MM, 250 * MM, CARD_SIZES.m.mm * MM);
+}
 const CARD_MARGIN = 20;
 const CARD_GAP = 6;
 const CAPTION = 9;
 const HEADING = 26;
 
 /** How the card overview lays out on a page: card size in points, and how many fit. */
-export function cardGrid(format, aspect, size) {
-  const page = PAGE_SIZES[format];
-  const w = CARD_SIZES[size].mm * MM;
-  const h = w / (aspect || 0.7);
+export function cardGrid(page, aspect, width) {
+  // A card never gets bigger than the page holds.
+  const a = aspect || 0.7;
+  const w = Math.min(width, page.w - 2 * CARD_MARGIN, (page.h - 2 * CARD_MARGIN - HEADING - CAPTION) * a);
+  const h = w / a;
   const cols = Math.max(1, Math.floor((page.w - 2 * CARD_MARGIN + CARD_GAP) / (w + CARD_GAP)));
   const rows = Math.max(1, Math.floor((page.h - 2 * CARD_MARGIN - HEADING + CARD_GAP) / (h + CAPTION + CARD_GAP)));
   return { w, h, cols, rows, perPage: cols * rows };
@@ -97,11 +117,14 @@ const CELL_LH = { l: 1.15, xl: 1.1, xxl: 1.05 };
  * groups: [{ heading, depth, rules: [{ sid, ref, title, label, kindLabel, inactive, html }] }]
  * cardTypes: [{ type, cards: [{ comp, data, label }] }]: every card in the version the ruleset uses
  * (label is the version's label, or null when printed).
- * options: { format: 'letter' | 'a4', perSheet: 1 | 2, cards: 'none' | 'table' | 'cards', cardSize: 's' | 'm' | 'l' }
+ * options: { format: 'letter' | 'a4' | 'custom', paperW, paperH, unit: 'mm' | 'in', perSheet: 1 | 2,
+ *   cards: 'none' | 'table' | 'cards', cardSize: 's' | 'm' | 'custom', cardW }
  */
 export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = [], shorthands, filename, options }) {
   const { jsPDF } = await import('jspdf');
-  const { format, perSheet, cards: cardMode, cardSize } = options;
+  const { perSheet, cards: cardMode } = options;
+  const paper = paperOf(options);
+  const format = [paper.w, paper.h];
   const twoUp = perSheet === 2;
   const pdf = new jsPDF({ unit: 'pt', format, orientation: twoUp ? 'landscape' : 'portrait' });
   // Shorthands read as their keyword: "(Rage)" in rules, "Rage" on cards.
@@ -190,8 +213,8 @@ export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = []
 
   // ---------- cards ----------
   const withCards = cardTypes.filter((t) => t.cards.length);
-  if (cardMode === 'table') for (const t of withCards) cardTable(pdf, t, { format, title, shText });
-  if (cardMode === 'cards') for (const t of withCards) await cardSheets(pdf, t, { format, size: cardSize, title, shText });
+  if (cardMode === 'table') for (const t of withCards) cardTable(pdf, t, { paper, format, title, shText });
+  if (cardMode === 'cards') for (const t of withCards) await cardSheets(pdf, t, { paper, format, cardW: cardWidthOf(options), title, shText });
 
   pdf.save(filename);
 }
@@ -222,9 +245,8 @@ const fieldsOf = (type) => new Map(type.fields.map((f) => [f.key, f]));
 const changedNote = (cards) => (cards.some((c) => c.label) ? 'Cards in another version than printed are marked with that version.' : 'All cards as printed.');
 
 /** Cards drawn as cards, in a grid, with the version under any card that isn't printed. */
-async function cardSheets(pdf, { type, cards }, { format, size, title, shText }) {
-  const g = cardGrid(format, type.aspect, size);
-  const page = PAGE_SIZES[format];
+async function cardSheets(pdf, { type, cards }, { paper: page, format, cardW, title, shText }) {
+  const g = cardGrid(page, type.aspect, cardW);
   const left = (page.w - (g.cols * g.w + (g.cols - 1) * CARD_GAP)) / 2;
   for (let i = 0; i < cards.length; i++) {
     const at = i % g.perPage;
@@ -379,8 +401,7 @@ async function drawCard(pdf, type, data, x, y, w, h, shText) {
 }
 
 /** Cards as a table: the fields shown on the card, one card per row, on landscape pages. */
-function cardTable(pdf, { type, cards }, { format, title, shText }) {
-  const page = PAGE_SIZES[format];
+function cardTable(pdf, { type, cards }, { paper: page, format, title, shText }) {
   const W = page.h;
   const H = page.w;
   const M = 36;

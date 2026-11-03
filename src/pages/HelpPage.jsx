@@ -80,7 +80,7 @@ const TOPICS = [
           </li>
           <li>
             <b>PDF</b> <Icon name="download" size={14} /> in the ruleset bar downloads the active ruleset: its rules in the versions it uses, then all its cards. You choose
-            Letter or A4, one or two rule pages per sheet, and whether the cards appear as cards (in a size you pick), as a table, or not at all. Cards the ruleset plays in
+            Letter, A4 or a custom paper size, one or two rule pages per sheet, and whether the cards appear as cards (in a size you pick), as a table, or not at all. Cards the ruleset plays in
             another version are marked. Images in rules appear as <i>[Image: description]</i>.
           </li>
         </ul>

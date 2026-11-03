@@ -686,15 +686,7 @@ select {
   white-space: nowrap;
 }
 
-.toc-disclaimer {
-  flex: none;
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
+
 
 .avatar {
   border-radius: 50%;
@@ -1134,14 +1126,6 @@ select {
   top: calc(var(--header-h) + var(--ruleset-bar-h, 0px) + 16px);
   align-self: start;
   max-height: calc(100vh - var(--header-h) - var(--ruleset-bar-h, 0px) - 32px);
-  /* The contents scroll; the disclaimer stays in view below them. */
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.toc nav {
-  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -4472,4 +4456,31 @@ summary.primary-summary {
 .pdf-art .fill {
   fill: var(--border-strong);
   stroke: none;
+}
+
+.pdf-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  margin-top: -4px;
+}
+
+.pdf-custom-field {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.pdf-custom-field > .muted {
+  padding-bottom: 8px;
+}
+
+.pdf-custom label {
+  display: grid;
+  gap: 2px;
+}
+
+.pdf-custom input {
+  width: 96px;
 }
