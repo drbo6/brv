@@ -454,9 +454,12 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   );
 }
 
+const DESC_MAX = 80;
+
 export function SaveRulesetDialog({ initialName = '', initialDescription = '', title = 'Save as a new ruleset', onSave, onClose }) {
   const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
+  // Kept short: it shows on one line in the ruleset bar.
+  const [description, setDescription] = useState((initialDescription || '').slice(0, DESC_MAX));
   const [busy, setBusy] = useState(false);
   return (
     <Modal title={title} onClose={onClose}>
@@ -475,8 +478,11 @@ export function SaveRulesetDialog({ initialName = '', initialDescription = '', t
           <input id="rs-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder="e.g. Our table’s house rules" />
         </div>
         <div className="field">
-          <label htmlFor="rs-desc">Description</label>
-          <textarea id="rs-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={1000} />
+          <label htmlFor="rs-desc">Short description</label>
+          <input id="rs-desc" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={DESC_MAX} placeholder="e.g. Faster games for two players" />
+          <p className="hint">
+            A few words, shown beside the ruleset’s name ({description.length}/{DESC_MAX}).
+          </p>
         </div>
         <p className="hint">New rulesets are private to you, but anyone with the link can view them. Admins can make a ruleset available to everyone.</p>
         <div className="modal-actions">

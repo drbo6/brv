@@ -4503,3 +4503,13 @@ summary.primary-summary {
   border-radius: var(--radius-sm);
   background: rgba(209, 165, 75, 0.08);
 }
+
+/* A ruleset's description stays on one line in the ruleset bar. */
+.set-desc {
+  display: inline-block;
+  max-width: calc(100% - 7rem);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}

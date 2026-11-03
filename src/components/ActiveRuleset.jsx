@@ -363,7 +363,11 @@ export function RulesetBar({ page }) {
           ) : (
             <span className="muted">
               {selectedSet.label in SET_LABELS && <span className={`tag ${SET_LABELS[selectedSet.label]}`}>{selectedSet.label}</span>}{' '}
-              {selectedSet.description ||
+              {(selectedSet.description && (
+                <span className="set-desc" title={selectedSet.description}>
+                  {selectedSet.description}
+                </span>
+              )) ||
                 (selectedSet.builtIn ? (
                   'The rules and cards exactly as printed.'
                 ) : (

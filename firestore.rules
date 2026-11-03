@@ -236,13 +236,17 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.visibility == 'private'
         && request.resource.data.get('label', null) == null
-        && shortText('name', 200);
+        && shortText('name', 200)
+        && request.resource.data.get('description', '').size() <= 120;
       // Owners edit their own sets; only staff make a set public or label it Official, Community or Experimental.
       allow update: if isEditor() || (signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.visibility == resource.data.visibility
-        && request.resource.data.get('label', null) == resource.data.get('label', null));
+        && request.resource.data.get('label', null) == resource.data.get('label', null)
+        // A short description (shown on one line); an older, longer one may stay as it is.
+        && (request.resource.data.get('description', '') == resource.data.get('description', '')
+          || request.resource.data.get('description', '').size() <= 120));
       allow delete: if isEditor() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
