@@ -380,6 +380,12 @@ const TOPICS = [
           All waiting rule and card suggestions, with their count on the tab. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to
           discuss, or delete it. Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>). Follow the feed to get a notice for each new suggestion.
         </p>
+        <h4>Discussions</h4>
+        <p>
+          The newest comments on all rules and cards, newest first, with the rule or card each one is about and the number still open on the tab. Mark a comment{' '}
+          <b>Handled</b> once it has been read or answered (or <i>Mark all handled</i>), reopen it if needed, open the rule or card to reply there, or delete it.{' '}
+          <i>All</i> shows handled comments too.
+        </p>
         <h4>Rules</h4>
         <ul>
           <li>

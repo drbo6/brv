@@ -5,7 +5,7 @@ A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rag
 - **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Editors add and edit components in place; admins define component types and their fields, arrange them on a simple card layout, and define `[shorthand]` icons.
-- **Admin.** Staff chat, a suggestions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup.
+- **Admin.** Staff chat, a suggestions queue, a discussions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup.
 - **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
 - **Inbox and following.** Signed-in users follow rules, cards, rulesets (and admins the suggestion feed) and get inbox notices about new comments, versions and changes. Commenting or suggesting follows automatically. A bell in the header shows unread notices.
 - **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
@@ -176,7 +176,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `sections` | `title`, `parent`, `order` |
 | `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
 | `versions` | `ruleId`, `label`, `text` (HTML), `note`, `reactions` {uid: `up` / `down` / `q`} |
-| `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions` |
+| `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions`, and `handled` once staff have dealt with it in the discussions queue |
 | `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId}, `ownerUid`, `visibility` |
 | `componentTypes` | Field definitions, layout and colors |
 | `components` | `typeId` and `data` {fieldKey: value}: the printed card |

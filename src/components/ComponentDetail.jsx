@@ -71,79 +71,75 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
         </div>
 
         <div className="detail-data">
-          <div className="version-switch card-version-switch">
-            {vs.length > 1 && (
-              <button className="icon-btn" onClick={() => step(-1)} aria-label="Previous version" title="Previous version">
-                <Icon name="left" />
-              </button>
-            )}
-            <span className={`label l-${shown.printed ? 'rulebook' : LABEL_CLASS[shown.label] || 'other'}`} title={shown.printed ? 'The card as printed' : `${shown.label} version`}>
-              {shown.label}
-            </span>
-            {vs.length > 1 && (
-              <>
-                <span className="version-count" aria-live="polite" title={`${vs.length} versions of this card`}>
-                  {idx + 1}/{vs.length}
-                </span>
-                <button className="icon-btn" onClick={() => step(1)} aria-label="Next version" title="Next version">
-                  <Icon name="right" />
-                </button>
-              </>
-            )}
-            {shown.id !== active.id && (
-              <span className="tag t-warn" title={`${selectedSet.name} uses the ${active.label} version of this card`}>
-                Not in {selectedSet.name}
-              </span>
-            )}
-            {shown.id === active.id && !active.printed && (
-              <span className="tag t-community" title={`This is the version ${selectedSet.name} uses`}>
-                In {selectedSet.name}
-              </span>
-            )}
-          </div>
-          {!shown.printed && (
-            <p className="version-meta">
-              <span>
-                Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
-              </span>
-              {shown.note && <span className="version-note">{shown.note}</span>}
-            </p>
-          )}
-
-
           <AttachedRules compId={current.id} name={name} />
 
-          <RulesetChoiceRow what="card" inSet={shown.id === active.id} active onUse={() => rs.setCard(current.id, shown.printed ? null : shown.id, savedId)} />
-
-          <div className="rule-foot">
-            <Reactions
-              reactions={shown.reactions}
-              onReact={(t) => requireUser((u) => attempt(() => reactToCard(current.id, shown, Boolean(metaOf(current.id)), u.uid, t), null, 'reaction'), 'talk')}
-            />
-            <div className="rule-actions">
-              <button className={`chip ${discuss ? 'on' : ''}`} onClick={() => setDiscuss((o) => !o)} aria-expanded={discuss} title="Discuss this card">
-                <Icon name="message" />
-                <span>{commentCount(current.id)}</span>
-                Discuss
-              </button>
-              <button className="chip" onClick={() => requireUser(() => setDialog('new'), isEditor ? null : 'suggest')} title={isEditor ? 'Add an official or community version of this card' : 'Propose different values for this card'}>
-                <Icon name="bulb" />
-                {isEditor ? 'Add version' : 'Suggest change'}
-              </button>
-              <FollowButton target={follow} what={`${follow.label} (its discussion and versions)`} />
-              <button
-                className="chip"
-                onClick={async () => {
-                  await copyText(absoluteLink('components', [type.id, current.id]));
-                  toast('Link copied', 'ok');
-                }}
-                title="Copy a link to this card"
-                aria-label="Copy link"
-              >
-                <Icon name="link" />
-              </button>
+          <div className="card-interact">
+            <div className="version-switch card-version-switch">
+              {vs.length > 1 && (
+                <button className="icon-btn" onClick={() => step(-1)} aria-label="Previous version" title="Previous version">
+                  <Icon name="left" />
+                </button>
+              )}
+              <span className={`label l-${shown.printed ? 'rulebook' : LABEL_CLASS[shown.label] || 'other'}`} title={shown.printed ? 'The card as printed' : `${shown.label} version`}>
+                {shown.label}
+              </span>
+              {vs.length > 1 && (
+                <>
+                  <span className="version-count" aria-live="polite" title={`${vs.length} versions of this card`}>
+                    {idx + 1}/{vs.length}
+                  </span>
+                  <button className="icon-btn" onClick={() => step(1)} aria-label="Next version" title="Next version">
+                    <Icon name="right" />
+                  </button>
+                </>
+              )}
+              {shown.id !== active.id && (
+                <span className="tag t-warn" title={`${selectedSet.name} uses the ${active.label} version of this card`}>
+                  Not in {selectedSet.name}
+                </span>
+              )}
+              {shown.id === active.id && !active.printed && (
+                <span className="tag t-community" title={`This is the version ${selectedSet.name} uses`}>
+                  In {selectedSet.name}
+                </span>
+              )}
+              <Reactions
+                reactions={shown.reactions}
+                onReact={(t) => requireUser((u) => attempt(() => reactToCard(current.id, shown, Boolean(metaOf(current.id)), u.uid, t), null, 'reaction'), 'talk')}
+              />
             </div>
-          </div>
+            {!shown.printed && (
+              <p className="version-meta">
+                <span>
+                  Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
+                </span>
+                {shown.note && <span className="version-note">{shown.note}</span>}
+              </p>
+            )}
+            <div className="rule-actions card-actions">
+                <button className={`chip ${discuss ? 'on' : ''}`} onClick={() => setDiscuss((o) => !o)} aria-expanded={discuss} title="Discuss this card">
+                  <Icon name="message" />
+                  <span>{commentCount(current.id)}</span>
+                  <span className="hide-sm">Discuss</span>
+                </button>
+                <button className="chip" onClick={() => requireUser(() => setDialog('new'), isEditor ? null : 'suggest')} title={isEditor ? 'Add an official or community version of this card' : 'Propose different values for this card'}>
+                  <Icon name="bulb" />
+                  <span className="hide-sm">{isEditor ? 'Add version' : 'Suggest change'}</span>
+                </button>
+                <FollowButton target={follow} what={`${follow.label} (its discussion and versions)`} />
+                <button
+                  className="chip"
+                  onClick={async () => {
+                    await copyText(absoluteLink('components', [type.id, current.id]));
+                    toast('Link copied', 'ok');
+                  }}
+                  title="Copy a link to this card"
+                  aria-label="Copy link"
+                >
+                  <Icon name="link" />
+                </button>
+              </div>
+            <RulesetChoiceRow what="card" inSet={shown.id === active.id} active onUse={() => rs.setCard(current.id, shown.printed ? null : shown.id, savedId)} />
 
           {(isEditor || ownsShown) && (
             <div className="admin-tools" role="group" aria-label="Edit tools">
@@ -191,6 +187,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
               )}
             </div>
           )}
+          </div>
 
           {discuss && <Discussion target={{ field: 'componentId', id: current.id, name }} follow={follow} versions={vs} shownVersion={shown} />}
         </div>

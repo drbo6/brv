@@ -189,7 +189,9 @@ service cloud.firestore {
         && noReactions()
         && shortText('text', 5000);
       allow update: if ownReactionOnly()
-        || (signedIn() && resource.data.uid == request.auth.uid && onlyChanged(['text', 'editedAt']) && shortText('text', 5000));
+        || (signedIn() && resource.data.uid == request.auth.uid && onlyChanged(['text', 'editedAt']) && shortText('text', 5000))
+        // Staff work through comments in the discussions queue.
+        || (isEditor() && onlyChanged(['handled', 'handledBy', 'handledAt']));
       allow delete: if isEditor() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 

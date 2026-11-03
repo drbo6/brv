@@ -3274,9 +3274,30 @@ span.field-place {
   font-family: var(--font-ui);
 }
 
+/* Card details: the same bar as an open rule, stacked for the narrower column. */
+.card-interact {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .card-version-switch {
-  margin-bottom: 8px;
   flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.card-version-switch .reactions {
+  margin-left: auto;
+}
+
+.card-actions {
+  margin: 0;
+  justify-content: flex-start;
+}
+
+.card-interact .ruleset-choice {
+  margin-top: 10px;
 }
 
 .detail-row.changed dd {
@@ -3982,6 +4003,60 @@ summary.primary-summary {
   background: transparent;
   white-space: normal;
   text-align: left;
+}
+
+/* ---------- discussions queue ---------- */
+
+.discussion-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.discussion-queue li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.discussion-queue li.is-handled {
+  opacity: 0.65;
+}
+
+.dq-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dq-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.dq-text {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.dq-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .discussion-queue li {
+    flex-wrap: wrap;
+  }
+
+  .dq-tools {
+    margin-left: 44px;
+  }
 }
 
 @media (max-width: 1100px) {

@@ -12,6 +12,7 @@ import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 import RulesTable from '../components/admin/RulesTable.jsx';
+import DiscussionsAdmin, { discussionsQuery } from '../components/admin/DiscussionsAdmin.jsx';
 import FollowButton from '../components/FollowButton.jsx';
 import { cardTarget, notify, ruleTarget, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
@@ -21,6 +22,7 @@ const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
 const TABS = [
   { id: 'chat', label: 'Staff chat' },
   { id: 'suggestions', label: 'Suggestions' },
+  { id: 'discussions', label: 'Discussions' },
   { id: 'rulesets', label: 'Rulesets' },
   { id: 'rules', label: 'Rules' },
   { id: 'components', label: 'Components' },
@@ -34,6 +36,8 @@ export default function AdminPage({ route }) {
   const pendingRules = useLive(() => (isEditor ? query(collection(db, 'versions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
   const pendingCards = useLive(() => (isEditor ? query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
   const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0);
+  const recentComments = useLive(() => (isEditor ? discussionsQuery() : null), [isEditor]);
+  const openComments = (recentComments.data || []).filter((c) => !c.handled).length;
   if (authLoading) return <Spinner />;
   if (!user || !isEditor)
     return (
@@ -63,11 +67,13 @@ export default function AdminPage({ route }) {
           <a key={t.id} href={href('admin', [t.id])} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined}>
             {t.label}
             {t.id === 'suggestions' && pending > 0 && <span className="tab-count">{pending}</span>}
+            {t.id === 'discussions' && openComments > 0 && <span className="tab-count">{openComments}</span>}
           </a>
         ))}
       </nav>
       {tab === 'chat' && <AdminChat />}
       {tab === 'suggestions' && <SuggestionsAdmin />}
+      {tab === 'discussions' && <DiscussionsAdmin />}
       {tab === 'rules' && <RulesAdmin route={route} />}
       {tab === 'rulesets' && <RulesetsAdmin />}
       {tab === 'components' && (
