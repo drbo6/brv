@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
-import { compareValues, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
+import { compareValues, displayTitle, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
 import { dataIn } from '../lib/cardVersions.js';
 import { LABEL_CLASS } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
@@ -80,21 +80,32 @@ export default function ComponentsPage({ route }) {
   const cardChoices = useMemo(() => rs.apply(rs.selectedSet.cards, 'cards'), [rs.apply, rs.selectedSet.cards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const types = state.types || [];
-  const type = types.find((t) => t.id === route.parts[0]) || types[0];
+  const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
+  // All types are shown together; ?type= (or an old #/components/<type> link) narrows to one.
+  const legacyType = route.parts.length === 1 && typeById.has(route.parts[0]) ? route.parts[0] : '';
+  const filterType = typeById.has(route.params.get('type')) ? route.params.get('type') : legacyType;
+  // With one type selected (or only one type existing), its own filters and sorts apply.
+  const activeType = typeById.get(filterType) || (types.length === 1 ? types[0] : null);
+  const setFilterType = (id) => navigate('components', [], id ? { type: id } : {}, { replace: true });
+
+  // States are indexed per type on the printed cards; the detail view applies versions itself.
+  const printedOf = useMemo(() => {
+    const m = new Map(types.map((t) => [t.id, []]));
+    for (const c of state.components || []) m.get(c.typeId)?.push(c);
+    return m;
+  }, [state.components, types]);
+  const statesOf = useMemo(() => new Map(types.map((t) => [t.id, indexStates(t, printedOf.get(t.id) || [])])), [types, printedOf]);
+
   // Each component as the selected ruleset shows it (a chosen card version replaces fields).
   const comps = useMemo(() => {
-    if (!type) return [];
     const byId = new Map((cardVersionDocs.data || []).map((v) => [v.id, v]));
     return (state.components || [])
-      .filter((c) => c.typeId === type.id)
+      .filter((c) => typeById.has(c.typeId) && (!filterType || c.typeId === filterType))
       .map((c) => {
         const v = byId.get(cardChoices[c.id]);
         return v && v.componentId === c.id ? { ...c, data: dataIn(c, v), version: v } : c;
       });
-  }, [state.components, type, cardChoices, cardVersionDocs.data]);
-  // States are indexed on the printed cards; the detail view applies versions itself.
-  const printedComps = useMemo(() => (type ? (state.components || []).filter((c) => c.typeId === type.id) : []), [state.components, type]);
-  const states = useMemo(() => (type ? indexStates(type, printedComps) : null), [type, printedComps]);
+  }, [state.components, typeById, filterType, cardChoices, cardVersionDocs.data]);
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
@@ -104,58 +115,64 @@ export default function ComponentsPage({ route }) {
   const [sortDir, setSortDir] = useState(1);
   const [cardWidth, setCardWidth] = useLocalStorage('brv-card-width', 210);
   const [showStates, setShowStates] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(null); // type to add a component of
   useEffect(() => {
     setFilters({});
     setSortKey('');
-  }, [type?.id]);
+  }, [activeType?.id]);
 
-  const filterFields = useMemo(() => (type ? type.fields.filter((f) => f.filterable) : []), [type]);
+  const filterFields = useMemo(() => (activeType ? activeType.fields.filter((f) => f.filterable) : []), [activeType]);
   const filterOptions = useMemo(() => {
     const out = {};
     for (const f of filterFields) {
       const vals = new Set();
-      for (const c of comps) if (!isEmptyValue(c.data[f.key], type)) vals.add(String(c.data[f.key]));
+      for (const c of comps) if (!isEmptyValue(c.data[f.key], activeType)) vals.add(String(c.data[f.key]));
       out[f.key] = [...vals].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     }
     return out;
-  }, [filterFields, comps, type]);
-  const sortFields = useMemo(() => (type ? type.fields.filter((f) => ['id', 'title', 'type', 'value'].includes(f.kind)) : []), [type]);
+  }, [filterFields, comps, activeType]);
+  const sortFields = useMemo(() => (activeType ? activeType.fields.filter((f) => ['id', 'title', 'type', 'value'].includes(f.kind)) : []), [activeType]);
+  const idf = activeType && statesOf.get(activeType.id)?.idf;
 
   const searchIndex = useMemo(() => {
     const m = new Map();
-    if (!type) return m;
     for (const c of comps) {
+      const t = typeById.get(c.typeId);
       m.set(
         c.id,
-        type.fields
+        `${t.name} ${t.fields
           .filter((f) => f.kind !== 'image' && f.kind !== 'state')
           .map((f) => toPlainText(String(c.data[f.key] ?? '')))
-          .join(' ')
-          .toLowerCase(),
+          .join(' ')}`.toLowerCase(),
       );
     }
     return m;
-  }, [comps, type]);
+  }, [comps, typeById]);
 
+  const isState = (c) => statesOf.get(c.typeId)?.isState.has(c.id);
+  const stateCount = comps.filter(isState).length;
   const visible = useMemo(() => {
-    if (!type) return [];
     const tokens = q.split(/\s+/).filter(Boolean);
     const active = Object.entries(filters).filter(([, v]) => v);
-    const list = comps.filter(
-      (c) =>
-        (showStates || !states.isState.has(c.id)) &&
-        active.every(([k, v]) => String(c.data[k] ?? '') === v) &&
-        tokens.every((t) => searchIndex.get(c.id).includes(t)),
-    );
-    const key = sortKey || states.idf?.key;
-    if (key) list.sort((a, b) => sortDir * compareValues(a.data[key], b.data[key], type) || compareValues(a.data[states.idf?.key], b.data[states.idf?.key], type));
+    const list = comps.filter((c) => (showStates || !isState(c)) && active.every(([k, v]) => String(c.data[k] ?? '') === v) && tokens.every((t) => searchIndex.get(c.id).includes(t)));
+    if (activeType) {
+      const key = sortKey || idf?.key;
+      if (key) list.sort((a, b) => sortDir * compareValues(a.data[key], b.data[key], activeType) || compareValues(a.data[idf?.key], b.data[idf?.key], activeType));
+    } else {
+      // Several types: by type, then by title (or by title only).
+      const title = (c) => String(displayTitle(typeById.get(c.typeId), c)).toLowerCase();
+      list.sort((a, b) => sortDir * ((sortKey === 'title' ? 0 : typeById.get(a.typeId).order - typeById.get(b.typeId).order) || title(a).localeCompare(title(b), undefined, { numeric: true })));
+    }
     return list;
-  }, [comps, type, q, filters, sortKey, sortDir, showStates, states, searchIndex]);
+  }, [comps, activeType, typeById, q, filters, sortKey, sortDir, showStates, statesOf, searchIndex, idf]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const open = useCallback((c) => navigate('components', [type.id, c.id]), [type?.id]);
-  const detailId = route.parts[1];
+  const backParams = filterType ? { type: filterType } : {};
+  const open = useCallback((c) => navigate('components', [c.typeId, c.id], backParams), [filterType]); // eslint-disable-line react-hooks/exhaustive-deps
+  const detailId = route.parts.length === 2 ? route.parts[1] : null;
   const detail = detailId ? (state.components || []).find((c) => c.id === detailId) : null;
+  const detailType = detail && typeById.get(detail.typeId);
+  // Cards of different shapes share the grid: rows are as tall as the tallest shape.
+  const aspect = activeType ? activeType.aspect || 0.7 : Math.min(...types.map((t) => t.aspect || 0.7));
 
   if (state.error)
     return (
@@ -166,39 +183,40 @@ export default function ComponentsPage({ route }) {
       </div>
     );
   if (state.loading && !state.types) return <Spinner label="Loading components…" />;
-  if (!type)
+  if (!types.length)
     return (
       <div className="page">
         <Empty title="No components yet">
-          <p>{isEditor ? 'Create a component type and import a spreadsheet in Admin → Components.' : 'Admins have not added any components yet.'}</p>
+          <p>{isEditor ? 'Create a component type in Admin → Components, then add components here.' : 'Admins have not added any components yet.'}</p>
         </Empty>
       </div>
     );
 
   return (
     <div className="page components-page">
-      {types.length > 1 && (
-        <nav className="tabs" aria-label="Component types">
-          {types.map((t) => (
-            <a key={t.id} href={href('components', [t.id])} className={t.id === type.id ? 'on' : ''}>
-              {t.name}
-            </a>
-          ))}
-        </nav>
-      )}
       <div className="page-head">
-        <h1>{type.name}</h1>
+        <h1>{filterType ? activeType.name : 'Components'}</h1>
         <div className="page-head-side">
           <p className="muted small">
-            {visible.length} of {comps.length - (showStates ? 0 : states.isState.size)} shown
+            {visible.length} of {comps.length - (showStates ? 0 : stateCount)} shown
           </p>
         </div>
       </div>
       <section className="toolbar sticky" aria-label="Search, filter and sort">
         <div className="search">
           <Icon name="search" />
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${type.name.toLowerCase()}…`} aria-label="Search components" />
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${(filterType ? activeType.name : 'components').toLowerCase()}…`} aria-label="Search components" />
         </div>
+        {types.length > 1 && (
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="Filter by component type" title="Show one type of component">
+            <option value="">All types</option>
+            {types.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         {filterFields.map((f) => (
           <select key={f.key} value={filters[f.key] || ''} onChange={(e) => setFilters((m) => ({ ...m, [f.key]: e.target.value }))} aria-label={`Filter by ${f.label}`}>
             <option value="">All {f.label}</option>
@@ -211,20 +229,29 @@ export default function ComponentsPage({ route }) {
         ))}
         <div className="sort">
           <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} aria-label="Sort by">
-            <option value="">Sort: {states.idf?.label || 'default'}</option>
-            {sortFields
-              .filter((f) => f.key !== states.idf?.key)
-              .map((f) => (
-                <option key={f.key} value={f.key}>
-                  Sort: {f.label}
-                </option>
-              ))}
+            {activeType ? (
+              <>
+                <option value="">Sort: {idf?.label || 'default'}</option>
+                {sortFields
+                  .filter((f) => f.key !== idf?.key)
+                  .map((f) => (
+                    <option key={f.key} value={f.key}>
+                      Sort: {f.label}
+                    </option>
+                  ))}
+              </>
+            ) : (
+              <>
+                <option value="">Sort: type, then name</option>
+                <option value="title">Sort: name</option>
+              </>
+            )}
           </select>
           <button className="icon-btn" onClick={() => setSortDir((d) => -d)} aria-label={sortDir > 0 ? 'Ascending' : 'Descending'} title={sortDir > 0 ? 'Ascending' : 'Descending'}>
             <Icon name={sortDir > 0 ? 'arrowUp' : 'arrowDown'} />
           </button>
         </div>
-        {states.sf && (
+        {types.some((t) => statesOf.get(t.id)?.sf) && (
           <label className="switch">
             <input type="checkbox" checked={showStates} onChange={(e) => setShowStates(e.target.checked)} />
             <span className="switch-track" aria-hidden="true" />
@@ -236,12 +263,36 @@ export default function ComponentsPage({ route }) {
           <Icon name="grid" />
           <input type="range" min="130" max="360" step="10" value={cardWidth} onChange={(e) => setCardWidth(Number(e.target.value))} aria-label="Card size" />
         </label>
-        {isEditor && states.idf && (
-          <button className="primary" onClick={() => setAdding(true)} title={`Add a new ${type.name.toLowerCase()} by hand`}>
-            <Icon name="plus" />
-            Add
-          </button>
-        )}
+        {isEditor &&
+          (activeType ? (
+            idf && (
+              <button className="primary" onClick={() => setAdding(activeType)} title={`Add a new ${activeType.name.toLowerCase()} by hand`}>
+                <Icon name="plus" />
+                Add
+              </button>
+            )
+          ) : (
+            <details className="menu">
+              <summary className="btn primary-summary" title="Add a component by hand">
+                <Icon name="plus" />
+                Add
+              </summary>
+              <div className="menu-pop view-as-pop" role="menu">
+                <p className="menu-title">Add a…</p>
+                {types
+                  .filter((t) => statesOf.get(t.id)?.idf)
+                  .map((t) => (
+                    <button key={t.id} type="button" className="menu-item" role="menuitem" onClick={(e) => {
+                      e.currentTarget.closest('details').removeAttribute('open');
+                      setAdding(t);
+                    }}>
+                      <Icon name="plus" />
+                      <span>{t.name}</span>
+                    </button>
+                  ))}
+              </div>
+            </details>
+          ))}
       </section>
 
       {visible.length === 0 ? (
@@ -251,44 +302,41 @@ export default function ComponentsPage({ route }) {
       ) : (
         <VirtualGrid
           items={visible}
-          aspect={type.aspect || 0.7}
+          aspect={aspect}
           cardWidth={cardWidth}
-          renderItem={(c) => (
-            <ComponentCard
-              key={c.id}
-              type={type}
-              comp={c}
-              shorthands={shorthands}
-              hasStates={states.statesOf.has(String(c.data[states.idf?.key]))}
-              onClick={() => open(c)}
-            >
-              <CardBadges version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
-            </ComponentCard>
-          )}
+          renderItem={(c) => {
+            const t = typeById.get(c.typeId);
+            const st = statesOf.get(c.typeId);
+            return (
+              <ComponentCard key={c.id} type={t} comp={c} shorthands={shorthands} hasStates={st.statesOf.has(String(c.data[st.idf?.key]))} onClick={() => open(c)}>
+                <CardBadges version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
+              </ComponentCard>
+            );
+          }}
         />
       )}
 
-      {detail && (
+      {detail && detailType && (
         <ComponentDetail
-          type={type}
+          type={detailType}
           comp={detail}
-          states={states}
+          states={statesOf.get(detailType.id)}
           versionsOf={(id) => versionsByComp.get(id) || []}
           metaOf={(id) => metaById.get(id)}
           commentCount={(id) => commentsByComp.get(id) || 0}
-          allComps={printedComps}
+          allComps={printedOf.get(detailType.id) || []}
           onChanged={() => load(true)}
-          onClose={() => navigate('components', [type.id])}
+          onClose={() => navigate('components', [], backParams)}
         />
       )}
       {adding && (
         <ComponentForm
-          type={type}
-          comps={printedComps}
-          onClose={() => setAdding(false)}
+          type={adding}
+          comps={printedOf.get(adding.id) || []}
+          onClose={() => setAdding(null)}
           onSaved={async (id) => {
             await load(true);
-            if (id) navigate('components', [type.id, id]);
+            if (id) navigate('components', [adding.id, id], backParams);
           }}
         />
       )}

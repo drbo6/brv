@@ -4,8 +4,8 @@ A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rag
 
 - **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
-- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Admins define component types and their fields, arrange them on a simple card layout, import and export spreadsheets, and define `[shorthand]` icons.
-- **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
+- **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Editors add and edit components in place; admins define component types and their fields, arrange them on a simple card layout, and define `[shorthand]` icons.
+- **Admin.** Staff chat, a suggestions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup.
 - **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
 - **Inbox and following.** Signed-in users follow rules, cards, rulesets (and admins the suggestion feed) and get inbox notices about new comments, versions and changes. Commenting or suggesting follows automatically. A bell in the header shows unread notices.
 - **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
@@ -22,7 +22,7 @@ npm install
 npm run demo
 ```
 
-Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. To try the admin tools, sign in with the name **Admin**. Then go to **Admin → Backup & import** and import [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json).
+Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. A fresh demo starts with the Blood Rage content from [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json). To try the admin tools, sign in with the name **Admin** and claim ownership in **Admin → People**.
 
 ## Set up for real
 
@@ -76,17 +76,26 @@ Admins can also restrict a user with **No suggestions** (they can still comment 
 
 ### 6. Load the content
 
-Go to **Admin → Backup & import**, choose [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) and import it in **Merge** mode. It contains:
+The site has no import, on purpose. The owner loads prepared content from their computer with the project's service-account key:
+
+1. Firebase console → **Project settings → Service accounts → Generate new private key**. Keep the downloaded file private and never commit it.
+2. Run:
+
+   ```bash
+   node imports/load-into-firestore.mjs path/to/service-account.json imports/blood-rage-valhalla.json
+   ```
+
+[imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) contains:
 
 - the rulebook, transcribed verbatim: 138 rules in 30 sections;
 - a *Blood Rage: Valhalla cards* component type with a card layout, and the 132 cards from the card spreadsheet;
 - the `[rage]`, `[axes]`, `[horns]` and `[tribute]` shorthands, shown as emoji (replace them with image URLs if you like).
 
-The file uses fixed document IDs, so importing it again updates the same documents instead of adding duplicates. If you loaded the rulebook with an earlier version of the site, its rules have different IDs: import the file in **Replace** mode for the rule collections (sections, rules, versions) to avoid duplicates. You can undo an import.
+Documents are written with merge and the file uses fixed ids, so running it again updates the same documents instead of adding duplicates. Nothing outside the file is deleted.
 
 **Card art.** The spreadsheet's `Illustration` column holds file names, not URLs. If you host the art somewhere, open the *Illustration* field in **Admin → Components → Fields & layout**, set its **URL template** (for example `https://example.com/art/{value}.jpg`) and place it on the card.
 
-**Regenerating the file.** The import is built from [imports/blood-rage/rulebook.json](imports/blood-rage/rulebook.json) and the card spreadsheet:
+**Regenerating the file.** It is built from [imports/blood-rage/rulebook.json](imports/blood-rage/rulebook.json) and the card spreadsheet:
 
 ```bash
 node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
@@ -143,9 +152,9 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 
 ### Backups
 
-**Admin → Backup & import** exports any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`) and imports such files in *Merge* or *Replace* mode. Admins, user profiles and admin chat are left out of imports unless you tick them, and *Replace* never deletes your own admin entry.
+**Admin → Backup** (owner only) downloads any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`). The site has no import; `imports/load-into-firestore.mjs` loads such a file with a service-account key (see setup step 6).
 
-### Field kinds
+## Field kinds
 
 | Kind | Purpose |
 | --- | --- |

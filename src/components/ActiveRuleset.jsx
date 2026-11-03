@@ -4,7 +4,9 @@ import { db } from '../lib/firebase.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { autoFollow, notify, rulesetTarget } from '../lib/inbox.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, rulebookEntries, updateRuleset } from '../lib/rules.js';
+import { createRuleset, groupVersions, kindInfo, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
+import { displayTitle, loadComponents } from '../lib/components.js';
+import { exportRulesPdf } from '../lib/pdf.js';
 import { useSession } from '../lib/session.jsx';
 import FollowButton from './FollowButton.jsx';
 import RulesetSelect, { useRulesetChoice } from './RulesetSelect.jsx';
@@ -23,7 +25,7 @@ export const useActiveRuleset = () => useContext(Ctx);
 const EMPTY = { rules: {}, cards: {} };
 
 export function ActiveRulesetProvider({ route, children }) {
-  const { user, isEditor, requireUser } = useSession();
+  const { user, isEditor, requireUser, kinds, shorthands } = useSession();
   const choice = useRulesetChoice(route.params.get('set'));
   const { selectedSet, setStoredSetId } = choice;
   const ownsSet = Boolean(!selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor));
@@ -124,8 +126,76 @@ export function ActiveRulesetProvider({ route, children }) {
       return id;
     });
 
+  /** The whole active ruleset as a PDF: its rules in the versions it uses, then the cards it changes. */
+  const exportPdf = () =>
+    attempt(async () => {
+      const [secSnap, ruleSnap, verSnap] = await Promise.all(['sections', 'rules', 'versions'].map((c) => getDocs(collection(db, c))));
+      const docs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const tree = sectionTree(docs(secSnap));
+      const rules = docs(ruleSnap);
+      const sids = shortIds(rules);
+      const vByRule = groupVersions(docs(verSnap));
+      const entries = apply(selectedSet.builtIn ? rulebookEntries(rules, vByRule) : selectedSet.entries || {}, 'rules');
+
+      const bySection = new Map();
+      for (const r of sortRules(rules)) {
+        const v = (vByRule.get(r.id) || []).find((x) => x.id === entries[r.id]);
+        if (!v) continue;
+        if (!bySection.has(r.sectionId)) bySection.set(r.sectionId, []);
+        bySection.get(r.sectionId).push({
+          sid: sids.get(r.id),
+          ref: v.label !== 'Rulebook' ? `${sids.get(r.id)}.${v.num}` : '',
+          title: r.title,
+          label: v.label,
+          kindLabel: r.kind && r.kind !== 'rule' ? kindInfo(kinds, r.kind).label : '',
+          html: v.text,
+        });
+      }
+      // A section heading is kept when it, or a section inside it, has rules.
+      const total = new Map();
+      for (const sec of [...tree.ordered].reverse()) {
+        total.set(sec.id, (bySection.get(sec.id)?.length || 0) + (tree.children.get(sec.id) || []).reduce((n, c) => n + (total.get(c.id) || 0), 0));
+      }
+      const groups = tree.ordered.filter((sec) => total.get(sec.id) > 0).map((sec) => ({ heading: `${sec.number}  ${sec.title}`, depth: sec.depth, rules: bySection.get(sec.id) || [] }));
+
+      // Cards the ruleset plays in another version than printed.
+      const cards = apply(selectedSet.cards, 'cards');
+      if (Object.keys(cards).length) {
+        const [{ types, components }, cvSnap] = await Promise.all([loadComponents(), getDocs(collection(db, 'componentVersions'))]);
+        const cvs = new Map(docs(cvSnap).map((v) => [v.id, v]));
+        const cardRules = [];
+        for (const [compId, vid] of Object.entries(cards)) {
+          const comp = components.find((c) => c.id === compId);
+          const v = cvs.get(vid);
+          if (!comp || !v) continue;
+          const type = types.find((t) => t.id === comp.typeId);
+          const label = (key) => type?.fields.find((f) => f.key === key)?.label || key;
+          cardRules.push({
+            sid: '',
+            title: displayTitle(type, comp),
+            label: v.label,
+            html: Object.entries(v.data || {})
+              .map(([k, val]) => `<p><b>${label(k)}:</b> ${val}</p>`)
+              .join(''),
+          });
+        }
+        if (cardRules.length) groups.push({ heading: 'Card changes', depth: 0, rules: cardRules });
+      }
+
+      const name = `${selectedSet.name}${unsaved ? ' (unsaved changes)' : ''}`;
+      const count = groups.reduce((n, g) => n + (g.heading === 'Card changes' ? 0 : g.rules.length), 0);
+      await exportRulesPdf({
+        title: 'Blood Rage: Valhalla - Living Rulebook',
+        subtitle: `Ruleset: ${name} · ${count} rules · exported ${new Date().toLocaleDateString()}`,
+        groups,
+        shorthands,
+        filename: `brv-${name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}.pdf`,
+      });
+    });
+
   const value = {
     choice,
+    exportPdf,
     selectedSet,
     ownsSet,
     overrides,
@@ -242,6 +312,10 @@ export function RulesetBar({ page }) {
             </>
           ) : (
             <>
+              <button className="small" onClick={rs.exportPdf} title="Download this ruleset as a PDF: its rules in the versions it uses, and the cards it changes">
+                <Icon name="download" />
+                PDF
+              </button>
               {page === 'rules' && (
                 <button className="small" onClick={() => rs.setCustomizing(true)} title="Show an “In ruleset” switch on every rule, to choose which rules and versions your ruleset uses">
                   <Icon name="layers" />

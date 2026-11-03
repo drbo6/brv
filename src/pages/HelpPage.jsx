@@ -229,10 +229,11 @@ const TOPICS = [
     icon: 'grid',
     body: (
       <>
-        <p>The Components page shows every card (and other components) as tidy cards of the same size.</p>
+        <p>The Components page shows every component (cards and anything else the site tracks) together, as tidy cards.</p>
         <ul>
           <li>
-            <b>Search</b>, <b>filter</b> (by type, god…), <b>sort</b> and change the <b>card size</b> with the slider.
+            <b>Search</b> everything, or narrow it with the <b>type</b> filter. With one type chosen, its own filters (god, kind…) and sort options appear. Change the{' '}
+            <b>card size</b> with the slider.
           </li>
           <li>
             Click a card for its <b>details</b>: every field, including ones not shown on the card, and a link to it.
@@ -250,7 +251,7 @@ const TOPICS = [
         <h4>For editors</h4>
         <p>
           Editors work on cards right where they read them, like rules: <b>Add</b> in the toolbar creates a card, and a card's details have <b>Edit card</b> and{' '}
-          <b>Delete card</b>. Card types, fields, layout and spreadsheets stay in Admin → Components.
+          <b>Delete card</b>. Card types, fields and layout stay in Admin → Components.
         </p>
       </>
     ),
@@ -261,7 +262,7 @@ const TOPICS = [
     icon: 'undo',
     body: (
       <>
-        <p>Every change you save can be undone, from reactions to deleting a rule or importing a whole spreadsheet.</p>
+        <p>Every change you save can be undone, from reactions to deleting a rule or changing many rules at once in the rules table.</p>
         <ul>
           <li>
             The confirmation message after an action has an <b>Undo</b> button.
@@ -386,6 +387,10 @@ const TOPICS = [
             <b>Rule kinds:</b> the list of kinds with their name and color.
           </li>
           <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (section, kind, page, status), move it, approve it or delete it.</li>
+          <li>
+            <b>Table</b> (a tab in Admin → Rules): every rule in a sortable, filterable table. Change a rule's section, kind, status, page or title in place, or tick several
+            rules and change them together. <i>Columns</i> chooses what is shown.
+          </li>
         </ul>
         <h4>Rulesets</h4>
         <p>Make rulesets public or private and choose the site default that new visitors see.</p>
@@ -400,7 +405,7 @@ const TOPICS = [
       <>
         <p>
           Single cards are added and edited on the Components page itself. <b>Admin → Components</b> is for structure and bulk work: pick a component type (or create one)
-          and use its three tabs:
+          and use its two tabs:
         </p>
         <ol>
           <li>
@@ -408,10 +413,6 @@ const TOPICS = [
           </li>
           <li>
             <b>Table:</b> all components of that type in a sortable table, for bulk work: search, edit, add or delete, and use <i>Columns</i> to choose which fields are shown.
-          </li>
-          <li>
-            <b>Spreadsheet:</b> import an <code>.xlsx</code> or <code>.csv</code> file (map its columns to fields; rows are matched by ID), or export all components to{' '}
-            <code>.xlsx</code> or <code>.csv</code>.
           </li>
         </ol>
         <h4>Field kinds</h4>
@@ -483,7 +484,7 @@ const TOPICS = [
   },
   {
     id: 'admin-data',
-    title: 'People, backups and imports',
+    title: 'People and backups',
     icon: 'database',
     body: (
       <>
@@ -494,22 +495,12 @@ const TOPICS = [
           reason they will see. Changes can be undone and are listed in the <b>moderation log</b>. If the site has no owner yet, an admin from the original setup can
           claim it here once.
         </p>
-        <h4>Backup &amp; import</h4>
-        <ul>
-          <li>
-            <b>Export</b> downloads any set of collections as one JSON file. Keep regular backups.
-          </li>
-          <li>
-            <b>Import</b> reads such a file. <i>Merge</i> adds and overwrites documents with the same ID and leaves everything else alone. <i>Replace</i> makes each chosen collection
-            match the file exactly.
-          </li>
-          <li>Admins, user profiles and admin chat are only imported when you tick them, and Replace never removes your own admin entry.</li>
-          <li>Imports can be undone.</li>
-        </ul>
-        <Tip>
-          The repository contains <code>imports/blood-rage-valhalla.json</code> with the transcribed rulebook, the card type and layout, all cards and the icon shorthands. Import it in
-          Merge mode to set up a new site.
-        </Tip>
+        <h4>Backup</h4>
+        <p>
+          Owner only. Downloads any set of collections as one JSON file; keep regular backups somewhere safe. The site has no import: loading a file into the database
+          (for example the prepared Blood Rage content in <code>imports/</code>) is done by the owner from a computer, with the project's service-account key, as the README
+          explains.
+        </p>
       </>
     ),
   },

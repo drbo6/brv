@@ -1,6 +1,8 @@
 // Minimal in-browser stand-in for the subset of `firebase/firestore` this app uses.
 // Data lives in localStorage so demo edits survive reloads. Security rules are NOT enforced here.
 
+import seed from '../../imports/blood-rage-valhalla.json';
+
 const STORE_KEY = 'brv-demo-db';
 const listeners = new Set();
 let store = {}; // filled below, once Timestamp exists (load() revives timestamps)
@@ -62,6 +64,11 @@ export class Timestamp {
 }
 
 store = load();
+// A fresh demo starts with the Blood Rage content, so there is something to try.
+if (!Object.keys(store).length) {
+  store = JSON.parse(JSON.stringify(seed.collections), (k, v) => (v && typeof v === 'object' && '__ts' in v ? new Timestamp(v.__ts) : v));
+  persistAndNotify();
+}
 
 const SENTINEL = Symbol('sentinel');
 export const serverTimestamp = () => ({ [SENTINEL]: 'ts' });

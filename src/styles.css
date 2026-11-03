@@ -3740,6 +3740,60 @@ select.is-unsaved {
   }
 }
 
+/* ---------- rules table ---------- */
+
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
+.rules-table td {
+  vertical-align: middle;
+}
+
+.rules-table select,
+.rules-table input:not([type='checkbox']) {
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 0.88rem;
+}
+
+.rules-table .col-section select {
+  max-width: 220px;
+}
+
+.rules-table .col-title input {
+  min-width: 200px;
+  width: 100%;
+}
+
+.rules-table .col-versions,
+.rules-table .col-comments {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pick-cell {
+  width: 32px;
+}
+
+.rules-table tr.picked td {
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+}
+
+summary.primary-summary {
+  background: linear-gradient(180deg, var(--blood-2), var(--blood));
+  border-color: var(--blood);
+  color: #fff;
+}
+
 @media (max-width: 1100px) {
   .layout-split {
     grid-template-columns: minmax(0, 1fr);

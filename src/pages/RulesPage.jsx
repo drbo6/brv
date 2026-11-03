@@ -6,7 +6,6 @@ import { navigate } from '../lib/router.js';
 import { groupVersions, kindInfo, LABELS, moveRule, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
-import { exportRulesPdf } from '../lib/pdf.js';
 import RuleCard from '../components/RuleCard.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
 import { RuleDialog } from '../components/RuleDialogs.jsx';
@@ -189,32 +188,6 @@ export default function RulesPage({ route }) {
   const [dialog, setDialog] = useState(null);
   const jumpTo = (sectionId) => document.getElementById(`sec-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const exportPdf = () => {
-    const pdfGroups = groups.map(({ section, items: its }) => ({
-      heading: section.number ? `${section.number}  ${section.title}` : section.title,
-      depth: section.depth,
-      rules: its.map((it) => ({
-        sid: it.rule.sid,
-        ref: it.shown && it.shown.id !== it.activeVersion?.id ? `${it.rule.sid}.${it.shown.num}` : '',
-        title: it.rule.title,
-        label: it.shown?.label,
-        kindLabel: it.rule.kind && it.rule.kind !== 'rule' ? kindInfo(kinds, it.rule.kind).label : '',
-        inactive: !it.active,
-        html: it.shown?.text || '',
-      })),
-    }));
-    const name = `${selectedSet.name}${unsaved ? ' (unsaved changes)' : ''}${browsed.length ? `, ${browsed.length} rule${browsed.length === 1 ? '' : 's'} in other versions` : ''}`;
-    const filters = [q && `search "${q}"`, labelFilter && `label ${labelFilter}`, kindFilter && kindInfo(kinds, kindFilter).label, showInactive && 'including inactive rules'].filter(Boolean).join(', ');
-    return attempt(() =>
-      exportRulesPdf({
-        title: 'Blood Rage: Valhalla - Living Rulebook',
-        subtitle: `Ruleset: ${name} · ${items.length} rules${filters ? ` · ${filters}` : ''} · exported ${new Date().toLocaleDateString()}`,
-        groups: pdfGroups,
-        shorthands,
-        filename: `brv-rules-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`,
-      }),
-    );
-  };
 
   const loading = sections.loading || rules.loading || versions.loading;
   const anyError = sections.error || rules.error || versions.error;
@@ -288,10 +261,6 @@ export default function RulesPage({ route }) {
             <span>Show inactive</span>
           </label>
           <div className="toolbar-end">
-            <button onClick={exportPdf} disabled={!items.length} title="Download the rules currently shown as a PDF">
-              <Icon name="download" />
-              PDF
-            </button>
             <button onClick={() => requireUser(() => setDialog('newRule'), isEditor ? null : 'suggest')} disabled={!tree.ordered.length}>
               <Icon name="plus" />
               {isEditor ? 'Add rule' : 'Suggest rule'}
@@ -336,7 +305,7 @@ export default function RulesPage({ route }) {
           <Spinner label="Loading rules…" />
         ) : allRules.length === 0 ? (
           <Empty title="No rules yet">
-            <p>{isEditor ? 'Load the rules from Admin → Backup & import (for example imports/blood-rage-valhalla.json from the repository).' : 'An admin needs to import the rulebook first.'}</p>
+            <p>{isEditor ? 'Add the first rule with “Add rule”, or have the owner load prepared content (see the README).' : 'The rulebook hasn’t been added yet.'}</p>
           </Empty>
         ) : groups.length === 0 ? (
           <Empty title="No rules match">

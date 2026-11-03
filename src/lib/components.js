@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, increment, serverTimestamp, setDoc as rawSetDoc } from 'firebase/firestore';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { db } from './firebase.js';
-import { commitInChunks, knownState, onRevert, setDoc } from './store.js';
+import { commitInChunks, onRevert, setDoc } from './store.js';
 
 export const FIELD_KINDS = {
   id: { label: 'ID', help: 'Unique identifier. Exactly one per component type.' },
@@ -199,35 +199,4 @@ export async function saveComponent(type, data, previousId) {
 export async function deleteComponents(ids) {
   await commitInChunks(ids.map((id) => (b) => b.delete(doc(db, 'components', id))));
   await bumpComponentsVersion();
-}
-
-/** Upsert many rows; rows are { [fieldKey]: value } and must include the ID field. */
-export async function importComponents(type, rows, { removeMissing = false, existing = [] } = {}) {
-  const idf = idField(type);
-  const ids = new Set();
-  const ops = [];
-  // `existing` is fresh, so the undo history can use it instead of reading every document again.
-  const before = new Map(existing.map((c) => [c.id, c]));
-  for (const data of rows) {
-    const id = docIdFor(type.id, data[idf.key]);
-    if (!ids.has(id)) {
-      const prev = before.get(id);
-      knownState(doc(db, 'components', id), prev ? { typeId: prev.typeId, data: prev.data } : null);
-    }
-    ids.add(id);
-    ops.push((b) => b.set(doc(db, 'components', id), { typeId: type.id, data, updatedAt: serverTimestamp() }));
-  }
-  let removed = 0;
-  if (removeMissing) {
-    for (const c of existing) {
-      if (c.typeId === type.id && !ids.has(c.id)) {
-        knownState(doc(db, 'components', c.id), { typeId: c.typeId, data: c.data });
-        ops.push((b) => b.delete(doc(db, 'components', c.id)));
-        removed++;
-      }
-    }
-  }
-  await commitInChunks(ops);
-  await bumpComponentsVersion();
-  return { written: ids.size, removed };
 }

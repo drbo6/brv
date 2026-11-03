@@ -11,6 +11,7 @@ import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
+import RulesTable from '../components/admin/RulesTable.jsx';
 import FollowButton from '../components/FollowButton.jsx';
 import { cardTarget, notify, ruleTarget, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
@@ -20,15 +21,15 @@ const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
 const TABS = [
   { id: 'chat', label: 'Staff chat' },
   { id: 'suggestions', label: 'Suggestions' },
-  { id: 'rules', label: 'Rules' },
   { id: 'rulesets', label: 'Rulesets' },
+  { id: 'rules', label: 'Rules' },
   { id: 'components', label: 'Components' },
   { id: 'people', label: 'People', adminOnly: true },
-  { id: 'data', label: 'Backup & import' },
+  { id: 'data', label: 'Backup', ownerOnly: true },
 ];
 
 export default function AdminPage({ route }) {
-  const { user, isEditor, isAdmin, authLoading } = useSession();
+  const { user, isEditor, isAdmin, isOwner, authLoading } = useSession();
   // Waiting suggestions are counted on their tab.
   const pendingRules = useLive(() => (isEditor ? query(collection(db, 'versions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
   const pendingCards = useLive(() => (isEditor ? query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
@@ -50,7 +51,7 @@ export default function AdminPage({ route }) {
         </Empty>
       </div>
     );
-  const tabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const tabs = TABS.filter((t) => (!t.adminOnly || isAdmin) && (!t.ownerOnly || isOwner));
   const tab = tabs.find((t) => t.id === route.parts[0])?.id || 'chat';
   return (
     <div className="page admin-page">
@@ -67,7 +68,7 @@ export default function AdminPage({ route }) {
       </nav>
       {tab === 'chat' && <AdminChat />}
       {tab === 'suggestions' && <SuggestionsAdmin />}
-      {tab === 'rules' && <RulesAdmin />}
+      {tab === 'rules' && <RulesAdmin route={route} />}
       {tab === 'rulesets' && <RulesetsAdmin />}
       {tab === 'components' && (
         <Suspense fallback={<Spinner />}>
@@ -75,7 +76,7 @@ export default function AdminPage({ route }) {
         </Suspense>
       )}
       {tab === 'people' && isAdmin && <PeopleAdmin />}
-      {tab === 'data' && (
+      {tab === 'data' && isOwner && (
         <Suspense fallback={<Spinner />}>
           <DataAdmin />
         </Suspense>
@@ -161,16 +162,31 @@ function AdminChat() {
 
 // ---------------------------------------------------------------- rules
 
-/** Content sections and rule kinds. */
-function RulesAdmin() {
+/** Structure first (sections and kinds), then all rules as a table for bulk work. */
+function RulesAdmin({ route }) {
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
+  const sub = route.params.get('tab') === 'table' ? 'table' : 'structure';
   return (
-    <div className="admin-grid">
-      <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
-      <KindsEditor rules={rules.data || []} />
-    </div>
+    <>
+      <nav className="tabs small" aria-label="Rules sections">
+        <a href={href('admin', ['rules'])} className={sub === 'structure' ? 'on' : ''} title="The sections rules are grouped in, and the kinds of rule">
+          Sections &amp; kinds
+        </a>
+        <a href={href('admin', ['rules'], { tab: 'table' })} className={sub === 'table' ? 'on' : ''} title="All rules as a table, for bulk work on their details">
+          Table
+        </a>
+      </nav>
+      {sub === 'table' ? (
+        <RulesTable tree={tree} />
+      ) : (
+        <div className="admin-grid">
+          <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
+          <KindsEditor rules={rules.data || []} />
+        </div>
+      )}
+    </>
   );
 }
 

@@ -8,13 +8,11 @@ import { useLive } from '../../lib/hooks.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner } from '../ui.jsx';
 import TypeEditor from './TypeEditor.jsx';
-import Importer, { SpreadsheetExport } from './Importer.jsx';
 import ComponentList from './ComponentList.jsx';
 
 const SUBTABS = [
   { id: 'layout', label: 'Fields & layout', tip: 'Define the data fields and arrange them on the card' },
   { id: 'list', label: 'Table', tip: 'All components of this type as a table, for bulk work. Single cards can also be added and edited on the Components page.' },
-  { id: 'import', label: 'Spreadsheet', tip: 'Import components from, or export them to, an .xlsx or .csv file' },
 ];
 
 export default function ComponentsAdmin({ route }) {
@@ -84,8 +82,8 @@ export default function ComponentsAdmin({ route }) {
               Pick a component type, or create one. A type defines the data fields of a component (card, tile, board…) and how they are laid out when rendered.
             </p>
             <ol className="steps">
-              <li>Create a type, or load prepared content under Admin → Backup &amp; import.</li>
-              <li>Import a spreadsheet (.xlsx or .csv) and map its columns to fields.</li>
+              <li>Create a type: give it fields and arrange its card.</li>
+              <li>Add components on the Components page.</li>
               <li>Arrange the card layout and define shorthands, such as [rage] → 🩸.</li>
             </ol>
           </section>
@@ -99,12 +97,6 @@ export default function ComponentsAdmin({ route }) {
               ))}
             </nav>
             {sub === 'layout' && <TypeEditor key={type.id} type={type} comps={comps} allComponents={data.components} onSaved={reload} />}
-            {sub === 'import' && (
-              <div className="col gap">
-                <SpreadsheetExport type={type} comps={comps} />
-                <Importer key={type.id} type={type} comps={comps} onDone={reload} />
-              </div>
-            )}
             {sub === 'list' && <ComponentList key={type.id} type={type} comps={comps} editId={route.params.get('edit')} onChanged={reload} />}
           </>
         )}
