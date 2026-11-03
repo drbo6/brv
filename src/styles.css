@@ -3728,8 +3728,78 @@ select.is-unsaved {
   color: var(--gold-2);
 }
 
-.site-ruleset-pick select {
-  max-width: 280px;
+/* The ruleset picker: a button that opens the site's own menu (not the browser's select list). */
+.ruleset-menu {
+  position: relative;
+  min-width: 0;
+}
+
+.ruleset-btn {
+  max-width: 300px;
+  min-height: 34px;
+  padding: 4px 10px 4px 12px;
+  gap: 8px;
+  justify-content: space-between;
+  background: var(--bg-2);
+}
+
+.ruleset-menu.open .ruleset-btn {
+  border-color: var(--gold);
+}
+
+.ruleset-btn-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.ruleset-btn-status {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--gold-2);
+}
+
+.ruleset-btn.is-unsaved {
+  border-color: var(--gold);
+}
+
+.ruleset-pop {
+  left: 0;
+  right: auto;
+  min-width: 300px;
+  max-width: min(440px, calc(100vw - 32px));
+  max-height: min(70vh, 520px);
+  padding: 8px;
+  gap: 6px;
+}
+
+.ruleset-group {
+  display: grid;
+  gap: 2px;
+}
+
+.ruleset-group + .ruleset-group {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.ruleset-pop .menu-item b {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ruleset-pop .menu-item .tag {
+  font-size: 0.62rem;
+  padding: 0 6px;
+}
+
+.ruleset-pop .menu-item:focus-visible {
+  outline: 2px solid var(--gold-2);
+  outline-offset: -2px;
 }
 
 .site-ruleset-status {
@@ -3883,7 +3953,7 @@ select.is-unsaved {
     display: none;
   }
 
-  .site-ruleset-pick select {
+  .site-ruleset-pick .ruleset-btn {
     max-width: 200px;
   }
 }
