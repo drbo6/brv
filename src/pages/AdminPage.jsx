@@ -5,7 +5,7 @@ import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, groupVersions, LABEL_CLASS, shortIds, millis, reactionCounts, rulebookEntries, RULEBOOK_SET, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
+import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, groupVersions, LABEL_CLASS, shortIds, millis, reactionCounts, rulebookEntries, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
@@ -748,7 +748,8 @@ function RulesetsAdmin() {
       </p>
       {!hasPublic && !sets.loading && (
         <p className="callout small">
-          The site has no public ruleset yet, so readers see the <b>{RULEBOOK_SET.name}</b>. Use <b>New from the printed rules</b> to make it a real ruleset.
+          The site has no public ruleset yet: readers see every rule as printed, and the picker has nothing to offer. Use <b>New from the printed rules</b> to publish the
+          first ruleset.
         </p>
       )}
       {sets.loading ? (

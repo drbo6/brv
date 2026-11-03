@@ -32,9 +32,10 @@ export const DEFAULT_KINDS = [
 export const kindInfo = (kinds, id) => kinds.find((k) => k.id === (id || 'rule')) || { id, label: id, color: '' };
 
 /** The built-in ruleset: every active rule, using its Rulebook version. Never stored. */
-// No ruleset is "the" rulebook: rulebooks get editions. Until an admin publishes a ruleset, readers see
-// the printed rules through this stand-in, which admins can turn into a real ruleset.
-export const RULEBOOK_SET = { id: 'rulebook', name: 'Printed rules', description: 'Every rule as printed. Shown until the site has a public ruleset.', builtIn: true };
+// No ruleset is "the" rulebook: the printed rules are a ruleset like any other (the content ships one).
+// Only on a site without any public ruleset does this placeholder stand in, showing every rule as
+// printed. It is not offered as a ruleset: the picker says there is none yet.
+export const RULEBOOK_SET = { id: 'rulebook', name: 'No public ruleset yet', description: 'No ruleset has been published yet: every rule is shown as printed.', builtIn: true };
 
 /** What admins can call a ruleset, in the order the picker lists them, with each one's tag style. */
 export const SET_LABELS = { Official: 't-official', Community: 't-community', Experimental: 't-warn' };

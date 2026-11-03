@@ -19,7 +19,7 @@ export function useRulesetChoice(linkedSetId) {
 
   // Public rulesets, Official first, then Community, Experimental and unlabeled ones.
   const publicList = useMemo(() => sortSets(publicSets.data || []), [publicSets.data]);
-  // The printed rules only stand in while the site has no public ruleset.
+  // Only while the site has no public ruleset does the placeholder stand in (rules as printed).
   const printed = publicSets.loading || publicList.length === 0;
 
   const allSets = useMemo(() => {
@@ -56,7 +56,6 @@ export default function RulesetSelect({ choice, onChange, id = 'ruleset-select',
       {printed && (
         <option value={RULEBOOK_SET.id}>
           {RULEBOOK_SET.name}
-          {isDefault(RULEBOOK_SET.id)}
         </option>
       )}
       {groups.map((g) => (
