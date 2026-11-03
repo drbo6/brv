@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from '../lib/hooks.js';
 import { loadComponents } from '../lib/components.js';
-import { CARD_SIZES, cardGrid, cardWidthOf, PAGE_SIZES, paperOf, UNITS } from '../lib/pdf.js';
+import { CARD_SIZES, cardGrid, cardSizeOf, PAGE_SIZES, paperOf, UNITS } from '../lib/pdf.js';
 import { Icon, Modal } from './ui.jsx';
 
 const usLike = () => /^en-(US|CA)|^es-(MX|US)|^fr-CA/i.test(navigator.language || '');
@@ -10,12 +10,13 @@ const DEFAULTS = {
   format: US ? 'letter' : 'a4',
   perSheet: 1,
   cards: 'cards',
-  cardSize: 'm',
+  cardSize: 's',
   // Custom sizes, in `unit`.
   unit: US ? 'in' : 'mm',
   paperW: US ? 5.5 : 148,
   paperH: US ? 8.5 : 210,
-  cardW: US ? 2.5 : 63,
+  cardW: US ? 1.61 : 41,
+  cardH: US ? 2.5 : 63.5,
 };
 
 // Rounded for display in a number field.
@@ -80,7 +81,8 @@ export default function PdfDialog({ setName, onExport, onClose }) {
   const [saved, setSaved] = useLocalStorage('brv-pdf-options', DEFAULTS);
   const [o, setO] = useState(() => {
     const x = { ...DEFAULTS, ...saved };
-    return x.cardSize in CARD_SIZES || x.cardSize === 'custom' ? x : { ...x, cardSize: 'm' };
+    // Sizes that no longer exist (Poker, Large) fall back to Mini.
+    return x.cardSize in CARD_SIZES || x.cardSize === 'custom' ? x : { ...x, cardSize: 's' };
   });
   const set = (patch) => setO((x) => ({ ...x, ...patch }));
   // Switching units converts the custom sizes, so they stay the same size.
@@ -88,16 +90,16 @@ export default function PdfDialog({ setName, onExport, onClose }) {
     setO((x) => {
       if (x.unit === unit) return x;
       const k = UNITS[x.unit].pt / UNITS[unit].pt;
-      return { ...x, unit, paperW: round(x.paperW * k, unit), paperH: round(x.paperH * k, unit), cardW: round(x.cardW * k, unit) };
+      return { ...x, unit, paperW: round(x.paperW * k, unit), paperH: round(x.paperH * k, unit), cardW: round(x.cardW * k, unit), cardH: round(x.cardH * k, unit) };
     });
-  const [cards, setCards] = useState(null); // { count, aspect }
+  const [cards, setCards] = useState(null); // { count }
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let live = true;
     loadComponents()
-      .then(({ types, components }) => live && setCards({ count: components.length, aspect: types.find((t) => components.some((c) => c.typeId === t.id))?.aspect || 0.7 }))
-      .catch(() => live && setCards({ count: 0, aspect: 0.7 }));
+      .then(({ components }) => live && setCards({ count: components.length }))
+      .catch(() => live && setCards({ count: 0 }));
     return () => {
       live = false;
     };
@@ -114,8 +116,8 @@ export default function PdfDialog({ setName, onExport, onClose }) {
 
   const paper = paperOf(o);
   const paperName = o.format === 'custom' ? 'page' : `${PAGE_SIZES[o.format].label} page`;
-  const fit = (cardSize, cardW) => {
-    const g = cardGrid(paper, cards.aspect, cardWidthOf({ ...o, cardSize, cardW }));
+  const fit = (cardSize) => {
+    const g = cardGrid(paper, cardSizeOf({ ...o, cardSize }));
     return `${g.perPage} per ${paperName}, about ${Math.ceil(cards.count / g.perPage)} pages`;
   };
   return (
@@ -167,13 +169,20 @@ export default function PdfDialog({ setName, onExport, onClose }) {
                 value={o.cardSize}
                 onChange={(cardSize) => set({ cardSize })}
                 options={[
-                  ...Object.entries(CARD_SIZES).map(([value, s]) => ({ value, label: `${s.label} · ${s.mm} mm wide`, hint: fit(value) })),
-                  { value: 'custom', label: 'Custom', hint: o.cardSize === 'custom' ? fit('custom', o.cardW) : 'Any width; the height follows the card shape' },
+                  ...Object.entries(CARD_SIZES).map(([value, s]) => ({ value, label: `${s.label} · ${s.w} × ${s.h} mm`, hint: fit(value) })),
+                  { value: 'custom', label: 'Custom', hint: o.cardSize === 'custom' ? fit('custom') : 'Any width and height' },
                 ]}
               />
             )}
             {o.cards === 'cards' && o.cardSize === 'custom' && (
-              <SizeFields unit={o.unit} onUnit={setUnit} fields={[{ label: 'Card width', value: o.cardW, onChange: (cardW) => set({ cardW }) }]} />
+              <SizeFields
+                unit={o.unit}
+                onUnit={setUnit}
+                fields={[
+                  { label: 'Card width', value: o.cardW, onChange: (cardW) => set({ cardW }) },
+                  { label: 'Card height', value: o.cardH, onChange: (cardH) => set({ cardH }) },
+                ]}
+              />
             )}
           </>
         )}

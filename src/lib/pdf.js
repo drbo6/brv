@@ -20,11 +20,9 @@ export const PAGE_SIZES = {
   a4: { label: 'A4', hint: '210 × 297 mm', w: 595.28, h: 841.89 },
 };
 
-/** Card widths for the card overview (or a custom width). */
+/** Card sizes for the card overview (or a custom size). Mini is Blood Rage's own card size. */
 export const CARD_SIZES = {
-  // Mini is the size of Blood Rage's own cards (41 × 63.5 mm).
-  s: { label: 'Mini', mm: 41 },
-  m: { label: 'Poker', mm: 63 },
+  s: { label: 'Mini', w: 41, h: 63.5 },
 };
 
 const MM = 72 / 25.4;
@@ -42,24 +40,24 @@ export function paperOf(o) {
   return { w: Math.min(a, b), h: Math.max(a, b) };
 }
 
-/** The chosen card width in points. options: { cardSize, cardW, unit } */
-export function cardWidthOf(o) {
-  if (o.cardSize !== 'custom') return (CARD_SIZES[o.cardSize] || CARD_SIZES.m).mm * MM;
-  return clamp(o.cardW * (UNITS[o.unit]?.pt || MM), 25 * MM, 250 * MM, CARD_SIZES.m.mm * MM);
+/** The chosen card size in points: { w, h }. options: { cardSize, cardW, cardH, unit } */
+export function cardSizeOf(o) {
+  const mini = CARD_SIZES.s;
+  if (o.cardSize !== 'custom') return { w: mini.w * MM, h: mini.h * MM };
+  const k = UNITS[o.unit]?.pt || MM;
+  return { w: clamp(o.cardW * k, 20 * MM, 300 * MM, mini.w * MM), h: clamp(o.cardH * k, 20 * MM, 400 * MM, mini.h * MM) };
 }
 const CARD_MARGIN = 20;
-const CARD_GAP = 6;
-const CAPTION = 9;
 const HEADING = 26;
 
 /** How the card overview lays out on a page: card size in points, and how many fit. */
-export function cardGrid(page, aspect, width) {
-  // A card never gets bigger than the page holds.
-  const a = aspect || 0.7;
-  const w = Math.min(width, page.w - 2 * CARD_MARGIN, (page.h - 2 * CARD_MARGIN - HEADING - CAPTION) * a);
-  const h = w / a;
-  const cols = Math.max(1, Math.floor((page.w - 2 * CARD_MARGIN + CARD_GAP) / (w + CARD_GAP)));
-  const rows = Math.max(1, Math.floor((page.h - 2 * CARD_MARGIN - HEADING + CARD_GAP) / (h + CAPTION + CARD_GAP)));
+export function cardGrid(page, size) {
+  // Cards touch, so one cut separates two of them. A card never gets bigger than the page holds.
+  const fit = Math.min(1, (page.w - 2 * CARD_MARGIN) / size.w, (page.h - 2 * CARD_MARGIN - HEADING) / size.h);
+  const w = size.w * fit;
+  const h = size.h * fit;
+  const cols = Math.max(1, Math.floor((page.w - 2 * CARD_MARGIN) / w));
+  const rows = Math.max(1, Math.floor((page.h - 2 * CARD_MARGIN - HEADING) / h));
   return { w, h, cols, rows, perPage: cols * rows };
 }
 
@@ -214,7 +212,7 @@ export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = []
   // ---------- cards ----------
   const withCards = cardTypes.filter((t) => t.cards.length);
   if (cardMode === 'table') for (const t of withCards) cardTable(pdf, t, { paper, format, title, shText });
-  if (cardMode === 'cards') for (const t of withCards) await cardSheets(pdf, t, { paper, format, cardW: cardWidthOf(options), title, shText });
+  if (cardMode === 'cards') for (const t of withCards) await cardSheets(pdf, t, { paper, format, size: cardSizeOf(options), title, shText });
 
   pdf.save(filename);
 }
@@ -244,10 +242,10 @@ function pageFooter(pdf, text, x, y) {
 const fieldsOf = (type) => new Map(type.fields.map((f) => [f.key, f]));
 const changedNote = (cards) => (cards.some((c) => c.label) ? 'Cards in another version than printed are marked with that version.' : 'All cards as printed.');
 
-/** Cards drawn as cards, in a grid, with the version under any card that isn't printed. */
-async function cardSheets(pdf, { type, cards }, { paper: page, format, cardW, title, shText }) {
-  const g = cardGrid(page, type.aspect, cardW);
-  const left = (page.w - (g.cols * g.w + (g.cols - 1) * CARD_GAP)) / 2;
+/** Cards drawn as cards, edge to edge in a grid, marked with their version when it isn't printed. */
+async function cardSheets(pdf, { type, cards }, { paper: page, format, size, title, shText }) {
+  const g = cardGrid(page, size);
+  const left = (page.w - g.cols * g.w) / 2;
   for (let i = 0; i < cards.length; i++) {
     const at = i % g.perPage;
     if (at === 0) {
@@ -257,20 +255,14 @@ async function cardSheets(pdf, { type, cards }, { paper: page, format, cardW, ti
     }
     const col = at % g.cols;
     const row = Math.floor(at / g.cols);
-    const x = left + col * (g.w + CARD_GAP);
-    const y = CARD_MARGIN + HEADING + row * (g.h + CAPTION + CARD_GAP);
-    await drawCard(pdf, type, cards[i].data, x, y, g.w, g.h, shText);
-    if (cards[i].label) {
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7);
-      pdf.setTextColor(140, 28, 26);
-      pdf.text(pdfSafe(cards[i].label), x + g.w / 2, y + g.h + 8, { align: 'center' });
-    }
+    const x = left + col * g.w;
+    const y = CARD_MARGIN + HEADING + row * g.h;
+    await drawCard(pdf, type, cards[i].data, x, y, g.w, g.h, shText, cards[i].label);
   }
 }
 
 /** One card, following the type's layout: rows top to bottom, fields side by side. */
-async function drawCard(pdf, type, data, x, y, w, h, shText) {
+async function drawCard(pdf, type, data, x, y, w, h, shText, versionLabel) {
   const u = w * 0.05;
   const accent = hexRgb((type.accentField && type.accentColors?.[data[type.accentField]]) || type.defaultAccent);
   const fields = fieldsOf(type);
@@ -278,10 +270,8 @@ async function drawCard(pdf, type, data, x, y, w, h, shText) {
     .rows.map((r) => ({ ...r, cells: r.cells.filter((c) => fields.has(c.key) && !isEmptyValue(data[c.key], type)) }))
     .filter((r) => r.cells.length);
 
-  pdf.setLineWidth(0.6);
-  pdf.setDrawColor(185, 178, 170);
   pdf.setFillColor(255, 255, 255);
-  pdf.roundedRect(x, y, w, h, u * 0.5, u * 0.5, 'FD');
+  pdf.rect(x, y, w, h, 'F');
 
   const padX = 0.9 * u;
   const gap = 0.6 * u;
@@ -310,7 +300,7 @@ async function drawCard(pdf, type, data, x, y, w, h, shText) {
       if (!r.fill && f.kind !== 'ability' && f.kind !== 'lore') {
         pdf.setFontSize(fs);
         const tw = pdf.getTextWidth(text);
-        if (tw > cw) fs = Math.max(fs * 0.6, (fs * cw) / tw);
+        if (tw > cw) fs = Math.max(fs * 0.45, (fs * cw) / tw);
       }
       pdf.setFontSize(fs);
       const lines = pdf.splitTextToSize(text, cw);
@@ -392,12 +382,18 @@ async function drawCard(pdf, type, data, x, y, w, h, shText) {
     cy += rh;
   }
 
-  // The accent edge on top, and the outline again over any band.
+  // The accent edge on top, the version in the bottom corner, and a square outline to cut along.
   pdf.setFillColor(...accent);
-  pdf.rect(x + 0.3, y + 0.3, w - 0.6, top, 'F');
-  pdf.setDrawColor(185, 178, 170);
-  pdf.setLineWidth(0.6);
-  pdf.roundedRect(x, y, w, h, u * 0.5, u * 0.5, 'S');
+  pdf.rect(x, y, w, top, 'F');
+  if (versionLabel) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(Math.max(5, 0.62 * u));
+    pdf.setTextColor(140, 28, 26);
+    pdf.text(pdfSafe(versionLabel.toUpperCase()), x + w - padX, y + h - 0.5 * u, { align: 'right' });
+  }
+  pdf.setDrawColor(150, 142, 135);
+  pdf.setLineWidth(0.5);
+  pdf.rect(x, y, w, h, 'S');
 }
 
 /** Cards as a table: the fields shown on the card, one card per row, on landscape pages. */
