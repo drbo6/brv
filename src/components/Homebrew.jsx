@@ -1,12 +1,14 @@
-import { autoFollow, notify, ruleTarget, SUGGESTIONS } from '../lib/inbox.js';
-import { shortIds } from '../lib/rules.js';
+import { autoFollow, notify, SUGGESTIONS } from '../lib/inbox.js';
 import { deleteHomebrew, shareHomebrew, withdrawHomebrew } from '../lib/homebrew.js';
 import { useSession } from '../lib/session.jsx';
 import { confirmDialog } from './dialogs.jsx';
 import { attempt, Icon } from './ui.jsx';
 
-/** Where a homebrew stands: private, shared for review, or accepted (with the public label). */
-export const homebrewState = (pub) => (!pub ? 'private' : pub.label === 'Suggestion' ? 'shared' : 'accepted');
+/**
+ * Where a homebrew stands: private, submitted (shared with the admins), shared (a public
+ * suggestion), or accepted (with the public label). `pub` is its public copy, if any.
+ */
+export const homebrewState = (pub, hb) => (pub ? (pub.label === 'Suggestion' ? 'shared' : 'accepted') : hb?.submitted ? 'submitted' : 'private');
 
 /**
  * The author's view of their homebrew on a rule or card: what it is, and buttons to share it,
@@ -15,31 +17,31 @@ export const homebrewState = (pub) => (!pub ? 'private' : pub.label === 'Suggest
  */
 export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
   const { requireUser } = useSession();
-  const state = homebrewState(pub);
+  const state = homebrewState(pub, hb);
   const what = hb.kind === 'rule' ? 'rule' : hb.kind === 'card' ? 'card change' : 'version';
 
   const share = () =>
     requireUser(async (u) => {
       const ok = await confirmDialog({
-        title: 'Share your homebrew',
-        message: `Your ${what} becomes a public suggestion: everyone can see it, react to it and discuss it. Admins may accept it as a Community version or Official Ruling, or add it to a public ruleset. You can keep editing it, and withdraw it while it is under review.`,
-        confirmLabel: 'Share for review',
+        title: hb.declinedAt ? 'Share your homebrew again' : 'Share your homebrew with the admins',
+        message: `Your ${what} goes to the admins first; until then only you and they see it. If they make it a public Suggestion, everyone can react to it and discuss it, and the admins may later accept it as a Community version or Official Ruling. You can keep editing it, and withdraw it at any time while it is under review.`,
+        confirmLabel: 'Share with the admins',
       });
-      const id = ok && (await attempt(() => shareHomebrew(hb, u), 'Shared for review: it now has its own discussion'));
-      if (!id) return;
-      // A shared homebrew rule is a new (suggested) rule; everything else belongs to its rule or card.
-      const t = hb.kind === 'rule' ? ruleTarget({ id, title: hb.title, sid: shortIds([{ id }]).get(id) }) : target;
+      if (!ok || !(await attempt(() => shareHomebrew(hb), 'Shared with the admins'))) return;
       // Sharing follows the rule or card, so the author hears what others say about it.
-      autoFollow(t.key, u.uid, t);
-      const title = hb.kind === 'rule' ? `${u.displayName || 'Someone'} shared a homebrew rule: ${hb.title}` : `${u.displayName || 'Someone'} shared a homebrew ${what} for ${t.label}`;
-      if (hb.kind !== 'rule') notify(t.key, u, { type: 'suggestion', title, text: hb.text || '', link: t.link });
-      notify(SUGGESTIONS.key, u, { type: 'suggestion', title, text: hb.text || '', link: t.link });
+      // (A homebrew rule has nothing public to follow yet.)
+      if (hb.kind !== 'rule') autoFollow(target.key, u.uid, target);
+      const title = hb.kind === 'rule' ? `${u.displayName || 'Someone'} shared a homebrew rule with the admins: ${hb.title}` : `${u.displayName || 'Someone'} shared a homebrew ${what} for ${target.label} with the admins`;
+      notify(SUGGESTIONS.key, u, { type: 'suggestion', title, text: hb.text || '', link: SUGGESTIONS.link });
     }, 'suggest');
 
   const withdraw = async () =>
     (await confirmDialog({
       title: 'Withdraw from review',
-      message: `Take your ${what} back? The public copy and its discussion go away; your homebrew stays, private to you.`,
+      message:
+        state === 'shared'
+          ? `Take your ${what} back? The public suggestion and its discussion go away; your homebrew stays, private to you.`
+          : `Take your ${what} back from the admins? Your homebrew stays, private to you, and you can share it again later.`,
       confirmLabel: 'Withdraw',
     })) && attempt(() => withdrawHomebrew(hb), 'Withdrawn: your homebrew is private again');
 
@@ -47,7 +49,7 @@ export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
     const message =
       state === 'accepted'
         ? `Remove this from your homebrew list? The accepted ${pub.label} version stays public.`
-        : `Delete your homebrew ${what}?${state === 'shared' ? ' It is withdrawn from review too.' : ''}`;
+        : `Delete your homebrew ${what}?${state === 'shared' || state === 'submitted' ? ' It is withdrawn from review too.' : ''}`;
     if (!(await confirmDialog({ title: 'Delete homebrew', message, confirmLabel: 'Delete', danger: true }))) return;
     if (await attempt(() => deleteHomebrew(hb), 'Homebrew deleted')) onDeleted?.();
   };
@@ -62,14 +64,19 @@ export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
             {hb.declineReason !== undefined && hb.declinedAt && (
               <span className="homebrew-declined">
                 {' '}
-                It was shared and turned down{hb.declineReason ? `: “${hb.declineReason}”` : '.'}
+                The admins turned it down{hb.declineReason ? `: “${hb.declineReason}”` : '.'} You can still play it, change it and share it again.
               </span>
             )}
           </>
         )}
+        {state === 'submitted' && (
+          <>
+            <b>Shared with the admins.</b> Only you and they see it until they make it a public suggestion.
+          </>
+        )}
         {state === 'shared' && (
           <>
-            <b>Shared for review.</b> Everyone can see and discuss it; admins decide whether to accept it.
+            <b>Public suggestion.</b> Everyone can see and discuss it; admins decide whether to accept it.
           </>
         )}
         {state === 'accepted' && (
@@ -80,18 +87,18 @@ export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
       </span>
       <span className="homebrew-bar-actions">
         {state !== 'accepted' && (
-          <button className="chip" onClick={onEdit} title={state === 'shared' ? 'Edit it: the shared copy changes too' : 'Edit your homebrew'}>
+          <button className="chip" onClick={onEdit} title={state === 'shared' ? 'Edit it: the public suggestion changes too' : 'Edit your homebrew'}>
             <Icon name="edit" />
             Edit
           </button>
         )}
         {state === 'private' && (
-          <button className="chip ok" onClick={share} title="Share it with everyone, for the admins to review">
+          <button className="chip ok" onClick={share} title="Share it with the admins, who can make it a public suggestion">
             <Icon name="share" />
-            Share
+            {hb.declinedAt ? 'Share again' : 'Share'}
           </button>
         )}
-        {state === 'shared' && (
+        {(state === 'shared' || state === 'submitted') && (
           <button className="chip" onClick={withdraw} title="Take it back from review">
             <Icon name="undo" />
             Withdraw

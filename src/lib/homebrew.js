@@ -9,13 +9,18 @@ import { deleteDoc, knownState, writeBatch } from './store.js';
 //   kind 'rule':    { sectionId, title, text } a rule of their own, in an existing section
 //   kind 'card':    { componentId, typeId, data } changed fields of a card
 // Only the owner can read it, so it shows on their screen only and can be used in their rulesets
-// (as "hb:<id>"). Sharing it copies it into the public versions (or rules) as a Suggestion with
-// `homebrewId`, where everyone can discuss it and admins review it. Turning a shared homebrew down
-// removes the public copy and hands it back, private again, with the admin's reason.
+// (as "hb:<id>"). Sharing it sends it to the admins (`submitted`), still out of public view. An
+// admin then makes it a public Suggestion: a copy in the public versions (or rules) with
+// `homebrewId`, credited to its author, where everyone can discuss it. Admins finally accept it as
+// Community or Official Ruling. Turning it down at either step hands it back, private again, with
+// the admin's reason; its author can change it and share it again.
 
 export const HOMEBREW = 'Homebrew';
 
 export const myHomebrewQuery = (uid) => (uid ? query(collection(db, 'homebrew'), where('ownerUid', '==', uid)) : null);
+
+/** Homebrew shared with the admins and waiting for them (editors only). */
+export const submittedHomebrewQuery = () => query(collection(db, 'homebrew'), where('submitted', '==', true));
 
 /** Ids of homebrew that has a public copy, from the public lists already loaded. */
 const publicIds = (...lists) => new Set(lists.flat().map((d) => d.homebrewId).filter(Boolean));
@@ -93,7 +98,6 @@ export async function privateHomebrewCount(set) {
 // ---------- writes (the owner's) ----------
 
 const owner = (user) => ({ ownerUid: user.uid, ownerName: user.displayName || 'Anonymous' });
-const author = (user) => ({ createdBy: user.uid, createdByName: user.displayName || 'Anonymous' });
 
 /** Where a homebrew goes in a ruleset: the rule (or card) it stands in for. */
 const setField = (h, id) => (h.kind === 'card' ? `cards.${h.componentId}` : `entries.${h.kind === 'rule' ? HB + id : h.ruleId}`);
@@ -138,10 +142,19 @@ export async function updateHomebrew(h, patch) {
   await batch.commit();
 }
 
-/** Share a homebrew for review: it becomes a public Suggestion. Returns the public id. */
-export async function shareHomebrew(h, user) {
+const noDecline = { declineReason: deleteField(), declinedBy: deleteField(), declinedAt: deleteField() };
+
+/** Share a homebrew with the admins. Nobody else sees it until they make it a suggestion. */
+export async function shareHomebrew(h) {
   const batch = writeBatch();
-  const base = { label: 'Suggestion', note: h.note || '', reactions: {}, homebrewId: h.id, createdAt: serverTimestamp(), ...author(user) };
+  batch.update(doc(db, 'homebrew', h.id), { submitted: true, submittedAt: serverTimestamp(), ...noDecline, updatedAt: serverTimestamp() });
+  await batch.commit();
+}
+
+/** An admin makes a shared homebrew a public Suggestion, credited to its author. Returns the public id. */
+export async function publishHomebrew(h) {
+  const batch = writeBatch();
+  const base = { label: 'Suggestion', note: h.note || '', reactions: {}, homebrewId: h.id, createdAt: serverTimestamp(), createdBy: h.ownerUid, createdByName: h.ownerName || 'Anonymous' };
   let sharedId;
   let sharedVersionId = null;
   if (h.kind === 'version') {
@@ -154,7 +167,7 @@ export async function shareHomebrew(h, user) {
     const order = Math.max(0, ...siblings.docs.map((d) => d.data().order ?? 0)) + 1;
     const rule = doc(collection(db, 'rules'));
     const version = doc(collection(db, 'versions'));
-    batch.set(rule, { sectionId: h.sectionId, order, title: h.title, kind: 'rule', status: 'suggested', page: null, commentCount: 0, homebrewId: h.id, createdAt: serverTimestamp(), ...author(user) });
+    batch.set(rule, { sectionId: h.sectionId, order, title: h.title, kind: 'rule', status: 'suggested', page: null, commentCount: 0, homebrewId: h.id, createdAt: serverTimestamp(), createdBy: h.ownerUid, createdByName: h.ownerName || 'Anonymous' });
     batch.set(version, { ...base, ruleId: rule.id, text: h.text, n: 1 });
     sharedId = rule.id;
     sharedVersionId = version.id;
@@ -163,16 +176,23 @@ export async function shareHomebrew(h, user) {
     batch.set(ref, { ...base, componentId: h.componentId, typeId: h.typeId, data: h.data || {} });
     sharedId = ref.id;
   }
-  batch.update(doc(db, 'homebrew', h.id), { sharedId, sharedVersionId, declineReason: deleteField(), declinedBy: deleteField(), declinedAt: deleteField(), updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'homebrew', h.id), { sharedId, sharedVersionId, submitted: false, ...noDecline });
   await batch.commit();
   return sharedId;
 }
 
-/** Take a shared homebrew back while it is under review: the public copy goes, the homebrew stays. */
+/** An admin turns down a homebrew shared with them: it stays private to its author, with the reason. */
+export async function turnDownHomebrew(h, reason, admin) {
+  const batch = writeBatch();
+  batch.update(doc(db, 'homebrew', h.id), { submitted: false, declineReason: reason || '', declinedBy: admin.uid, declinedAt: serverTimestamp() });
+  await batch.commit();
+}
+
+/** Take a shared homebrew back, from the admins or from public review: the homebrew stays, private. */
 export async function withdrawHomebrew(h) {
   const batch = writeBatch();
   for (const [col, id] of publicDocs(h)) if (id) batch.delete(doc(db, col, id));
-  batch.update(doc(db, 'homebrew', h.id), { sharedId: null, sharedVersionId: null, updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'homebrew', h.id), { submitted: false, sharedId: null, sharedVersionId: null, updatedAt: serverTimestamp() });
   await batch.commit();
 }
 

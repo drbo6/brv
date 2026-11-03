@@ -117,7 +117,7 @@ export function ActiveRulesetProvider({ route, children }) {
       if (brewSet) return open();
       const own = await confirmDialog({
         title: 'Homebrew needs a ruleset of your own',
-        message: `Your homebrew goes into the ruleset you are using, so you can play it right away. “${selectedSet.name}” isn't yours to change. Switch to one of your own rulesets in the ruleset bar, or make your own copy of this one, then choose Homebrew again.`,
+        message: `Your homebrew goes into the ruleset you are using, so you can play it right away. “${selectedSet.name}” isn't yours to change: switch to one of your own rulesets in the ruleset bar, or make your own copy of this one, then choose Homebrew again. Would you like a Rulebook, Official Ruling or Community version to change for everyone? Say so with Discuss on that rule or card, or write your homebrew in your own ruleset and share it with the admins.`,
         confirmLabel: 'Make my own copy',
         cancelLabel: 'Not now',
       });
@@ -236,20 +236,21 @@ export function ActiveRulesetProvider({ route, children }) {
       const n = hidden.length;
       const share = await confirmDialog({
         title: 'This ruleset uses your homebrew',
-        message: `${n === 1 ? 'One homebrew' : `${n} homebrews`} in “${selectedSet.name}” ${n === 1 ? 'is' : 'are'} private: others opening the link won't see ${n === 1 ? 'it' : 'them'}, and the ruleset can't be made public. Share ${n === 1 ? 'it' : 'them'} for review? Everyone can then see and discuss ${n === 1 ? 'it' : 'them'}.`,
+        message: `${n === 1 ? 'One homebrew' : `${n} homebrews`} in “${selectedSet.name}” ${n === 1 ? 'is' : 'are'} private: others opening the link won't see ${n === 1 ? 'it' : 'them'}, and the ruleset can't be made public. Share ${n === 1 ? 'it' : 'them'} with the admins? Once they make ${n === 1 ? 'it a public suggestion' : 'them public suggestions'}, everyone with the link sees ${n === 1 ? 'it' : 'them'}.`,
         confirmLabel: n === 1 ? 'Share it and copy the link' : `Share ${n} and copy the link`,
         cancelLabel: 'Copy the link without them',
       });
-      if (share) {
+      const unshared = hidden.filter((h) => !h.submitted);
+      if (share && unshared.length) {
         const ok = await requireUser(
           (u) =>
             attempt(async () => {
-              for (const h of hidden) await shareHomebrew(h, u);
+              for (const h of unshared) await shareHomebrew(h);
               return true;
-            }, `Shared ${n === 1 ? 'your homebrew' : `${n} homebrews`} for review`),
+            }, `Shared ${unshared.length === 1 ? 'your homebrew' : `${unshared.length} homebrews`} with the admins`),
           'suggest',
         );
-        if (ok) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} shared ${n === 1 ? 'a homebrew' : `${n} homebrews`} from the ruleset “${selectedSet.name}”`, text: '', link: SUGGESTIONS.link });
+        if (ok) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} shared ${unshared.length === 1 ? 'a homebrew' : `${unshared.length} homebrews`} from the ruleset “${selectedSet.name}” with the admins`, text: '', link: SUGGESTIONS.link });
       }
     }
     await copyText(absoluteLink(page, [], { set: selectedSet.id }));

@@ -7,7 +7,7 @@ import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset } from '../lib/rules.js';
 import { plainToHtml, toPlainText } from '../lib/html.js';
-import { acceptSuggestion, declineSuggestion, privateHomebrewCount } from '../lib/homebrew.js';
+import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
@@ -35,7 +35,8 @@ export default function AdminPage({ route }) {
   // Waiting suggestions are counted on their tab.
   const pendingRules = useLive(() => (isEditor ? query(collection(db, 'versions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
   const pendingCards = useLive(() => (isEditor ? query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
-  const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0);
+  const pendingHomebrew = useLive(() => (isEditor ? submittedHomebrewQuery() : null), [isEditor]);
+  const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0) + (pendingHomebrew.data?.length || 0);
   const recentComments = useLive(() => (isEditor ? discussionsQuery() : null), [isEditor]);
   const openComments = (recentComments.data || []).filter((c) => !c.handled).length;
   if (authLoading) return <Spinner />;
@@ -268,7 +269,7 @@ function SuggestionsAdmin() {
     const reason = await promptDialog({
       title: 'Turn down',
       message: v.homebrewId
-        ? 'The public copy and its discussion are removed, and it goes back to its author as private homebrew. They see your reason.'
+        ? 'The public suggestion and its discussion are removed, and it goes back to its author as private homebrew. They see your reason, and can change it and share it again.'
         : 'The suggestion is removed. Its author sees your reason.',
       label: 'Reason',
       placeholder: 'e.g. It changes the balance of the Ragnarök phase too much',
@@ -282,6 +283,45 @@ function SuggestionsAdmin() {
     if (ok) notifyUser(v.createdBy, target.key, user, { type: 'declined', title: `${who} turned down your ${what(v)} for ${target.label}`, text: reason.trim(), link });
   };
 
+  // Homebrew shared with the admins: nobody else sees it until it is made a public suggestion.
+  const homebrew = useLive(() => submittedHomebrewQuery(), []);
+  const sections = useLive(() => collection(db, 'sections'), []);
+  const sectionName = (id) => (sections.data || []).find((s) => s.id === id)?.title || 'a section';
+  const brewTarget = (h, id) =>
+    h.kind === 'card'
+      ? cardTarget({ id: h.componentId, typeId: h.typeId }, h.data?.title || h.componentId.split('__').pop())
+      : h.kind === 'rule'
+        ? ruleTarget({ id, title: h.title, sid: shortIds([{ id }]).get(id) })
+        : ruleById.get(h.ruleId)
+          ? ruleTarget(ruleById.get(h.ruleId))
+          : { key: `rule_${h.ruleId}`, label: 'a deleted rule', link: { page: 'rules', parts: [] } };
+
+  /** Making a shared homebrew a public suggestion tells its author and everyone following the rule or card. */
+  const publish = async (h) => {
+    const id = await attempt(() => publishHomebrew(h), 'Now a public suggestion');
+    if (!id) return;
+    const t = brewTarget(h, id);
+    const text = h.kind === 'card' ? `Changes: ${Object.keys(h.data || {}).join(', ')}` : h.text || '';
+    notifyUser(h.ownerUid, t.key, user, { type: 'suggestion', title: `${who} made your homebrew for ${t.label} a public suggestion`, text, link: t.link });
+    if (h.kind !== 'rule') notify(t.key, user, { type: 'suggestion', title: `New suggestion for ${t.label}, by ${h.ownerName || 'someone'}`, text, link: t.link }, { skip: [h.ownerUid] });
+  };
+
+  const turnDown = async (h) => {
+    const reason = await promptDialog({
+      title: 'Turn down',
+      message: 'It stays private to its author, who sees your reason and can change it and share it again.',
+      label: 'Reason',
+      placeholder: 'e.g. Please keep the wording civil',
+      confirmLabel: 'Turn down',
+      danger: true,
+    });
+    if (reason == null) return;
+    if (!(await attempt(() => turnDownHomebrew(h, reason.trim(), user), 'Turned down: it is back in its author’s homebrew'))) return;
+    const t = h.kind === 'rule' ? { key: `homebrew_${h.id}`, label: `the rule “${h.title}”`, link: { page: 'rules', parts: [] } } : brewTarget(h);
+    notifyUser(h.ownerUid, t.key, user, { type: 'declined', title: `${who} turned down your homebrew for ${t.label}`, text: reason.trim(), link: t.link });
+  };
+
+  const brewQueue = [...(homebrew.data || [])].filter((h) => !h.sharedId).sort((x, y) => millis(x.submittedAt) - millis(y.submittedAt));
   const ruleQueue = [...(suggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
   const cardQueue = [...(cardSuggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
   const counts = (v) => {
@@ -293,11 +333,77 @@ function SuggestionsAdmin() {
     <div className="admin-grid">
       <section className="panel span-2">
         <div className="panel-head">
-          <h2>Suggestions queue</h2>
-          <FollowButton target={SUGGESTIONS} what="new suggestions from the community" className="small" />
+          <h2>Shared with the admins</h2>
+          <FollowButton target={SUGGESTIONS} what="homebrew shared with the admins" className="small" />
         </div>
         <p className="small muted">
-          Homebrew that people shared for review. Open one to read its discussion. <b>Accept</b> makes it a public Community version or Official Ruling (a new rule becomes
+          Homebrew that members shared with you. Only they and the staff see it. <b>Make it a suggestion</b> to put it up for everyone to see and discuss, credited to its
+          author; <b>Turn down</b> keeps it private to them, with your reason. Authors hear either way.
+        </p>
+        {homebrew.loading || rules.loading ? (
+          <Spinner />
+        ) : brewQueue.length === 0 ? (
+          <p className="muted">Nothing waiting. 🎉</p>
+        ) : (
+          <ul className="queue">
+            {brewQueue.map((h) => {
+              const r = ruleById.get(h.ruleId);
+              return (
+                <li key={h.id}>
+                  <div className="queue-head">
+                    {h.kind === 'card' ? (
+                      <a href={href('components', [h.typeId, h.componentId])} title="Open the card">
+                        <b>{h.componentId.split('__').pop()}</b> {h.data?.title || ''}
+                      </a>
+                    ) : h.kind === 'rule' ? (
+                      <span>
+                        <b>{h.title}</b> <span className="small muted">in {sectionName(h.sectionId)}</span>
+                      </span>
+                    ) : r ? (
+                      <a href={href('rules', [r.sid])} title="Open the rule">
+                        <b className="rule-code">{r.sid}</b> {r.title}
+                      </a>
+                    ) : (
+                      <span className="muted">Deleted rule</span>
+                    )}
+                    <span className="tag t-homebrew">{h.kind === 'card' ? 'Card change' : h.kind === 'rule' ? 'New rule' : 'New version'}</span>
+                  </div>
+                  {h.kind === 'card' ? (
+                    <p className="queue-text small">
+                      {Object.entries(h.data || {})
+                        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+                        .join(' · ')}
+                    </p>
+                  ) : (
+                    <p className="queue-text small">{toPlainText(h.text || '')}</p>
+                  )}
+                  <p className="small muted">
+                    by <UserName uid={h.ownerUid} fallback={h.ownerName} /> · shared {timeAgo(h.submittedAt)}
+                    {h.note && ` · “${h.note}”`}
+                  </p>
+                  <div className="review-actions">
+                    <button className="small ok" onClick={() => publish(h)} title="Make it a public suggestion, for everyone to see, react to and discuss">
+                      <Icon name="check" />
+                      Make it a suggestion
+                    </button>
+                    <button className="small danger" onClick={() => turnDown(h)} title="Turn it down with a reason: it stays private to its author">
+                      <Icon name="x" />
+                      Turn down…
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-head">
+          <h2>Public suggestions</h2>
+        </div>
+        <p className="small muted">
+          Suggestions everyone can see and discuss. Open one to read its discussion. <b>Accept</b> makes it a public Community version or Official Ruling (a new rule becomes
           active), optionally in a public ruleset right away. <b>Turn down</b> gives it back to its author as private homebrew, with your reason. Authors hear either way.
         </p>
         {suggestions.loading || rules.loading ? (

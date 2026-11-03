@@ -36,7 +36,7 @@ const TOPICS = [
             <b>Visitors</b> can read everything: rules, versions, discussions, rulesets and cards.
           </li>
           <li>
-            <b>Signed-in members</b> can react, discuss, write their own homebrew, share it for review and save their own rulesets.
+            <b>Signed-in members</b> can react, discuss, write their own homebrew, share it with the admins and save their own rulesets.
           </li>
           <li>
             <b>Admins</b> curate the content: they review shared homebrew, publish rulesets, manage cards and keep backups.
@@ -110,7 +110,7 @@ const TOPICS = [
           <dt>
             <span className="label l-suggestion">Suggestion</span>
           </dt>
-          <dd>A member's homebrew, shared for review: open for reactions and its own discussion while admins decide.</dd>
+          <dd>A member's homebrew that the admins put up for everyone: open for reactions and its own discussion while admins decide.</dd>
           <dt>
             <span className="label l-homebrew">Homebrew</span>
           </dt>
@@ -181,17 +181,27 @@ const TOPICS = [
             (you are asked to switch, or make your own copy, if it isn't); it prints in your PDF too.
           </li>
           <li>
-            <b>Share</b> sends it for review. It becomes a public <span className="label l-suggestion">Suggestion</span> with <b>its own discussion</b>, where everyone can
-            react and say what they think, for example that it should become the default. You can keep editing it, and <b>Withdraw</b> it while it is under review.
+            <b>Share</b> sends it to the admins. Only you and they see it at this point.
           </li>
           <li>
-            Admins then <b>accept</b> it as a <i>Community</i> version or <i>Official Ruling</i>, sometimes straight into a public ruleset, or <b>turn it down</b>. Turned down,
-            it comes back to you as private homebrew, with their reason. You get a notice either way.
+            The admins make it a public <span className="label l-suggestion">Suggestion</span>, credited to you, with <b>its own discussion</b>, where everyone can react and
+            say what they think, for example that it should become the default.
+          </li>
+          <li>
+            Admins then <b>accept</b> the suggestion as a <i>Community</i> version or <i>Official Ruling</i>, sometimes straight into a public ruleset.
           </li>
         </ol>
         <p>
+          You can keep editing it, and <b>Withdraw</b> it, at any point while it is under review. If the admins <b>turn it down</b> at either step, it stays your private
+          homebrew, with their reason: you can still play it, change it and <b>Share again</b>. You get a notice at every step.
+        </p>
+        <p>
+          Would you like a <i>Rulebook</i>, <i>Official Ruling</i> or <i>Community</i> version changed for everyone? Say so with <b>Discuss</b> on that rule or card, or write
+          your change as homebrew and share it with the admins.
+        </p>
+        <p>
           Your homebrew is listed under <b>Account → My homebrew</b>. A ruleset that uses private homebrew works for you, but others opening its link see it without your
-          homebrew; copying the link offers to share it first.
+          homebrew until the admins make it a public suggestion; copying the link offers to share it with them first.
         </p>
         <h4>The text editor</h4>
         <p>
@@ -327,7 +337,7 @@ const TOPICS = [
           <b>Follow</b> a rule (in its tools), a card (in its details) or a ruleset (in the ruleset bar). You then get a notice in your <b>Inbox</b> when someone comments,
           adds or changes a version, or updates the ruleset.
         </li>
-        <li>Commenting on something or sharing a homebrew of it follows it automatically, so you hear about replies. You always hear whether your shared homebrew was accepted or turned down.</li>
+        <li>Commenting on something or sharing a homebrew of it follows it automatically, so you hear about replies. You always hear when the admins make your shared homebrew a suggestion, accept it or turn it down.</li>
         <li>
           The bell in the header shows how many notices are unread. In the Inbox you can open a notice, mark notices read or unread, and clear old ones. The <b>Following</b> tab
           lists everything you follow, with an Unfollow button.
@@ -392,10 +402,11 @@ const TOPICS = [
         <p>A private chat for editors and admins. Enter sends, Shift+Enter starts a new line.</p>
         <h4>Suggestions</h4>
         <p>
-          Homebrew that members shared for review, with the count on the tab. Open one to read its own discussion. <b>Accept</b> it as <i>Community</i> or{' '}
-          <i>Official Ruling</i> (a new rule becomes active), optionally using it in a public ruleset right away, or <b>Turn down</b> with a reason: it goes back to its author as
-          private homebrew. The author is told either way. Follow the feed to get a notice whenever something is shared. Making a ruleset public warns you if it relies on
-          someone's private homebrew.
+          Two steps, with the count of waiting items on the tab. <b>Shared with the admins</b> lists homebrew members sent you; nobody else sees it yet. Check it, then{' '}
+          <b>Make it a suggestion</b> (public, credited to its author, with its own discussion) or <b>Turn down</b> with a reason. <b>Public suggestions</b> lists those
+          everyone can discuss: <b>Accept</b> one as <i>Community</i> or <i>Official Ruling</i> (a new rule becomes active), optionally using it in a public ruleset right
+          away, or <b>Turn down</b> with a reason. Turned down, it goes back to its author as private homebrew, which they can change and share again. The author is told at
+          every step. Follow the feed to get a notice whenever something is shared. Making a ruleset public warns you if it relies on someone's private homebrew.
         </p>
         <h4>Discussions</h4>
         <p>
@@ -587,7 +598,7 @@ const TOPICS = [
         </dd>
         <dt>Who can change what?</dt>
         <dd>
-          Visitors read. Signed-in members react, comment, write homebrew versions of rules and cards and homebrew rules of their own, share them for review, and save their own
+          Visitors read. Signed-in members react, comment, write homebrew versions of rules and cards and homebrew rules of their own, share them with the admins, and save their own
           rulesets. They can't change sections, kinds or other structure. Editors and admins change everything else.
         </dd>
         <dt>My change disappeared. Can I get it back?</dt>

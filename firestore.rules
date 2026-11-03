@@ -189,11 +189,12 @@ service cloud.firestore {
     }
 
     // Private homebrew: a changed rule, a rule of one's own or a changed card. Only its owner reads
-    // and changes it. Editors may open one by id (shared ones name it in `homebrewId`) and, when
-    // turning a shared one down, hand it back with a reason.
+    // and changes it. Sharing it (`submitted`) lets editors see it: they make it a public suggestion
+    // (a copy in versions/rules naming it in `homebrewId`) or turn it down with a reason.
     match /homebrew/{id} {
       // A missing document reveals nothing (saving one is checked against it first).
       allow read: if signedIn() && (resource == null || resource.data.ownerUid == request.auth.uid);
+      allow list: if isEditor() && resource.data.submitted == true;
       allow get: if isEditor();
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
@@ -208,8 +209,10 @@ service cloud.firestore {
           && request.resource.data.ownerUid == resource.data.ownerUid
           && request.resource.data.kind == resource.data.kind
           && request.resource.data.get('text', '').size() <= 20000
-          && request.resource.data.get('data', {}).size() <= 50)
-        || (isEditor() && onlyChanged(['sharedId', 'sharedVersionId', 'declineReason', 'declinedBy', 'declinedAt']));
+          && request.resource.data.get('data', {}).size() <= 50
+          // Sharing it with the admins is barred for those restricted from sharing.
+          && (request.resource.data.get('submitted', false) != true || resource.data.get('submitted', false) == true || canSuggest()))
+        || (isEditor() && onlyChanged(['sharedId', 'sharedVersionId', 'submitted', 'declineReason', 'declinedBy', 'declinedAt']));
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 

@@ -159,7 +159,12 @@ export default function AccountPage() {
   );
 }
 
-const HB_STATE = { private: ['Private', 't-homebrew'], shared: ['Shared for review', 't-suggestion'], accepted: ['Accepted', 't-community'] };
+const HB_STATE = {
+  private: ['Private', 't-homebrew'],
+  submitted: ['Shared with the admins', 't-homebrew'],
+  shared: ['Public suggestion', 't-suggestion'],
+  accepted: ['Accepted', 't-community'],
+};
 
 /** Everything the reader made their own: where it is, and whether it is private, shared or accepted. */
 function MyHomebrew({ uid }) {
@@ -194,7 +199,7 @@ function MyHomebrew({ uid }) {
         <ul className="set-list">
           {list.map((h) => {
             const d = describe(h);
-            const [label, cls] = HB_STATE[homebrewState(pubOf.get(h.id))];
+            const [label, cls] = HB_STATE[homebrewState(pubOf.get(h.id), h)];
             return (
               <li key={h.id}>
                 <div>
@@ -208,7 +213,7 @@ function MyHomebrew({ uid }) {
                   <span className={`tag ${cls}`}>{label === 'Accepted' ? `Accepted as ${pubOf.get(h.id).label}` : label}</span>
                   <p className="small muted">
                     {d.kind} · updated {timeAgo(h.updatedAt)}
-                    {h.declinedAt && !h.sharedId && <> · turned down{h.declineReason ? `: “${h.declineReason}”` : ''}</>}
+                    {h.declinedAt && !h.sharedId && !h.submitted && <> · turned down{h.declineReason ? `: “${h.declineReason}”` : ''}; you can change it and share it again</>}
                   </p>
                 </div>
               </li>
