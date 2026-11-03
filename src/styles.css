@@ -4507,7 +4507,7 @@ summary.primary-summary {
 /* A ruleset's description stays on one line in the ruleset bar. */
 .set-desc {
   display: inline-block;
-  max-width: calc(100% - 7rem);
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
