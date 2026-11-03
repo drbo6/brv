@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
-import { addDoc, deleteDoc, setDoc, updateDoc } from '../lib/store.js';
+import { addDoc, deleteDoc, setDoc, updateDoc, writeBatch } from '../lib/store.js';
+import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
-import { useSession } from '../lib/session.jsx';
+import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 import FollowButton from '../components/FollowButton.jsx';
@@ -17,26 +18,24 @@ const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.j
 const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
 
 const TABS = [
-  { id: 'chat', label: 'Admin chat' },
+  { id: 'chat', label: 'Staff chat' },
   { id: 'rules', label: 'Rules' },
   { id: 'rulesets', label: 'Rulesets' },
   { id: 'components', label: 'Components' },
-  { id: 'people', label: 'People' },
+  { id: 'people', label: 'People', adminOnly: true },
   { id: 'data', label: 'Backup & import' },
 ];
 
 export default function AdminPage({ route }) {
-  const { user, isAdmin, authLoading } = useSession();
+  const { user, isEditor, isAdmin, authLoading } = useSession();
   if (authLoading) return <Spinner />;
-  if (!user || !isAdmin)
+  if (!user || !isEditor)
     return (
       <div className="page narrow">
-        <Empty title="Admins only">
+        <Empty title="Staff only">
           <p>
             {user ? (
-              <>
-                Your account is not an admin. Share your user ID from the <a href={href('account')}>Account</a> page with a site admin.
-              </>
+              <>This part of the site is for editors and admins. An admin can give you a role from Admin → People: they find you by your username.</>
             ) : (
               <>
                 Please <a href={href('account')}>log in</a> first.
@@ -46,14 +45,15 @@ export default function AdminPage({ route }) {
         </Empty>
       </div>
     );
-  const tab = TABS.find((t) => t.id === route.parts[0])?.id || 'chat';
+  const tabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const tab = tabs.find((t) => t.id === route.parts[0])?.id || 'chat';
   return (
     <div className="page admin-page">
       <div className="page-head">
         <h1>Admin</h1>
       </div>
       <nav className="tabs" aria-label="Admin sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <a key={t.id} href={href('admin', [t.id])} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined}>
             {t.label}
           </a>
@@ -67,7 +67,7 @@ export default function AdminPage({ route }) {
           <ComponentsAdmin route={route} />
         </Suspense>
       )}
-      {tab === 'people' && <PeopleAdmin />}
+      {tab === 'people' && isAdmin && <PeopleAdmin />}
       {tab === 'data' && (
         <Suspense fallback={<Spinner />}>
           <DataAdmin />
@@ -600,47 +600,204 @@ function RulesetsAdmin() {
 // ---------------------------------------------------------------- people
 
 function PeopleAdmin() {
-  const { user } = useSession();
+  const { user, ownerUid, ownerLoaded } = useSession();
   const users = useLive(() => collection(db, 'users'), []);
+  const roles = useLive(() => collection(db, 'roles'), []);
   const admins = useLive(() => collection(db, 'admins'), []);
+  const log = useLive(() => query(collection(db, 'modlog'), orderBy('createdAt', 'desc'), limit(50)), []);
   const [filter, setFilter] = useState('');
-  const adminIds = new Set((admins.data || []).map((a) => a.id));
-  const list = [...(users.data || [])]
-    .filter((u) => !filter || u.name?.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => (adminIds.has(b.id) ? 1 : 0) - (adminIds.has(a.id) ? 1 : 0) || millis(b.lastSeen) - millis(a.lastSeen));
+  const [show, setShow] = useState('all');
 
-  const toggle = async (u) => {
-    if (adminIds.has(u.id)) {
-      if (adminIds.size <= 1) return alertDialog({ title: 'Last admin', message: 'There must be at least one admin.' });
-      if (u.id === user.uid && !(await confirmDialog({ title: 'Remove your admin access', message: 'You will lose access to the admin pages. Another admin can give it back.', confirmLabel: 'Remove', danger: true }))) return;
-      return attempt(() => deleteDoc(doc(db, 'admins', u.id)), `${u.name} is no longer an admin`);
-    }
-    return attempt(() => setDoc(doc(db, 'admins', u.id), { name: u.name, addedAt: serverTimestamp(), addedBy: user.uid }), `${u.name} is now an admin`);
+  const roleOf = useMemo(() => new Map((roles.data || []).map((r) => [r.id, r])), [roles.data]);
+  const legacy = useMemo(() => new Set((admins.data || []).map((a) => a.id)), [admins.data]);
+  const effectiveRole = (uid) => (uid === ownerUid ? 'owner' : legacy.has(uid) || roleOf.get(uid)?.role === 'admin' ? 'admin' : roleOf.get(uid)?.role === 'editor' ? 'editor' : 'user');
+  const blockOf = (uid) => roleOf.get(uid)?.block || 'none';
+  const adminCount = (users.data || []).filter((u) => ['owner', 'admin'].includes(effectiveRole(u.id))).length;
+
+  const rank = { owner: 0, admin: 1, editor: 2, user: 3 };
+  const list = [...(users.data || [])]
+    .filter((u) => u.setup || u.name)
+    .filter((u) => !filter || u.name?.toLowerCase().includes(filter.toLowerCase()))
+    .filter((u) => show === 'all' || (show === 'staff' ? effectiveRole(u.id) !== 'user' : blockOf(u.id) !== 'none'))
+    .sort((a, b) => rank[effectiveRole(a.id)] - rank[effectiveRole(b.id)] || millis(b.lastSeen) - millis(a.lastSeen));
+
+  // Moderation log entries are permanent (not undoable), so they are written directly.
+  const logAction = (target, action, from, to, reason = '') =>
+    rawAddDoc(collection(db, 'modlog'), { actorUid: user.uid, actorName: user.displayName, targetUid: target.id, targetName: target.name || '', action, from, to, reason, createdAt: serverTimestamp() }).catch((e) =>
+      console.warn('Could not write the moderation log', e),
+    );
+
+  const setRole = async (u, role) => {
+    const from = effectiveRole(u.id);
+    if (from === role) return;
+    if (['owner', 'admin'].includes(from) && role !== 'admin' && adminCount <= 1) return alertDialog({ title: 'Last admin', message: 'There must be at least one admin.' });
+    if (u.id === user.uid && !(await confirmDialog({ title: 'Change your own role', message: `You will become ${ROLES[role].toLowerCase()} and lose the matching access. Another admin can give it back.`, confirmLabel: 'Change', danger: true })))
+      return;
+    const ok = await attempt(async () => {
+      const batch = writeBatch();
+      batch.set(doc(db, 'roles', u.id), { role, updatedBy: user.uid, updatedAt: serverTimestamp() }, { merge: true });
+      // The original admin list would keep them an admin: take them off it.
+      if (legacy.has(u.id) && role !== 'admin') batch.delete(doc(db, 'admins', u.id));
+      await batch.commit();
+    }, `${u.name} is now ${role === 'user' ? 'a regular user' : `an ${ROLES[role].toLowerCase()}`}`);
+    if (ok) logAction(u, 'role', from, role);
   };
 
+  const setBlock = async (u, block) => {
+    const from = blockOf(u.id);
+    if (from === block) return;
+    let reason = '';
+    if (block !== 'none') {
+      reason = await promptDialog({
+        title: block === 'silence' ? `Silence ${u.name}` : `Stop ${u.name} from suggesting`,
+        message:
+          block === 'silence'
+            ? 'They can still read everything, but can no longer comment, react, suggest or send notices.'
+            : 'They can still comment and react, but can no longer suggest rules, versions or card changes.',
+        label: 'Reason (shown to them)',
+        placeholder: 'e.g. Repeated spam suggestions',
+        confirmLabel: block === 'silence' ? 'Silence' : 'Restrict',
+        allowEmpty: true,
+      });
+      if (reason === null) return;
+    }
+    const ok = await attempt(
+      () => setDoc(doc(db, 'roles', u.id), { block, reason: reason.trim(), updatedBy: user.uid, updatedAt: serverTimestamp() }, { merge: true }),
+      block === 'none' ? `${u.name}'s restriction was lifted` : `${u.name} is restricted: ${BLOCKS[block].toLowerCase()}`,
+    );
+    if (ok) logAction(u, 'block', from, block, reason.trim());
+  };
+
+  const claim = () =>
+    attempt(() => rawSetDoc(doc(db, 'config', 'owner'), { uid: user.uid, claimedAt: serverTimestamp() }), 'You are now the owner of this site');
+
   return (
-    <section className="panel">
-      <h2>People</h2>
-      <p className="small muted">Everyone who has logged in. Admins can manage rules, rulesets, components and other admins.</p>
-      <input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by name…" aria-label="Filter people" />
-      {users.loading ? (
-        <Spinner />
-      ) : (
-        <ul className="people">
-          {list.map((u) => (
-            <li key={u.id}>
-              <Avatar name={u.name} avatar={u.avatar} photo={u.photo} size={32} />
-              <div>
-                <b>{u.name}</b> {adminIds.has(u.id) && <span className={`tag t-${LABEL_CLASS['Official Ruling']}`}>Admin</span>}
-                <p className="small muted">last seen {timeAgo(u.lastSeen)}</p>
-              </div>
-              <button className={adminIds.has(u.id) ? 'small danger' : 'small'} onClick={() => toggle(u)}>
-                {adminIds.has(u.id) ? 'Remove admin' : 'Make admin'}
+    <div className="admin-grid">
+      {ownerLoaded && !ownerUid && (
+        <section className="panel span-2 owner-claim">
+          <h2>No owner yet</h2>
+          {legacy.has(user.uid) ? (
+            <>
+              <p className="muted">
+                The owner is the one admin nobody can demote or restrict. Claim it now: this can only be done once, and only changed later in the Firebase console.
+              </p>
+              <button className="primary" onClick={claim}>
+                <Icon name="shield" />
+                Make me the owner
               </button>
-            </li>
-          ))}
-        </ul>
+            </>
+          ) : (
+            <p className="muted">An admin from the original setup (with a document in the admins collection) can claim ownership here.</p>
+          )}
+        </section>
       )}
-    </section>
+
+      <section className="panel span-2">
+        <div className="panel-head">
+          <h2>People</h2>
+          <div className="seg">
+            {[
+              ['all', 'Everyone'],
+              ['staff', 'Staff'],
+              ['restricted', 'Restricted'],
+            ].map(([id, label]) => (
+              <button key={id} type="button" className={show === id ? 'on' : ''} onClick={() => setShow(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="small muted">
+          Everyone who has signed in and chosen a username. <b>Editors</b> manage all content; <b>admins</b> also manage people here. The <b>owner</b> can't be changed from
+          the site. Changes can be undone and are kept in the moderation log.
+        </p>
+        <input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find someone by username…" aria-label="Find people" className="wide-search" />
+        {users.loading || roles.loading ? (
+          <Spinner />
+        ) : list.length === 0 ? (
+          <p className="muted">Nobody matches.</p>
+        ) : (
+          <ul className="people">
+            {list.map((u) => {
+              const role = effectiveRole(u.id);
+              const block = blockOf(u.id);
+              const locked = role === 'owner';
+              return (
+                <li key={u.id} className={block !== 'none' ? 'is-restricted' : ''}>
+                  <Avatar name={u.name} avatar={u.avatar} photo={u.photo} size={36} />
+                  <div className="people-main">
+                    <b>{u.name || 'New member'}</b> {u.id === user.uid && <span className="muted small">(you)</span>}
+                    <p className="small muted">
+                      last seen {timeAgo(u.lastSeen)}
+                      {block !== 'none' && (
+                        <span className="tag t-warn" title={roleOf.get(u.id)?.reason || 'No reason given'}>
+                          {BLOCKS[block]}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {locked ? (
+                    <span className="tag t-official" title="The owner can't be demoted or restricted from the site">
+                      Owner
+                    </span>
+                  ) : (
+                    <div className="people-controls">
+                      <label>
+                        <span className="sr-only">Role of {u.name}</span>
+                        <select value={role} onChange={(e) => setRole(u, e.target.value)} title="Role: what this person may manage">
+                          <option value="user">User</option>
+                          <option value="editor">Editor</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span className="sr-only">Restriction for {u.name}</span>
+                        <select value={block} onChange={(e) => setBlock(u, e.target.value)} disabled={u.id === user.uid} title={u.id === user.uid ? 'You can’t restrict yourself' : 'Restrict what this person can do'}>
+                          {Object.entries(BLOCKS).map(([k, v]) => (
+                            <option key={k} value={k}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel span-2">
+        <h2>Moderation log</h2>
+        {log.loading ? (
+          <Spinner />
+        ) : !log.data?.length ? (
+          <p className="muted small">No role or restriction changes yet.</p>
+        ) : (
+          <ul className="modlog">
+            {log.data.map((e) => (
+              <li key={e.id}>
+                <span className="muted small">{timeAgo(e.createdAt)}</span>{' '}
+                <b>
+                  <UserName uid={e.actorUid} fallback={e.actorName} />
+                </b>{' '}
+                {e.action === 'role' ? (
+                  <>
+                    changed <UserName uid={e.targetUid} fallback={e.targetName} /> from {ROLES[e.from] || e.from} to <b>{ROLES[e.to] || e.to}</b>
+                  </>
+                ) : (
+                  <>
+                    set <UserName uid={e.targetUid} fallback={e.targetName} /> to <b>{BLOCKS[e.to] || e.to}</b>
+                    {e.reason && <span className="muted"> — “{e.reason}”</span>}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

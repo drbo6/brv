@@ -56,11 +56,23 @@ No composite indexes are needed.
 
 In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions**. Every push to `main` builds and deploys the site through [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
 
-### 5. Make yourself the first admin
+### 5. Make yourself the owner
 
-1. Open the site and log in. The **Account** page shows your user ID.
-2. In the Firebase console, open **Firestore**, create a collection named `admins`, and add a document whose **ID is your user ID**. It can have any field, for example `name: "Your name"`.
-3. Reload the site. An **Admin** tab appears. From then on you can promote other people from **Admin → People**.
+1. Open the site, sign in and choose a username.
+2. Copy your user ID from **Account → Technical: your user ID**. This is the only time anyone needs it.
+3. In the Firebase console, open **Firestore**, create a collection named `admins`, and add a document whose **ID is your user ID**. It can have any field, for example `name: "Your name"`.
+4. Reload the site and go to **Admin → People**. Choose **Make me the owner**. This works once: it records you in `config/owner`, and nobody can demote or restrict the owner from the site.
+
+From then on, give other people roles in **Admin → People**. You find them by their username:
+
+| Role | Can do |
+| --- | --- |
+| User | Read, react, comment, suggest, follow, save rulesets (everyone who signs in) |
+| Editor | Everything about content: rules, versions, sections, kinds, rulesets, components, backups, staff chat |
+| Admin | Everything an editor can, plus roles and restrictions for other people |
+| Owner | Everything an admin can; can't be demoted or restricted from the site |
+
+Admins can also restrict a user with **No suggestions** (they can still comment and react) or **Silenced** (read only), with a reason that user sees. Role and restriction changes can be undone and are listed in the moderation log. The security rules enforce all of this.
 
 ### 6. Load the content
 
@@ -162,7 +174,10 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}] |
 | `config/shorthands` | `items` {keyword: {type, value}} |
 | `config/componentsMeta` | `version` (cache counter) |
-| `admins/{uid}` | Admin flag |
+| `config/owner` | `uid` of the owner. Created once from the site, changed only in the Firebase console |
+| `roles/{uid}` | `role` (`editor` / `admin`), `block` (`suggest` / `silence`) and `reason`. Written by admins |
+| `modlog` | Role and restriction changes: who, whom, from, to, reason |
+| `admins/{uid}` | The original admin list, still honored as admin |
 | `users/{uid}` | Public profile: chosen `name` and `avatar` ({glyph, color} or {photo}). Never an email address |
 | `subscribers/{key}` | `uids` {uid: true} following `rule_<id>`, `component_<id>`, `ruleset_<id>` or `suggestions`, plus a `label` and `link` |
 | `inbox/{uid}/items` | A user's notices: `type`, `title`, `text`, `link`, `actorUid`, `read`. Delivered by whoever caused the event (there is no server) |

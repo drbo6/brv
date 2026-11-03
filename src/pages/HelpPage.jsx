@@ -347,7 +347,7 @@ const TOPICS = [
         </li>
         <li>The Account page lists your rulesets: open, rename, share or delete them.</li>
         <li>
-          It also shows your <b>user ID</b>. To become an admin, send it to an existing admin.
+          It also shows your role, and any restriction an admin has put on your account with the reason. To get a role, ask an admin: they find you by your username.
         </li>
       </ul>
     ),
@@ -358,14 +358,17 @@ const TOPICS = [
     icon: 'shield',
     body: (
       <>
-        <p>Admins see an Admin tab with these sections.</p>
-        <h4>Admin chat</h4>
-        <p>A private chat for the admin team. Enter sends, Shift+Enter starts a new line.</p>
+        <p>
+          Staff see an Admin tab. <b>Editors</b> manage all content: everything below except People. <b>Admins</b> also manage people. The <b>owner</b> is an admin who
+          can't be demoted or restricted.
+        </p>
+        <h4>Staff chat</h4>
+        <p>A private chat for editors and admins. Enter sends, Shift+Enter starts a new line.</p>
         <h4>Rules</h4>
         <ul>
           <li>
             <b>Suggestions queue:</b> new rule and card suggestions. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to discuss, or delete it.
-            Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>), which gives them a permanent ID.
+            Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>).
           </li>
           <li>
             <b>Sections:</b> add sections, rename them, nest them and reorder them. Section numbers follow the new order; rule ids never change.
@@ -373,7 +376,7 @@ const TOPICS = [
           <li>
             <b>Rule kinds:</b> the list of kinds with their name and color.
           </li>
-          <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (ID, section, kind, page, status), move it, approve it or delete it.</li>
+          <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (section, kind, page, status), move it, approve it or delete it.</li>
         </ul>
         <h4>Rulesets</h4>
         <p>Make rulesets public or private and choose the site default that new visitors see.</p>
@@ -475,7 +478,12 @@ const TOPICS = [
     body: (
       <>
         <h4>People</h4>
-        <p>Everyone who has signed in is listed here. Promote members to admin or remove admin rights.</p>
+        <p>
+          Admins only. Everyone who has chosen a username is listed; find people by name, or show only staff or restricted users. For each person choose a <b>role</b>{' '}
+          (User, Editor, Admin) and, if needed, a <b>restriction</b>: <i>No suggestions</i> (they can still comment and react) or <i>Silenced</i> (read only), with a
+          reason they will see. Changes can be undone and are listed in the <b>moderation log</b>. If the site has no owner yet, an admin from the original setup can
+          claim it here once.
+        </p>
         <h4>Backup &amp; import</h4>
         <ul>
           <li>

@@ -1,7 +1,9 @@
 rules_version = '2';
 
 // Everyone can read. Signed-in users can react, comment, suggest and save their own rulesets.
-// Admins (a document at /admins/{uid}) can change everything else.
+// Roles: editors change content; admins also manage people; the owner (config/owner) is an admin
+// nobody can demote. roles/{uid} holds a person's role and any restriction (block) on them.
+// A document at admins/{uid} (the original setup) still counts as admin.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -9,8 +11,39 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function path(col, id) {
+      return /databases/$(database)/documents/$(col)/$(id);
+    }
+
+    function isOwner() {
+      return signedIn() && exists(path('config', 'owner')) && get(path('config', 'owner')).data.uid == request.auth.uid;
+    }
+
+    function myRole() {
+      return exists(path('roles', request.auth.uid)) ? get(path('roles', request.auth.uid)).data.get('role', 'user') : 'user';
+    }
+
+    // Admins manage people (and can do everything editors do).
     function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return signedIn() && (isOwner() || exists(path('admins', request.auth.uid)) || myRole() == 'admin');
+    }
+
+    // Editors (and admins) manage all content.
+    function isEditor() {
+      return signedIn() && (isAdmin() || myRole() == 'editor');
+    }
+
+    function myBlock() {
+      return exists(path('roles', request.auth.uid)) ? get(path('roles', request.auth.uid)).data.get('block', 'none') : 'none';
+    }
+
+    // "suggest": may not propose rules, versions or card changes. "silence": read only.
+    function canSuggest() {
+      return signedIn() && !(myBlock() in ['suggest', 'silence']);
+    }
+
+    function canTalk() {
+      return signedIn() && myBlock() != 'silence';
     }
 
     function onlyChanged(keys) {
@@ -21,7 +54,7 @@ service cloud.firestore {
     function ownReactionOnly() {
       let before = resource.data.get('reactions', {});
       let after = request.resource.data.get('reactions', {});
-      return signedIn()
+      return canTalk()
         && onlyChanged(['reactions'])
         && after.diff(before).affectedKeys().hasOnly([request.auth.uid])
         && (!(request.auth.uid in after) || after[request.auth.uid] in ['up', 'down', 'q']);
@@ -37,12 +70,40 @@ service cloud.firestore {
 
     match /config/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      // config/owner is set once and never changed from the site (only in the Firebase console).
+      allow write: if isEditor() && id != 'owner';
+      // The first owner is claimed by an admin from the original setup.
+      allow create: if id == 'owner' && signedIn()
+        && exists(path('admins', request.auth.uid))
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'claimedAt']);
     }
 
+    // The original admin list; still honored, managed by admins.
     match /admins/{uid} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() && !isOwnerUid(uid);
+    }
+
+    function isOwnerUid(uid) {
+      return exists(path('config', 'owner')) && get(path('config', 'owner')).data.uid == uid;
+    }
+
+    // Roles and restrictions. Admins manage them; nobody can change the owner's.
+    match /roles/{uid} {
+      allow read: if true;
+      allow create, update: if isAdmin() && !isOwnerUid(uid)
+        && request.resource.data.keys().hasOnly(['role', 'block', 'reason', 'updatedBy', 'updatedAt'])
+        && request.resource.data.get('role', 'user') in ['user', 'editor', 'admin']
+        && request.resource.data.get('block', 'none') in ['none', 'suggest', 'silence'];
+      allow delete: if isAdmin() && !isOwnerUid(uid);
+    }
+
+    // Who changed whose role or restriction, and why.
+    match /modlog/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // Public profiles: a chosen username and avatar. Never an email address.
@@ -78,24 +139,24 @@ service cloud.firestore {
 
     match /sections/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isEditor();
     }
 
     match /rules/{id} {
       allow read: if true;
       // Users may suggest new rules.
-      allow create: if isAdmin() || (signedIn()
+      allow create: if isEditor() || (canSuggest()
         && request.resource.data.status == 'suggested'
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.get('commentCount', 0) == 0
         && shortText('title', 200));
       // Posting or deleting a comment adjusts the comment counter by one.
-      allow update: if isAdmin() || (signedIn()
+      allow update: if isEditor() || (signedIn()
         && onlyChanged(['commentCount'])
         && (request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1
           || request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1));
       // Users may withdraw (or undo) their own suggested rule while nobody has discussed it.
-      allow delete: if isAdmin() || (signedIn()
+      allow delete: if isEditor() || (signedIn()
         && resource.data.createdBy == request.auth.uid
         && resource.data.status == 'suggested'
         && resource.data.get('commentCount', 0) == 0);
@@ -103,30 +164,30 @@ service cloud.firestore {
 
     match /versions/{id} {
       allow read: if true;
-      allow create: if isAdmin() || (signedIn()
+      allow create: if isEditor() || (canSuggest()
         && request.resource.data.label == 'Suggestion'
         && request.resource.data.createdBy == request.auth.uid
         && noReactions()
         && shortText('text', 20000));
-      allow update: if isAdmin()
+      allow update: if isEditor()
         || ownReactionOnly()
         || (signedIn()
           && resource.data.createdBy == request.auth.uid
           && resource.data.label == 'Suggestion'
           && onlyChanged(['text', 'note', 'updatedAt'])
           && shortText('text', 20000));
-      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
+      allow delete: if isEditor() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
     }
 
     match /comments/{id} {
       allow read: if true;
-      allow create: if signedIn()
+      allow create: if canTalk()
         && request.resource.data.uid == request.auth.uid
         && noReactions()
         && shortText('text', 5000);
       allow update: if ownReactionOnly()
         || (signedIn() && resource.data.uid == request.auth.uid && onlyChanged(['text', 'editedAt']) && shortText('text', 5000));
-      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow delete: if isEditor() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
     match /rulesets/{id} {
@@ -137,52 +198,52 @@ service cloud.firestore {
         && request.resource.data.visibility == 'private'
         && shortText('name', 200);
       // Owners edit their own sets; only admins can change visibility (make a set public).
-      allow update: if isAdmin() || (signedIn()
+      allow update: if isEditor() || (signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.visibility == resource.data.visibility);
-      allow delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow delete: if isEditor() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
     match /componentTypes/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isEditor();
     }
 
     match /components/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isEditor();
     }
 
     // Card versions work like rule versions: users suggest, admins label and edit.
     match /componentVersions/{id} {
       allow read: if true;
-      allow create: if isAdmin() || (signedIn()
+      allow create: if isEditor() || (canSuggest()
         && request.resource.data.label == 'Suggestion'
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.data is map
         && request.resource.data.data.size() <= 50
         && noReactions());
-      allow update: if isAdmin()
+      allow update: if isEditor()
         || ownReactionOnly()
         || (signedIn()
           && resource.data.createdBy == request.auth.uid
           && resource.data.label == 'Suggestion'
           && onlyChanged(['data', 'note', 'updatedAt'])
           && request.resource.data.data is map);
-      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
+      allow delete: if isEditor() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
     }
 
     // Reactions to the printed version of a card, kept apart from the admin-only component docs.
     match /componentMeta/{id} {
       allow read: if true;
-      allow create: if signedIn()
+      allow create: if canTalk()
         && request.resource.data.keys().hasOnly(['reactions'])
         && request.resource.data.reactions.keys().hasOnly([request.auth.uid])
         && request.resource.data.reactions[request.auth.uid] in ['up', 'down', 'q'];
-      allow update: if isAdmin() || ownReactionOnly();
+      allow update: if isEditor() || ownReactionOnly();
       // Lets a user undo the reaction that created this document, while it holds only theirs.
-      allow delete: if isAdmin() || (signedIn()
+      allow delete: if isEditor() || (signedIn()
         && resource.data.keys().hasOnly(['reactions'])
         && resource.data.reactions.keys().hasOnly([request.auth.uid]));
     }
@@ -197,7 +258,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uids', 'label', 'link'])
         && request.resource.data.get('uids', {}).diff(resource.data.get('uids', {})).affectedKeys().hasOnly([request.auth.uid]);
-      allow delete: if isAdmin();
+      allow delete: if isEditor();
     }
 
     // Personal notices. Only the owner reads, marks or deletes them; anyone signed in may deliver
@@ -205,7 +266,7 @@ service cloud.firestore {
     match /inbox/{uid}/items/{id} {
       allow read, delete: if signedIn() && request.auth.uid == uid;
       allow update: if signedIn() && request.auth.uid == uid && onlyChanged(['read']);
-      allow create: if signedIn()
+      allow create: if canTalk()
         && request.auth.uid != uid
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.read == false
@@ -215,10 +276,10 @@ service cloud.firestore {
     }
 
     match /adminChat/{id} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);
+      allow read: if isEditor();
+      allow create: if isEditor() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);
       allow update: if false;
-      allow delete: if isAdmin() && resource.data.uid == request.auth.uid;
+      allow delete: if isEditor() && resource.data.uid == request.auth.uid;
     }
   }
 }

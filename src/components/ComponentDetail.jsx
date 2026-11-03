@@ -16,7 +16,7 @@ import { autoFollow, cardTarget, notify, rulesetTarget, SUGGESTIONS } from '../l
  * reactions and discussion, the same way rules work.
  */
 export default function ComponentDetail({ type, comp, states, versionsOf, metaOf, commentCount, selectedSet, onClose }) {
-  const { shorthands, isAdmin, user, requireUser } = useSession();
+  const { shorthands, isEditor, user, requireUser } = useSession();
   const { byIdValue, statesOf, idf, sf } = states;
   // The family: the base component plus all its alternate states.
   const baseId = sf && comp.data[sf.key]?.of ? String(comp.data[sf.key].of) : String(comp.data[idf?.key]);
@@ -40,7 +40,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const [discuss, setDiscuss] = useState(false);
   const [dialog, setDialog] = useState(null);
 
-  const canChoose = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isAdmin);
+  const canChoose = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor);
   const ownsShown = !shown.printed && user && shown.createdBy === user.uid && shown.label === 'Suggestion';
   const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(data[f.key], type));
   const name = displayTitle(type, { ...current, data });
@@ -135,7 +135,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
           <div className="rule-foot">
             <Reactions
               reactions={shown.reactions}
-              onReact={(t) => requireUser((u) => attempt(() => reactToCard(current.id, shown, Boolean(metaOf(current.id)), u.uid, t), null, 'reaction'))}
+              onReact={(t) => requireUser((u) => attempt(() => reactToCard(current.id, shown, Boolean(metaOf(current.id)), u.uid, t), null, 'reaction'), 'talk')}
             />
             <div className="rule-actions">
               <button className={`chip ${discuss ? 'on' : ''}`} onClick={() => setDiscuss((o) => !o)} aria-expanded={discuss} title="Discuss this card">
@@ -143,9 +143,9 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 <span>{commentCount(current.id)}</span>
                 Discuss
               </button>
-              <button className="chip" onClick={() => requireUser(() => setDialog('new'))} title={isAdmin ? 'Add an official or community version of this card' : 'Propose different values for this card'}>
+              <button className="chip" onClick={() => requireUser(() => setDialog('new'), isEditor ? null : 'suggest')} title={isEditor ? 'Add an official or community version of this card' : 'Propose different values for this card'}>
                 <Icon name="bulb" />
-                {isAdmin ? 'Add version' : 'Suggest change'}
+                {isEditor ? 'Add version' : 'Suggest change'}
               </button>
               {canChoose && shown.id !== active.id && (
                 <button className="chip ok" onClick={() =>
@@ -173,9 +173,9 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
             </div>
           </div>
 
-          {(isAdmin || ownsShown) && (
+          {(isEditor || ownsShown) && (
             <div className="admin-tools" role="group" aria-label="Edit tools">
-              {isAdmin && <span className="admin-tools-label">Admin</span>}
+              {isEditor && <span className="admin-tools-label">Admin</span>}
               {!shown.printed && (
                 <button className="chip" onClick={() => setDialog('edit')}>
                   <Icon name="edit" />
@@ -194,7 +194,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   Delete version
                 </button>
               )}
-              {isAdmin && (
+              {isEditor && (
                 <a className="chip btn" href={href('admin', ['components', type.id], { tab: 'list', edit: current.id })} title="Edit the printed card's data">
                   <Icon name="edit" />
                   Edit printed card
@@ -222,10 +222,10 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
 
 /** Suggest (or, for admins, add) a version of a card, or edit one. Stores only the changed fields. */
 function CardVersionDialog({ type, comp, version, startData, onClose, onSaved }) {
-  const { isAdmin, user } = useSession();
+  const { isEditor, user } = useSession();
   const editable = type.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state');
   const [values, setValues] = useState(() => Object.fromEntries(editable.map((f) => [f.key, startData[f.key] ?? ''])));
-  const [label, setLabel] = useState(version?.label || (isAdmin ? 'Community' : 'Suggestion'));
+  const [label, setLabel] = useState(version?.label || (isEditor ? 'Community' : 'Suggestion'));
   const [note, setNote] = useState(version?.note || '');
   const [busy, setBusy] = useState(false);
 
@@ -235,8 +235,8 @@ function CardVersionDialog({ type, comp, version, startData, onClose, onSaved })
     if (!Object.keys(data).length) return alertDialog({ title: 'Nothing changed', message: 'Change at least one value compared to the printed card.' });
     setBusy(true);
     const id = version
-      ? await attempt(() => updateCardVersion(version.id, isAdmin ? { data, note: note.trim(), label } : { data, note: note.trim() }), 'Version saved')
-      : await attempt(() => createCardVersion({ comp, label: isAdmin ? label : 'Suggestion', data, note: note.trim() }, user), isAdmin ? 'Version added' : 'Thanks! Your suggestion was added.');
+      ? await attempt(() => updateCardVersion(version.id, isEditor ? { data, note: note.trim(), label } : { data, note: note.trim() }), 'Version saved')
+      : await attempt(() => createCardVersion({ comp, label: isEditor ? label : 'Suggestion', data, note: note.trim() }, user), isEditor ? 'Version added' : 'Thanks! Your suggestion was added.');
     setBusy(false);
     if (id !== undefined) {
       onSaved(version ? version.id : id);
@@ -246,19 +246,19 @@ function CardVersionDialog({ type, comp, version, startData, onClose, onSaved })
       if (version) notify(t.key, user, { type: 'version', title: `${who} edited a version of ${t.label}`, text: `Changes: ${changes}`, link: t.link });
       else {
         autoFollow(t.key, user.uid, t);
-        const title = isAdmin ? `${who} added a ${label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+        const title = isEditor ? `${who} added a ${label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
         notify(t.key, user, { type: 'version', title, text: `Changes: ${changes}`, link: t.link });
-        if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: `Changes: ${changes}`, link: t.link });
+        if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: `Changes: ${changes}`, link: t.link });
       }
       onClose();
     }
   };
 
   return (
-    <Modal title={version ? 'Edit card version' : isAdmin ? 'New card version' : 'Suggest a change to this card'} onClose={onClose} wide>
+    <Modal title={version ? 'Edit card version' : isEditor ? 'New card version' : 'Suggest a change to this card'} onClose={onClose} wide>
       <form className="form" onSubmit={submit}>
-        {!version && !isAdmin && <p className="muted">Change the values you want to propose. Your suggestion appears as a “Suggestion” version that others can react to and discuss.</p>}
-        {isAdmin && (
+        {!version && !isEditor && <p className="muted">Change the values you want to propose. Your suggestion appears as a “Suggestion” version that others can react to and discuss.</p>}
+        {isEditor && (
           <div className="field">
             <label>Label</label>
             <div className="seg">
@@ -302,7 +302,7 @@ function CardVersionDialog({ type, comp, version, startData, onClose, onSaved })
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy}>
-            {version ? 'Save' : isAdmin ? 'Add version' : 'Submit suggestion'}
+            {version ? 'Save' : isEditor ? 'Add version' : 'Submit suggestion'}
           </button>
         </div>
       </form>

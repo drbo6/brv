@@ -3577,6 +3577,61 @@ select.is-unsaved {
   font-weight: 500;
 }
 
+/* ---------- people and roles ---------- */
+
+.people li {
+  flex-wrap: wrap;
+}
+
+.wide-search {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.people-main {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.people-main .tag {
+  margin-left: 8px;
+}
+
+.people-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.people li.is-restricted {
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.modlog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.modlog li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.owner-claim {
+  border-color: var(--gold);
+}
+
+.restricted-note {
+  border-color: var(--warn);
+}
+
+.uid-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
 @media (max-width: 1100px) {
   .layout-split {
     grid-template-columns: minmax(0, 1fr);

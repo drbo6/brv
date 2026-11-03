@@ -33,7 +33,7 @@ export default function App() {
 
 function Shell() {
   const route = useRoute();
-  const { user, isAdmin, realUser, realRole, role, previewing, setViewAs, profileOpen } = useSession();
+  const { user, isEditor, realUser, realRole, role, previewing, setViewAs, profileOpen } = useSession();
   const history = useHistory();
   const theme = useTheme();
   useUndoKeys(useCallback((kind, label) => toast(`${kind === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'ok'), []));
@@ -56,7 +56,7 @@ function Shell() {
   const nav = [
     { page: 'rules', label: 'Rules', icon: 'book', tip: 'The rules, with versions, discussion and rulesets' },
     { page: 'components', label: 'Components', icon: 'grid', tip: 'Browse the cards and other components' },
-    isAdmin && { page: 'admin', label: 'Admin', icon: 'shield', tip: 'Manage content, rulesets, people and backups' },
+    isEditor && { page: 'admin', label: 'Admin', icon: 'shield', tip: 'Manage content, rulesets, people and backups' },
     { page: 'help', label: 'Help', icon: 'help', tip: 'How everything on this site works' },
   ].filter(Boolean);
 
@@ -173,7 +173,9 @@ function Shell() {
 }
 
 const ROLE_HINTS = {
-  admin: 'Everything, including editing and the Admin pages',
+  owner: 'Everything; can’t be demoted',
+  admin: 'Content and people management',
+  editor: 'All content, no people management',
   user: 'Signed in, without admin rights: react, discuss, suggest',
   visitor: 'Not signed in: read only',
 };
@@ -210,7 +212,7 @@ function ViewAsMenu({ roles, role, realRole, previewing, setViewAs }) {
               close();
             }}
           >
-            <Icon name={r === role ? 'check' : r === 'admin' ? 'shield' : r === 'user' ? 'user' : 'eye'} />
+            <Icon name={r === role ? 'check' : r === 'user' ? 'user' : r === 'visitor' ? 'eye' : r === 'editor' ? 'edit' : 'shield'} />
             <span>
               <b>
                 {ROLES[r]}

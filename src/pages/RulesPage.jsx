@@ -17,7 +17,7 @@ import FollowButton from '../components/FollowButton.jsx';
 import { autoFollow, notify, rulesetTarget } from '../lib/inbox.js';
 
 export default function RulesPage({ route }) {
-  const { user, isAdmin, shorthands, requireUser, kinds } = useSession();
+  const { user, isEditor, shorthands, requireUser, kinds } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const versions = useLive(() => collection(db, 'versions'), []);
@@ -160,14 +160,14 @@ export default function RulesPage({ route }) {
       })
       .filter((it) => {
         if (it.rule.id === focusId) return true;
-        if (it.rule.status === 'rejected' && !(isAdmin && showInactive)) return false;
+        if (it.rule.status === 'rejected' && !(isEditor && showInactive)) return false;
         // While customizing a ruleset, inactive rules stay visible so they can be switched back on.
         if (!it.active && !showInactive && !draft) return false;
         if (labelFilter && !it.vs.some((v) => v.label === labelFilter)) return false;
         if (kindFilter && (it.rule.kind || 'rule') !== kindFilter) return false;
         return tokens.every((t) => it.searchText.includes(t));
       });
-  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isAdmin, focusId, draft]);
+  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isEditor, focusId, draft]);
 
   const groups = useMemo(() => {
     const bySection = new Map();
@@ -216,7 +216,7 @@ export default function RulesPage({ route }) {
   const [dialog, setDialog] = useState(null);
   // The contents list starts collapsed on narrow screens, where it sits above the rules.
   const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
-  const ownsSet = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isAdmin);
+  const ownsSet = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor);
 
   const saveExisting = () =>
     requireUser(async () => {
@@ -409,9 +409,9 @@ export default function RulesPage({ route }) {
               <Icon name="download" />
               PDF
             </button>
-            <button onClick={() => requireUser(() => setDialog('newRule'))} disabled={!tree.ordered.length}>
+            <button onClick={() => requireUser(() => setDialog('newRule'), isEditor ? null : 'suggest')} disabled={!tree.ordered.length}>
               <Icon name="plus" />
-              {isAdmin ? 'Add rule' : 'Suggest rule'}
+              {isEditor ? 'Add rule' : 'Suggest rule'}
             </button>
             <button
               className={`icon-btn pin-btn ${pinned ? 'on' : ''}`}
@@ -434,7 +434,7 @@ export default function RulesPage({ route }) {
           <Spinner label="Loading rules…" />
         ) : allRules.length === 0 ? (
           <Empty title="No rules yet">
-            <p>{isAdmin ? 'Load the rules from Admin → Backup & import (for example imports/blood-rage-valhalla.json from the repository).' : 'An admin needs to import the rulebook first.'}</p>
+            <p>{isEditor ? 'Load the rules from Admin → Backup & import (for example imports/blood-rage-valhalla.json from the repository).' : 'An admin needs to import the rulebook first.'}</p>
           </Empty>
         ) : groups.length === 0 ? (
           <Empty title="No rules match">
@@ -526,7 +526,7 @@ export default function RulesPage({ route }) {
           rules={allRules}
           onClose={() => setDialog(null)}
           onCreated={(id) => {
-            if (!isAdmin) setShowInactive(true);
+            if (!isEditor) setShowInactive(true);
             setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
           }}
         />

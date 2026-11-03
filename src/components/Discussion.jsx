@@ -14,7 +14,7 @@ import { confirmDialog } from './dialogs.jsx';
  * Each comment remembers which version the author was looking at.
  */
 export default function Discussion({ rule, target: given, follow: givenFollow, versions, shownVersion }) {
-  const { user, isAdmin, requireUser, signIn } = useSession();
+  const { user, isEditor, requireUser, signIn, block, blockReason } = useSession();
   const target = given || { field: 'ruleId', id: rule.id, name: rule.sid || rule.title };
   const follow = givenFollow || ruleTarget(rule);
   const comments = useLive(() => query(collection(db, 'comments'), where(target.field, '==', target.id)), [target.field, target.id]);
@@ -43,7 +43,7 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
       // Commenting follows the discussion, and tells everyone else who follows it.
       autoFollow(follow.key, u.uid, follow);
       notify(follow.key, u, { type: 'comment', title: `${u.displayName} commented on ${follow.label}`, text: body, link: follow.link });
-    });
+    }, 'talk');
     setBusy(false);
   };
 
@@ -90,13 +90,13 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
                   <p className="comment-text" dangerouslySetInnerHTML={{ __html: plainToHtml(c.text) }} />
                 )}
                 <div className="comment-actions">
-                  <Reactions compact reactions={c.reactions} onReact={(type) => requireUser((u) => attempt(() => react('comments', c.id, u.uid, c.reactions?.[u.uid], type), null, 'reaction'))} />
+                  <Reactions compact reactions={c.reactions} onReact={(type) => requireUser((u) => attempt(() => react('comments', c.id, u.uid, c.reactions?.[u.uid], type), null, 'reaction'), 'talk')} />
                   {user?.uid === c.uid && editing?.id !== c.id && (
                     <button className="link-btn small" onClick={() => setEditing({ id: c.id, text: c.text })}>
                       Edit
                     </button>
                   )}
-                  {(user?.uid === c.uid || isAdmin) && (
+                  {(user?.uid === c.uid || isEditor) && (
                     <button className="link-btn small danger" onClick={async () => (await confirmDialog({ title: 'Delete comment', message: 'Delete this comment?', confirmLabel: 'Delete', danger: true })) && attempt(() => deleteComment(c), 'Comment deleted')}>
                       Delete
                     </button>
@@ -107,7 +107,9 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
           ))}
         </ol>
       )}
-      {user ? (
+      {user && block === 'silence' ? (
+        <p className="small muted">Your account can’t comment at the moment{blockReason ? ` (${blockReason})` : ''}.</p>
+      ) : user ? (
         <form className="comment-form" onSubmit={post}>
           <textarea
             value={text}

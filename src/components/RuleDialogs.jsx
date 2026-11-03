@@ -171,9 +171,9 @@ const normalizeText = (t) => {
 
 /** Suggest (or, for admins, add) a new version of an existing rule — or edit one. */
 export function VersionDialog({ rule, version, onClose }) {
-  const { isAdmin, user } = useSession();
+  const { isEditor, user } = useSession();
   const editing = Boolean(version);
-  const [label, setLabel] = useState(version?.label || (isAdmin ? 'Community' : 'Suggestion'));
+  const [label, setLabel] = useState(version?.label || (isEditor ? 'Community' : 'Suggestion'));
   const [text, setText] = useState(version?.text || '');
   const [note, setNote] = useState(version?.note || '');
   const [busy, setBusy] = useState(false);
@@ -193,10 +193,10 @@ export function VersionDialog({ rule, version, onClose }) {
       if (!ok) return;
     }
     setBusy(true);
-    const data = { label: isAdmin ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
+    const data = { label: isEditor ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
     const ok = editing
-      ? await attempt(() => updateVersion(version.id, isAdmin ? data : { text: data.text, note: data.note }), 'Version saved')
-      : await attempt(() => createVersion({ ruleId: rule.id, ...data }, user), isAdmin ? 'Version added' : 'Thanks! Your suggestion was added.');
+      ? await attempt(() => updateVersion(version.id, isEditor ? data : { text: data.text, note: data.note }), 'Version saved')
+      : await attempt(() => createVersion({ ruleId: rule.id, ...data }, user), isEditor ? 'Version added' : 'Thanks! Your suggestion was added.');
     setBusy(false);
     if (ok === undefined) return;
     onClose();
@@ -207,14 +207,14 @@ export function VersionDialog({ rule, version, onClose }) {
     } else {
       // Suggesting follows the rule, so the author hears about reactions to it in the discussion.
       autoFollow(t.key, user.uid, t);
-      const title = isAdmin ? `${who} added a ${data.label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+      const title = isEditor ? `${who} added a ${data.label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
       notify(t.key, user, { type: 'version', title, text: data.text, link: t.link });
-      if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: data.text, link: t.link });
+      if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: data.text, link: t.link });
     }
   };
 
   return (
-    <Modal title={editing ? `Edit version of ${ruleName(rule)}` : isAdmin ? `New version of ${ruleName(rule)}` : `Suggest a change to ${ruleName(rule)}`} onClose={onClose} wide>
+    <Modal title={editing ? `Edit version of ${ruleName(rule)}` : isEditor ? `New version of ${ruleName(rule)}` : `Suggest a change to ${ruleName(rule)}`} onClose={onClose} wide>
       {changedElsewhere && (
         <div className="conflict-bar" role="alert">
           <Icon name="info" />
@@ -233,8 +233,8 @@ export function VersionDialog({ rule, version, onClose }) {
         </div>
       )}
       <form onSubmit={submit} className="form">
-        {!editing && !isAdmin && <p className="muted">Propose new wording or a clarification. It will appear as a “Suggestion” version that others can react to and discuss.</p>}
-        {isAdmin && (
+        {!editing && !isEditor && <p className="muted">Propose new wording or a clarification. It will appear as a “Suggestion” version that others can react to and discuss.</p>}
+        {isEditor && (
           <div className="field">
             <label>Label</label>
             <div className="seg">
@@ -256,7 +256,7 @@ export function VersionDialog({ rule, version, onClose }) {
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy || !text.trim()}>
-            {editing ? 'Save' : isAdmin ? 'Add version' : 'Submit suggestion'}
+            {editing ? 'Save' : isEditor ? 'Add version' : 'Submit suggestion'}
           </button>
         </div>
       </form>
@@ -266,7 +266,7 @@ export function VersionDialog({ rule, version, onClose }) {
 
 /** Create a new rule (users: as a suggestion) or edit an existing rule's details (admins). */
 export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCreated }) {
-  const { isAdmin, user, kinds } = useSession();
+  const { isEditor, user, kinds } = useSession();
   const editing = Boolean(rule);
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(rule?.sectionId || firstSection);
@@ -290,16 +290,16 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
       if (sectionId !== rule.sectionId) patch.order = order;
       ok = await attempt(() => updateRule(rule.id, patch), 'Rule saved');
     } else {
-      const meta = isAdmin
+      const meta = isEditor
         ? { sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status }
         : { sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
-      const version = { label: isAdmin ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
-      ok = await attempt(() => createRule(meta, version, user), isAdmin ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
+      const version = { label: isEditor ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
+      ok = await attempt(() => createRule(meta, version, user), isEditor ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
       if (ok) {
         onCreated?.(ok);
         const t = ruleTarget({ id: ok, title: meta.title });
         autoFollow(t.key, user.uid, t);
-        if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
+        if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
       }
     }
     setBusy(false);
@@ -307,9 +307,9 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
   };
 
   return (
-    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : isAdmin ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
+    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : isEditor ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
-        {!editing && !isAdmin && (
+        {!editing && !isEditor && (
           <p className="muted">
             Suggested rules are visible to everyone (turn on “Show inactive”) and can be discussed. Admins may adopt them into the official FAQ.
           </p>
@@ -331,7 +331,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
             <input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="e.g. Summoning at 0 Rage" />
           </div>
         </div>
-        {isAdmin && (
+        {isEditor && (
           <div className="grid-3">
             <div className="field">
               <label htmlFor="r-kind">Kind</label>
@@ -360,7 +360,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
         )}
         {!editing && (
           <>
-            {isAdmin && (
+            {isEditor && (
               <div className="field">
                 <label>Label of the first version</label>
                 <div className="seg">
@@ -384,7 +384,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy || !title.trim() || (!editing && !text.trim())}>
-            {editing ? 'Save' : isAdmin ? 'Add rule' : 'Submit suggestion'}
+            {editing ? 'Save' : isEditor ? 'Add rule' : 'Submit suggestion'}
           </button>
         </div>
       </form>

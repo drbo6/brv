@@ -37,7 +37,7 @@ export function indexStates(type, comps) {
 }
 
 export default function ComponentsPage({ route }) {
-  const { shorthands, isAdmin } = useSession();
+  const { shorthands, isEditor } = useSession();
   const [state, setState] = useState({ loading: true });
 
   const load = useCallback((force = false) => {
@@ -168,7 +168,7 @@ export default function ComponentsPage({ route }) {
     return (
       <div className="page">
         <Empty title="No components yet">
-          <p>{isAdmin ? 'Create a component type and import a spreadsheet in Admin → Components.' : 'Admins have not added any components yet.'}</p>
+          <p>{isEditor ? 'Create a component type and import a spreadsheet in Admin → Components.' : 'Admins have not added any components yet.'}</p>
         </Empty>
       </div>
     );

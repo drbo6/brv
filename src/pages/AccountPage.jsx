@@ -3,13 +3,13 @@ import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { deleteRuleset, millis, updateRuleset } from '../lib/rules.js';
-import { useSession } from '../lib/session.jsx';
+import { ROLES, useSession } from '../lib/session.jsx';
 import { useTheme } from '../lib/theme.js';
 import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../components/ui.jsx';
 import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 export default function AccountPage() {
-  const { user, authLoading, isAdmin, signIn, signOut, editProfile } = useSession();
+  const { user, authLoading, realRole, block, blockReason, signIn, signOut, editProfile } = useSession();
   const theme = useTheme();
   const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
 
@@ -47,7 +47,11 @@ export default function AccountPage() {
             <span title="Only you can see this. It is never shown to others.">
               <Icon name="eyeOff" size={13} /> {user.email} · private
             </span>{' '}
-            {isAdmin && <span className="tag t-official">Admin</span>}
+            {realRole !== 'user' && (
+              <span className="tag t-official" title={{ owner: 'Runs the site; can’t be demoted', admin: 'Manages content and people', editor: 'Manages content' }[realRole]}>
+                {ROLES[realRole]}
+              </span>
+            )}
           </p>
         </div>
         <div className="row gap wrap">
@@ -120,9 +124,19 @@ export default function AccountPage() {
         )}
       </section>
 
-      <section className="panel">
-        <h2>Your user ID</h2>
-        <p className="small muted">Site owners need this to make you an admin.</p>
+      {block !== 'none' && (
+        <section className="panel restricted-note" role="status">
+          <h2>Your account is restricted</h2>
+          <p>
+            {block === 'silence' ? 'You can read everything, but can’t comment, react or suggest changes.' : 'You can comment and react, but can’t suggest rules, versions or card changes.'}
+            {blockReason && <> Reason given: “{blockReason}”.</>} Contact an admin if you think this is a mistake.
+          </p>
+        </section>
+      )}
+
+      <details className="panel uid-panel">
+        <summary>Technical: your user ID</summary>
+        <p className="small muted">You don't need this to get a role: admins find you by your username. It is only used when setting up the site's owner in the Firebase console.</p>
         <div className="row gap">
           <code className="uid">{user.uid}</code>
           <button
@@ -136,7 +150,7 @@ export default function AccountPage() {
             <Icon name="copy" />
           </button>
         </div>
-      </section>
+      </details>
     </div>
   );
 }

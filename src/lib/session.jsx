@@ -12,7 +12,17 @@ const SessionCtx = createContext(null);
 export const DEFAULT_SITE = { defaultRulesetId: 'rulebook' };
 
 /** Roles you can preview the site as, from most to least access. */
-export const ROLES = { admin: 'Admin', user: 'Signed-in user', visitor: 'Visitor' };
+/** Roles from most to least access. Editors manage content; admins also manage people; the owner can't be demoted. */
+export const ROLES = { owner: 'Owner', admin: 'Admin', editor: 'Editor', user: 'Signed-in user', visitor: 'Visitor' };
+
+/** Restrictions admins can put on a user. */
+export const BLOCKS = { none: 'No restriction', suggest: 'No suggestions', silence: 'Silenced (read only)' };
+
+// Messages shown when a restricted user tries something they can't do.
+const BLOCKED = {
+  suggest: 'Your account can’t suggest changes at the moment.',
+  talk: 'Your account can’t comment or react at the moment.',
+};
 
 const readViewAs = () => {
   try {
@@ -72,7 +82,10 @@ export function SessionProvider({ children }) {
   const needsProfile = Boolean(authUser && !profile.loading && !profile.data?.setup);
   const [profileOpen, setProfileOpen] = useState(false);
 
+  // Role sources: config/owner (the owner), roles/{uid} (role and restriction), admins/{uid} (original setup).
   const adminDoc = useLive(() => (user ? doc(db, 'admins', user.uid) : null), [user?.uid]);
+  const roleDoc = useLive(() => (user ? doc(db, 'roles', user.uid) : null), [user?.uid]);
+  const ownerDoc = useLive(() => doc(db, 'config', 'owner'), []);
   const site = useLive(() => doc(db, 'config', 'site'), []);
   const shorthands = useLive(() => doc(db, 'config', 'shorthands'), []);
 
@@ -92,9 +105,19 @@ export function SessionProvider({ children }) {
     }
   }, [viewAs]);
 
-  /** Run `fn` as the signed-in user with a profile; otherwise ask to sign in (and set up a profile) first. */
+  const block = roleDoc.data?.block || 'none';
+  const blockReason = roleDoc.data?.reason || '';
+
+  /**
+   * Run `fn` as the signed-in user with a profile; otherwise ask to sign in (and set up a profile)
+   * first. `need` ('suggest' or 'talk') also checks that no restriction forbids the action.
+   */
   const requireUser = useCallback(
-    async (fn) => {
+    async (fn, need) => {
+      if (need && (block === 'silence' || (need === 'suggest' && block === 'suggest'))) {
+        alertDialog({ title: 'Not available', message: `${BLOCKED[need]}${blockReason ? ` Reason given: ${blockReason}` : ''} Contact an admin if you think this is a mistake.` });
+        return undefined;
+      }
       if (user && viewAs !== 'visitor') return needsProfile ? undefined : fn(user);
       if (!(await signIn())) return undefined;
       const u = auth.currentUser;
@@ -102,14 +125,22 @@ export function SessionProvider({ children }) {
       // A brand-new user first sees the profile dialog; they can repeat the action afterwards.
       return snap.exists() && snap.data().setup ? fn(asUser(u, snap.data())) : undefined;
     },
-    [user, signIn, viewAs, needsProfile],
+    [user, signIn, viewAs, needsProfile, block, blockReason],
   );
 
-  const realAdmin = Boolean(user && adminDoc.data);
-  const realRole = !user ? 'visitor' : realAdmin ? 'admin' : 'user';
-  const order = Object.keys(ROLES);
+  const isOwnerUser = Boolean(user && ownerDoc.data?.uid === user.uid);
+  const realRole = !user
+    ? 'visitor'
+    : isOwnerUser
+      ? 'owner'
+      : adminDoc.data || roleDoc.data?.role === 'admin'
+        ? 'admin'
+        : roleDoc.data?.role === 'editor'
+          ? 'editor'
+          : 'user';
+  const rank = (r) => Object.keys(ROLES).indexOf(r);
   // Only roles below your own count; anything else means "no preview".
-  const role = viewAs && order.indexOf(viewAs) > order.indexOf(realRole) ? viewAs : realRole;
+  const role = viewAs && rank(viewAs) > rank(realRole) ? viewAs : realRole;
   const shownUser = role === 'visitor' ? (user === undefined ? undefined : null) : user;
 
   const value = useMemo(
@@ -117,7 +148,14 @@ export function SessionProvider({ children }) {
       user: shownUser,
       realUser: user,
       authLoading: user === undefined,
-      isAdmin: role === 'admin',
+      // isEditor: may change content. isAdmin: may also manage people.
+      isEditor: rank(role) <= rank('editor'),
+      isAdmin: rank(role) <= rank('admin'),
+      isOwner: role === 'owner',
+      ownerUid: ownerDoc.data?.uid || null,
+      ownerLoaded: !ownerDoc.loading,
+      block: role === 'visitor' ? 'none' : block,
+      blockReason,
       realRole,
       role,
       previewing: role !== realRole,
@@ -133,7 +171,7 @@ export function SessionProvider({ children }) {
       editProfile: () => setProfileOpen(true),
       closeProfile: () => setProfileOpen(false),
     }),
-    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen],
+    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen, ownerDoc.data, ownerDoc.loading, block, blockReason],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;

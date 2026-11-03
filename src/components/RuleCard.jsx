@@ -15,7 +15,7 @@ import { notify, ruleTarget } from '../lib/inbox.js';
  * the reader browsed to.
  */
 function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersion, onSetActive, onUseVersion, onMove, canMoveUp, canMoveDown, tree, rules }) {
-  const { isAdmin, requireUser, user, kinds } = useSession();
+  const { isEditor, requireUser, user, kinds } = useSession();
   const { rule, vs, active, activeVersion, shown } = item;
   const [discussOpen, setDiscussOpen] = useState(focused);
   const [dialog, setDialog] = useState(null);
@@ -148,7 +148,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
             {shown && (
               <Reactions
                 reactions={shown.reactions}
-                onReact={(type) => requireUser((u) => attempt(() => react('versions', shown.id, u.uid, shown.reactions?.[u.uid], type), null, 'reaction'))}
+                onReact={(type) => requireUser((u) => attempt(() => react('versions', shown.id, u.uid, shown.reactions?.[u.uid], type), null, 'reaction'), 'talk')}
               />
             )}
 
@@ -158,15 +158,15 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 <span>{rule.commentCount || 0}</span>
                 <span className="hide-sm">Discuss</span>
               </button>
-              <button className="chip" onClick={() => requireUser(() => setDialog('suggest'))}>
+              <button className="chip" onClick={() => requireUser(() => setDialog('suggest'), isEditor ? null : 'suggest')}>
                 <Icon name="bulb" />
-                <span className="hide-sm">{isAdmin ? 'Add version' : 'Suggest change'}</span>
+                <span className="hide-sm">{isEditor ? 'Add version' : 'Suggest change'}</span>
               </button>
               <FollowButton target={ruleTarget(rule)} what={`${ruleName(rule)} (its discussion and versions)`} />
               <button className="chip" onClick={copyLink} title="Copy a link to this rule (it keeps working when rules are renumbered)" aria-label={`Copy link to ${ruleName(rule)}`}>
                 <Icon name="link" />
               </button>
-              {!isAdmin && shown && user && shown.createdBy === user.uid && shown.label === 'Suggestion' && (
+              {!isEditor && shown && user && shown.createdBy === user.uid && shown.label === 'Suggestion' && (
                 <button className="chip" onClick={() => setDialog('version')}>
                   <Icon name="edit" />
                   <span className="hide-sm">Edit my suggestion</span>
@@ -175,7 +175,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
             </div>
           </div>
 
-          {isAdmin && (
+          {isEditor && (
             <div className="admin-tools" role="group" aria-label="Admin tools">
               <span className="admin-tools-label">Admin</span>
               {shown && (
