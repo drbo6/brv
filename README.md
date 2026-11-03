@@ -2,7 +2,7 @@
 
 A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rage: Valhalla*. It's a static site hosted on GitHub Pages, with Firebase handling sign-in and data.
 
-- **Rules.** Every rule from the rulebook is a separate entry with a stable ID such as `SUM.1`. The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
+- **Rules.** Every rule from the rulebook is a separate, numbered entry (such as 5.3.1.2) with its own permanent link. The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Admins define component types and their fields, arrange them on a simple card layout, import and export spreadsheets, and define `[shorthand]` icons.
 - **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
@@ -82,13 +82,11 @@ node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
 
 ## How it works
 
-### Rule IDs
+### Rule numbers and links
 
-Rule IDs look like `SECTION.n`, for example `SUM.1`, `CON.4` or `QRF.3`. The ID is stored separately from the rule's position. Moving a rule, reordering sections or renaming a section never changes existing IDs, so links and discussions stay valid. Section numbers such as *5.3.1* are computed from the current order and are only used for display.
+Sections and rules have no codes. A section's number (*5.3.1*) comes from its place in the section tree, and a rule's number (*5.3.1.2*) adds its place among the active rules of its section. Numbers are computed on the fly, so moving rules or sections renumbers them. Suggested rules have no number until they are approved.
 
-New rules get the next free number in their section. A rule added between `SUM.2` and `SUM.3` might be `SUM.5`. Admins can edit any ID if they want to renumber.
-
-Suggested rules from the community get a temporary `SUG-XXXX` ID until an admin approves them.
+Links point at a rule's document id, which never changes, so links, discussions and inbox notices survive renumbering. (Links from older versions of the site, which used codes such as `SUM.1`, still open the right rule.)
 
 ### Rulesets
 
@@ -150,8 +148,8 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 
 | Collection | Contents |
 | --- | --- |
-| `sections` | `code`, `title`, `parent`, `order` |
-| `rules` | `code`, `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
+| `sections` | `title`, `parent`, `order` |
+| `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
 | `versions` | `ruleId`, `label`, `text` (HTML), `note`, `reactions` {uid: `up` / `down` / `q`} |
 | `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions` |
 | `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId}, `ownerUid`, `visibility` |

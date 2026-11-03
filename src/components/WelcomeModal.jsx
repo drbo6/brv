@@ -27,16 +27,15 @@ export default function WelcomeModal({ onClose }) {
         </div>
         <div className="welcome-body">
           <p className="welcome-lead">
-            <b>Blood Rage: Valhalla</b> is a fantastic game. Its rulebook, however, leaves a lot of questions unanswered — and the table argument over what a card
-            “really” means can last longer than an Age.
+            <b>Blood Rage: Valhalla</b> is a fantastic game. Its rulebook, however, leaves a lot of questions unanswered.
           </p>
           <p>This site is a FAQ that the Blood Rage community maintains together:</p>
           <ul className="welcome-points">
             <li>
               <Icon name="book" size={18} />
               <span>
-                <b>Every rule, one at a time.</b> The rulebook is split into individual rules with short IDs like <code>SUM.1</code>, so you can point at exactly
-                what you mean.
+                <b>Every rule, one at a time.</b> The rulebook is split into individual, numbered rules (like <b>5.3.1.2</b>), each with its own link, so
+                you can point at exactly what you mean.
               </span>
             </li>
             <li>

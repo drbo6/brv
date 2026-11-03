@@ -59,8 +59,8 @@ const TOPICS = [
             time.
           </li>
           <li>
-            <b>Rule IDs</b> like <code>SUM.1</code> are permanent. Moving a rule or renaming a section never changes them, so they are safe to cite. Section numbers such as{' '}
-            <i>5.3.1</i> are only for display and can change.
+            <b>Rule numbers</b> like <i>5.3.1.2</i> are the section number plus the rule's place in it. They follow the current order, so they can change when rules or
+            sections are moved; a rule's <b>link</b> never changes.
           </li>
           <li>
             <b>Copy link</b> <Icon name="link" size={14} /> gives a direct link that opens the site on that rule.
@@ -172,7 +172,7 @@ const TOPICS = [
             <b>Suggest change</b> on an open rule adds your wording as a new <i>Suggestion</i> version. Add a rationale or source so others understand why.
           </li>
           <li>
-            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It gets a temporary ID like <code>SUG-4KQ2</code> until an admin approves it and gives it a permanent one.
+            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It has no number until an admin approves it.
             Turn on <i>Show inactive</i> to see suggested rules.
           </li>
           <li>You can edit your own suggestions at any time, and withdraw a suggested rule as long as nobody has commented on it.</li>
@@ -367,7 +367,7 @@ const TOPICS = [
             Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>), which gives them a permanent ID.
           </li>
           <li>
-            <b>Sections:</b> add sections, rename them, change their short code, nest them and reorder them. Rule IDs never change when you do.
+            <b>Sections:</b> add sections, rename them, nest them and reorder them. Numbers follow the new order; links to rules keep working.
           </li>
           <li>
             <b>Rule kinds:</b> the list of kinds with their name and color.
@@ -545,7 +545,8 @@ const TOPICS = [
         <dd>It may not be part of the current ruleset (turn on Show inactive), or a search or filter hides it.</dd>
         <dt>How do I cite a rule?</dt>
         <dd>
-          Use its ID, for example <code>SUM.1</code>, or the link from the rule's link button. Both stay valid when rules are reordered.
+          Use its number, for example <i>5.3.1.2</i>, in conversation. For something lasting, share the link from the rule's link button: it keeps working even
+          if the rule is renumbered.
         </dd>
         <dt>Who can change what?</dt>
         <dd>

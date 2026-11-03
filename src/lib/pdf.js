@@ -57,7 +57,7 @@ export async function exportRulesPdf({ title, subtitle, groups, shorthands, file
     for (const r of g.rules) {
       ensure(48);
       const tags = [r.label, r.kindLabel, r.inactive ? 'not in ruleset' : null].filter(Boolean).join(' | ');
-      write(`${r.code}  ${r.title || ''}`, { size: 10.5, style: 'bold', gap: 1, color: r.inactive ? [140, 135, 130] : [30, 26, 24] });
+      write(`${r.number ? `${r.number}  ` : ''}${r.title || ''}`, { size: 10.5, style: 'bold', gap: 1, color: r.inactive ? [140, 135, 130] : [30, 26, 24] });
       if (tags) write(tags, { size: 8, color: [120, 110, 105], gap: 2 });
       write(shText(r.html), { size: 10, gap: 10, color: r.inactive ? [140, 135, 130] : [30, 26, 24] });
     }

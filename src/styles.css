@@ -1359,15 +1359,6 @@ h4.section-heading {
   font-variant-numeric: tabular-nums;
 }
 
-.section-code {
-  margin-left: auto;
-  font-family: var(--font-ui);
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  font-weight: 500;
-}
-
 /* Rules read like running text. Clicking one turns it into a card with its tools. */
 .rule {
   position: relative;

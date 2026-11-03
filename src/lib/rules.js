@@ -63,7 +63,28 @@ export function groupVersions(versions = []) {
   return map;
 }
 
-export const sortRules = (rules) => [...rules].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
+export const sortRules = (rules) => [...rules].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || millis(a.createdAt) - millis(b.createdAt) || String(a.id).localeCompare(String(b.id)));
+
+/**
+ * Rule numbers come from position: the section's number plus the rule's place among the active
+ * rules of that section (e.g. 5.3.1.2). Suggested and rejected rules have no number yet.
+ * Links use the rule's document id, so they survive reordering.
+ */
+export function numberRules(rules, tree) {
+  const out = new Map();
+  const count = new Map();
+  for (const r of sortRules(rules)) {
+    if (r.status && r.status !== 'active') continue;
+    const n = (count.get(r.sectionId) || 0) + 1;
+    count.set(r.sectionId, n);
+    const sec = tree.byId.get(r.sectionId)?.number;
+    out.set(r.id, sec ? `${sec}.${n}` : String(n));
+  }
+  return out;
+}
+
+/** How a rule is named in messages and lists: its number and title. */
+export const ruleName = (rule) => (rule.number ? `${rule.number} ${rule.title}` : `“${rule.title}”`);
 
 export function rulebookEntries(rules, versionsByRule) {
   const entries = {};
@@ -73,17 +94,6 @@ export function rulebookEntries(rules, versionsByRule) {
     if (v) entries[r.id] = v.id;
   }
   return entries;
-}
-
-/** Next free "<SECTION>.<n>" code. */
-export function nextCode(sectionCode, rules) {
-  const prefix = `${sectionCode}.`;
-  const max = rules.reduce((m, r) => {
-    if (!String(r.code).startsWith(prefix)) return m;
-    const n = parseInt(String(r.code).slice(prefix.length), 10);
-    return Number.isFinite(n) ? Math.max(m, n) : m;
-  }, 0);
-  return `${prefix}${max + 1}`;
 }
 
 export const reactionCounts = (reactions = {}) => {

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { escapeHtml } from '../lib/html.js';
-import { createRule, createVersion, LABELS, nextCode, updateRule, updateVersion } from '../lib/rules.js';
+import { createRule, createVersion, LABELS, ruleName, updateRule, updateVersion } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 import { confirmDialog, promptDialog } from './dialogs.jsx';
@@ -214,7 +214,7 @@ export function VersionDialog({ rule, version, onClose }) {
   };
 
   return (
-    <Modal title={editing ? `Edit version of ${rule.code}` : isAdmin ? `New version of ${rule.code}` : `Suggest a change to ${rule.code}`} onClose={onClose} wide>
+    <Modal title={editing ? `Edit version of ${ruleName(rule)}` : isAdmin ? `New version of ${ruleName(rule)}` : `Suggest a change to ${ruleName(rule)}`} onClose={onClose} wide>
       {changedElsewhere && (
         <div className="conflict-bar" role="alert">
           <Icon name="info" />
@@ -270,9 +270,6 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
   const editing = Boolean(rule);
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(rule?.sectionId || firstSection);
-  const sectionCode = (id) => tree.byId.get(id)?.code || 'GEN';
-  const [code, setCode] = useState(rule?.code || nextCode(sectionCode(firstSection), rules));
-  const [codeTouched, setCodeTouched] = useState(editing);
   const [title, setTitle] = useState(rule?.title || '');
   const [kind, setKind] = useState(rule?.kind || 'rule');
   const [page, setPage] = useState(rule?.page ?? '');
@@ -282,33 +279,25 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const codeTaken = isAdmin && rules.some((r) => r.code.toLowerCase() === code.trim().toLowerCase() && r.id !== rule?.id);
-
-  const changeSection = (id) => {
-    setSectionId(id);
-    if (!codeTouched) setCode(nextCode(sectionCode(id), rules));
-  };
-
   const submit = async (e) => {
     e.preventDefault();
-    if (codeTaken) return;
     setBusy(true);
     const siblings = rules.filter((r) => r.sectionId === sectionId && r.id !== rule?.id);
     const order = siblings.reduce((m, r) => Math.max(m, r.order ?? 0), 0) + 1;
     let ok;
     if (editing) {
-      const patch = { title: title.trim(), sectionId, code: code.trim(), kind, page: page === '' ? null : Number(page), status };
+      const patch = { title: title.trim(), sectionId, kind, page: page === '' ? null : Number(page), status };
       if (sectionId !== rule.sectionId) patch.order = order;
       ok = await attempt(() => updateRule(rule.id, patch), 'Rule saved');
     } else {
       const meta = isAdmin
-        ? { code: code.trim(), sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status }
-        : { code: `SUG-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
+        ? { sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status }
+        : { sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
       const version = { label: isAdmin ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
       ok = await attempt(() => createRule(meta, version, user), isAdmin ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
       if (ok) {
-        onCreated?.(meta.code);
-        const t = ruleTarget({ id: ok, code: meta.code, title: meta.title });
+        onCreated?.(ok);
+        const t = ruleTarget({ id: ok, title: meta.title });
         autoFollow(t.key, user.uid, t);
         if (!isAdmin) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
       }
@@ -318,7 +307,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
   };
 
   return (
-    <Modal title={editing ? `Edit rule ${rule.code}` : isAdmin ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
+    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : isAdmin ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
         {!editing && !isAdmin && (
           <p className="muted">
@@ -328,7 +317,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
         <div className="grid-2">
           <div className="field">
             <label htmlFor="r-section">Section</label>
-            <select id="r-section" value={sectionId} onChange={(e) => changeSection(e.target.value)} required>
+            <select id="r-section" value={sectionId} onChange={(e) => setSectionId(e.target.value)} required>
               {tree.ordered.map((s) => (
                 <option key={s.id} value={s.id}>
                   {'  '.repeat(s.depth)}
@@ -343,21 +332,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
           </div>
         </div>
         {isAdmin && (
-          <div className="grid-4">
-            <div className="field">
-              <label htmlFor="r-code">ID</label>
-              <input
-                id="r-code"
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value.replace(/\s+/g, ''));
-                  setCodeTouched(true);
-                }}
-                required
-                aria-invalid={codeTaken}
-              />
-              {codeTaken && <p className="error small">That ID is already used.</p>}
-            </div>
+          <div className="grid-3">
             <div className="field">
               <label htmlFor="r-kind">Kind</label>
               <select id="r-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -408,7 +383,7 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCre
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" type="submit" disabled={busy || !title.trim() || (!editing && !text.trim()) || codeTaken}>
+          <button className="primary" type="submit" disabled={busy || !title.trim() || (!editing && !text.trim())}>
             {editing ? 'Save' : isAdmin ? 'Add rule' : 'Submit suggestion'}
           </button>
         </div>

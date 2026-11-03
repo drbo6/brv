@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { absoluteLink, href } from '../lib/router.js';
-import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, nextCode, react, updateRule } from '../lib/rules.js';
+import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, react, ruleName, updateRule } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
@@ -28,19 +28,16 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
   };
 
   const copyLink = async () => {
-    await copyText(absoluteLink('rules', [rule.code]));
-    toast(`Link to ${rule.code} copied`, 'ok');
+    await copyText(absoluteLink('rules', [rule.id]));
+    toast(`Link to ${ruleName(rule)} copied`, 'ok');
   };
 
-  const approve = () => {
-    const section = tree.byId.get(rule.sectionId);
-    const code = nextCode(section?.code || 'GEN', rules);
-    return attempt(() => updateRule(rule.id, { status: 'active', code }), `Approved as ${code}`).then((ok) => {
+  const approve = () =>
+    attempt(() => updateRule(rule.id, { status: 'active' }), 'Rule approved').then((ok) => {
       if (!ok) return;
-      const t = ruleTarget({ ...rule, code });
-      notify(t.key, user, { type: 'approved', title: `${user.displayName || 'An admin'} approved the suggested rule “${rule.title}” as ${code}`, text: '', link: t.link });
+      const t = ruleTarget(rule);
+      notify(t.key, user, { type: 'approved', title: `${user.displayName || 'An admin'} approved the suggested rule “${rule.title}”`, text: '', link: t.link });
     });
-  };
 
   const kind = kindInfo(kinds, rule.kind);
   const hasKind = rule.kind && rule.kind !== 'rule';
@@ -53,10 +50,10 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
   };
 
   return (
-    <article id={`rule-${rule.code}`} className={classes.join(' ')} aria-label={`${rule.code} ${rule.title}`} style={hasKind && kind.color ? { '--kind': kind.color } : undefined}>
+    <article id={`rule-${rule.id}`} className={classes.join(' ')} aria-label={ruleName(rule)} style={hasKind && kind.color ? { '--kind': kind.color } : undefined}>
       <div className="rule-read" onClick={onBodyClick}>
         <header className="rule-head">
-          <span className="rule-code">{rule.code}</span>
+          {rule.number && <span className="rule-code">{rule.number}</span>}
           <h3 className="rule-title">
             <button type="button" className="rule-toggle" onClick={() => onToggle(rule.id)} aria-expanded={open} title={open ? 'Hide tools' : 'Show versions, reactions and discussion'}>
               {rule.title}
@@ -156,8 +153,8 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 <Icon name="bulb" />
                 <span className="hide-sm">{isAdmin ? 'Add version' : 'Suggest change'}</span>
               </button>
-              <FollowButton target={ruleTarget(rule)} what={`${rule.code} (its discussion and versions)`} />
-              <button className="chip" onClick={copyLink} title="Copy link" aria-label={`Copy link to ${rule.code}`}>
+              <FollowButton target={ruleTarget(rule)} what={`${ruleName(rule)} (its discussion and versions)`} />
+              <button className="chip" onClick={copyLink} title="Copy a link to this rule (it keeps working when rules are renumbered)" aria-label={`Copy link to ${ruleName(rule)}`}>
                 <Icon name="link" />
               </button>
               {!isAdmin && shown && user && shown.createdBy === user.uid && shown.label === 'Suggestion' && (
@@ -179,7 +176,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                 </button>
               )}
               {shown && vs.length > 1 && (
-                <button className="chip danger" onClick={async () => (await confirmDialog({ title: 'Delete version', message: `Delete this ${shown.label} version of ${rule.code}?`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteVersion(shown.id), 'Version deleted')}>
+                <button className="chip danger" onClick={async () => (await confirmDialog({ title: 'Delete version', message: `Delete this ${shown.label} version of ${ruleName(rule)}?`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteVersion(shown.id), 'Version deleted')}>
                   <Icon name="trash" />
                   Delete version
                 </button>
@@ -200,7 +197,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                   Approve rule
                 </button>
               )}
-              <button className="chip danger" onClick={async () => (await confirmDialog({ title: `Delete ${rule.code}`, message: `Delete “${rule.title}” with all its versions and comments? You can undo this.`, confirmLabel: 'Delete rule', danger: true })) && attempt(() => deleteRule(rule.id), `${rule.code} deleted`)}>
+              <button className="chip danger" onClick={async () => (await confirmDialog({ title: 'Delete rule', message: `Delete ${ruleName(rule)} with all its versions and comments? You can undo this.`, confirmLabel: 'Delete rule', danger: true })) && attempt(() => deleteRule(rule.id), 'Rule deleted')}>
                 <Icon name="trash" />
                 Delete rule
               </button>

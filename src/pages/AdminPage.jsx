@@ -4,7 +4,7 @@ import { addDoc, deleteDoc, setDoc, updateDoc } from '../lib/store.js';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
+import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, numberRules, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { useSession } from '../lib/session.jsx';
@@ -161,7 +161,10 @@ function RulesAdmin() {
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
   const cardSuggestions = useLive(() => query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
-  const ruleById = useMemo(() => new Map((rules.data || []).map((r) => [r.id, r])), [rules.data]);
+  const ruleById = useMemo(() => {
+    const numbers = numberRules(rules.data || [], tree);
+    return new Map((rules.data || []).map((r) => [r.id, { ...r, number: numbers.get(r.id) || '' }]));
+  }, [rules.data, tree]);
 
   const suggestedRules = (rules.data || []).filter((r) => r.status === 'suggested');
 
@@ -202,8 +205,8 @@ function RulesAdmin() {
                 <li key={v.id}>
                   <div className="queue-head">
                     {r ? (
-                      <a href={href('rules', [r.code])}>
-                        <b>{r.code}</b> {r.title}
+                      <a href={href('rules', [r.id])}>
+                        {r.number && <b>{r.number}</b>} {r.title}
                       </a>
                     ) : (
                       <span className="muted">Deleted rule</span>
@@ -383,8 +386,7 @@ function KindsEditor({ rules }) {
 }
 
 function SectionsEditor({ tree, rules, loading }) {
-  const [adding, setAdding] = useState({ code: '', title: '', parent: '' });
-  const codes = new Set(tree.ordered.map((s) => s.code));
+  const [adding, setAdding] = useState({ title: '', parent: '' });
   const ruleCount = (id) => rules.filter((r) => r.sectionId === id).length;
 
   const move = (s, delta) => {
@@ -399,18 +401,16 @@ function SectionsEditor({ tree, rules, loading }) {
 
   const add = async (e) => {
     e.preventDefault();
-    const code = adding.code.trim().toUpperCase();
-    if (codes.has(code)) return alertDialog({ title: 'Code in use', message: `The section code ${code} is already used. Pick another one.` });
     const siblings = tree.children.get(adding.parent || null) || [];
-    const ok = await attempt(() => setDoc(doc(db, 'sections', code), { code, title: adding.title.trim(), parent: adding.parent || null, order: siblings.length + 1 }), 'Section added');
-    if (ok) setAdding({ code: '', title: '', parent: '' });
+    const ok = await attempt(() => addDoc(collection(db, 'sections'), { title: adding.title.trim(), parent: adding.parent || null, order: siblings.length + 1 }), 'Section added');
+    if (ok) setAdding({ title: '', parent: '' });
   };
 
   return (
     <section className="panel span-2">
       <h2>Sections</h2>
       <p className="small muted">
-        Section codes prefix new rule IDs (e.g. <code>SUM</code> → <code>SUM.7</code>). Existing rule IDs never change when sections are renamed or reordered, so links and discussions stay valid.
+        Section and rule numbers follow the order here. Moving sections or rules renumbers them; links to rules keep working because they don't use the numbers.
       </p>
       {loading ? (
         <Spinner />
@@ -419,7 +419,6 @@ function SectionsEditor({ tree, rules, loading }) {
           <thead>
             <tr>
               <th>#</th>
-              <th>Code</th>
               <th>Title</th>
               <th>Parent</th>
               <th>Rules</th>
@@ -430,22 +429,6 @@ function SectionsEditor({ tree, rules, loading }) {
             {tree.ordered.map((s) => (
               <tr key={s.id}>
                 <td className="muted">{s.number}</td>
-                <td>
-                  <input
-                    className="mini"
-                    defaultValue={s.code}
-                    aria-label="Code"
-                    onBlur={(e) => {
-                      const v = e.target.value.trim().toUpperCase();
-                      if (v && v !== s.code) {
-                        if (codes.has(v)) {
-                          alertDialog({ title: 'Code in use', message: `The section code ${v} is already used.` });
-                          e.target.value = s.code;
-                        } else attempt(() => updateDoc(doc(db, 'sections', s.id), { code: v }), null, 'section code');
-                      }
-                    }}
-                  />
-                </td>
                 <td style={{ paddingLeft: 8 + s.depth * 18 }}>
                   <input defaultValue={s.title} aria-label="Title" onBlur={(e) => e.target.value.trim() && e.target.value !== s.title && attempt(() => updateDoc(doc(db, 'sections', s.id), { title: e.target.value.trim() }), null, 'section title')} />
                 </td>
@@ -493,7 +476,6 @@ function SectionsEditor({ tree, rules, loading }) {
         </table>
       )}
       <form className="row gap wrap add-row" onSubmit={add}>
-        <input value={adding.code} onChange={(e) => setAdding({ ...adding, code: e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 6) })} placeholder="Code (e.g. FAQ)" required aria-label="New section code" className="mini" />
         <input value={adding.title} onChange={(e) => setAdding({ ...adding, title: e.target.value })} placeholder="Title" required aria-label="New section title" />
         <select value={adding.parent} onChange={(e) => setAdding({ ...adding, parent: e.target.value })} aria-label="New section parent">
           <option value="">— top level —</option>

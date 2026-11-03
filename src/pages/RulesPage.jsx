@@ -4,7 +4,7 @@ import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, numberRules, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { exportRulesPdf } from '../lib/pdf.js';
@@ -29,13 +29,17 @@ export default function RulesPage({ route }) {
   // ----- derived rule data -----
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const vByRule = useMemo(() => groupVersions(versions.data || []), [versions.data]);
-  const allRules = useMemo(() => sortRules(rules.data || []), [rules.data]);
+  // Every rule carries its display number (from its position), computed fresh as rules move.
+  const allRules = useMemo(() => {
+    const numbers = numberRules(rules.data || [], tree);
+    return sortRules(rules.data || []).map((r) => ({ ...r, number: numbers.get(r.id) || '' }));
+  }, [rules.data, tree]);
   const rulebook = useMemo(() => rulebookEntries(allRules, vByRule), [allRules, vByRule]);
   const index = useMemo(
     () =>
       allRules.map((rule) => {
         const vs = vByRule.get(rule.id) || [];
-        return { rule, vs, searchText: `${rule.code} ${rule.title} ${vs.map((v) => `${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`.toLowerCase() };
+        return { rule, vs, searchText: `${rule.number} ${rule.title} ${vs.map((v) => `${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`.toLowerCase() };
       }),
     [allRules, vByRule],
   );
@@ -87,7 +91,7 @@ export default function RulesPage({ route }) {
     const first = allRules.find((r) => r.id === browsed[0]);
     if (first) {
       setOpenId(first.id);
-      document.getElementById(`rule-${first.code}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById(`rule-${first.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -133,7 +137,9 @@ export default function RulesPage({ route }) {
   const [showInactive, setShowInactive] = useLocalStorage('brv-show-inactive', false);
   const [labelFilter, setLabelFilter] = useState('');
   const [kindFilter, setKindFilter] = useState('');
-  const focusCode = route.parts[0] || null;
+  // Links point at a rule's id; links from before rules were numbered used its old code.
+  const focusParam = route.parts[0] || null;
+  const focusId = useMemo(() => (focusParam ? (allRules.find((r) => r.id === focusParam || r.code === focusParam)?.id ?? null) : null), [focusParam, allRules]);
 
   const items = useMemo(() => {
     const tokens = q.split(/\s+/).filter(Boolean);
@@ -144,7 +150,7 @@ export default function RulesPage({ route }) {
         return { rule, vs, searchText, active: Boolean(activeVersion), activeVersion, shown };
       })
       .filter((it) => {
-        if (it.rule.code === focusCode) return true;
+        if (it.rule.id === focusId) return true;
         if (it.rule.status === 'rejected' && !(isAdmin && showInactive)) return false;
         // While customizing a ruleset, inactive rules stay visible so they can be switched back on.
         if (!it.active && !showInactive && !draft) return false;
@@ -152,7 +158,7 @@ export default function RulesPage({ route }) {
         if (kindFilter && (it.rule.kind || 'rule') !== kindFilter) return false;
         return tokens.every((t) => it.searchText.includes(t));
       });
-  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isAdmin, focusCode, draft]);
+  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isAdmin, focusId, draft]);
 
   const groups = useMemo(() => {
     const bySection = new Map();
@@ -176,15 +182,14 @@ export default function RulesPage({ route }) {
   // ----- focus a linked rule -----
   const focusedOnce = useRef(null);
   useEffect(() => {
-    if (!focusCode || focusedOnce.current === focusCode || rules.loading || versions.loading) return;
-    const el = document.getElementById(`rule-${focusCode}`);
+    if (!focusId || focusedOnce.current === focusId || rules.loading || versions.loading) return;
+    const el = document.getElementById(`rule-${focusId}`);
     if (el) {
-      focusedOnce.current = focusCode;
-      const linked = allRules.find((r) => r.code === focusCode);
-      if (linked) setOpenId(linked.id);
+      focusedOnce.current = focusId;
+      setOpenId(focusId);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [focusCode, rules.loading, versions.loading, groups, allRules]);
+  }, [focusId, rules.loading, versions.loading, groups]);
 
   // ----- actions -----
   const onMove = useCallback(
@@ -235,7 +240,7 @@ export default function RulesPage({ route }) {
       heading: section.number ? `${section.number}  ${section.title}` : section.title,
       depth: section.depth,
       rules: its.map((it) => ({
-        code: it.rule.code,
+        number: it.rule.number,
         title: it.rule.title,
         label: it.shown?.label,
         kindLabel: it.rule.kind && it.rule.kind !== 'rule' ? kindInfo(kinds, it.rule.kind).label : '',
@@ -434,7 +439,6 @@ export default function RulesPage({ route }) {
                   <H id={`sec-${section.id}`} className="section-heading">
                     {section.number && <span className="section-num">{section.number}</span>}
                     {section.title}
-                    {section.code && <span className="section-code">{section.code}</span>}
                   </H>
                   {its.map((it) => {
                     const siblings = allRules.filter((r) => r.sectionId === it.rule.sectionId);
@@ -445,7 +449,7 @@ export default function RulesPage({ route }) {
                         item={it}
                         setName={unsaved ? `${selectedSet.name} (unsaved)` : selectedSet.name}
                         editing={Boolean(draft?.customizing)}
-                        focused={it.rule.code === focusCode}
+                        focused={it.rule.id === focusId}
                         open={openId === it.rule.id}
                         onToggle={onToggle}
                         onShowVersion={onShowVersion}
@@ -508,9 +512,9 @@ export default function RulesPage({ route }) {
           tree={tree}
           rules={allRules}
           onClose={() => setDialog(null)}
-          onCreated={(code) => {
+          onCreated={(id) => {
             if (!isAdmin) setShowInactive(true);
-            setTimeout(() => navigate('rules', [code]), 300);
+            setTimeout(() => navigate('rules', [id]), 300);
           }}
         />
       )}
