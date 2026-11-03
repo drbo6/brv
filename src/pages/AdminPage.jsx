@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { collection, doc, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
+import { collection, doc, getDocs, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
 import { addDoc, deleteDoc, setDoc, updateDoc, writeBatch } from '../lib/store.js';
 import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset } from '../lib/rules.js';
+import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, groupVersions, LABEL_CLASS, shortIds, millis, reactionCounts, rulebookEntries, RULEBOOK_SET, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
+import { sortSets } from '../components/RulesetSelect.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
@@ -697,15 +698,59 @@ function SectionsEditor({ tree, rules, loading }) {
 function RulesetsAdmin() {
   const { site, user } = useSession();
   const sets = useLive(() => collection(db, 'rulesets'), []);
-  const list = [...(sets.data || [])].sort((a, b) => (a.visibility === 'public' ? 0 : 1) - (b.visibility === 'public' ? 0 : 1) || millis(b.updatedAt) - millis(a.updatedAt));
+  const all = sets.data || [];
+  // Public sets first (Official, Community, Experimental), then everyone's private sets, newest first.
+  const list = [...sortSets(all.filter((s) => s.visibility === 'public')), ...all.filter((s) => s.visibility !== 'public').sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt))];
+  const hasPublic = all.some((s) => s.visibility === 'public');
   const setDefault = (id) => attempt(() => setDoc(doc(db, 'config', 'site'), { defaultRulesetId: id }, { merge: true }), 'Default ruleset updated');
+
+  const rename = async (s) => {
+    const name = await promptDialog({ title: 'Rename ruleset', label: 'Name', initial: s.name, confirmLabel: 'Rename', validate: (v) => (v.trim() ? '' : 'Give it a name.') });
+    if (name?.trim() && name.trim() !== s.name) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Ruleset renamed');
+  };
+
+  /** A new ruleset holding every printed rule: for a new edition, or the site's first ruleset. */
+  const fromPrinted = async () => {
+    const name = await promptDialog({
+      title: 'New ruleset from the printed rules',
+      message: 'It uses the Rulebook version of every rule, and becomes a public Official ruleset you can rename and change.',
+      label: 'Name',
+      initial: 'Rulebook',
+      placeholder: 'e.g. Rulebook, 1st edition',
+      confirmLabel: 'Create',
+      validate: (v) => (v.trim() ? '' : 'Give it a name.'),
+    });
+    if (!name?.trim()) return;
+    await attempt(async () => {
+      const [rules, versions] = await Promise.all(['rules', 'versions'].map((c) => getDocs(collection(db, c)).then((q) => q.docs.map((d) => ({ id: d.id, ...d.data() })))));
+      const entries = rulebookEntries(rules, groupVersions(versions));
+      const newId = await createRuleset({ name: name.trim(), description: 'Every rule as printed in the rulebook.', entries }, user);
+      await updateRuleset(newId, { visibility: 'public', label: 'Official' });
+      // The first public ruleset becomes the default.
+      if (!hasPublic) await setDoc(doc(db, 'config', 'site'), { defaultRulesetId: newId }, { merge: true });
+      return newId;
+    }, 'Ruleset created');
+  };
 
   return (
     <section className="panel">
-      <h2>Rulesets</h2>
+      <div className="panel-head">
+        <h2>Rulesets</h2>
+        <button className="small" onClick={fromPrinted} title="Make a public Official ruleset with every rule as printed: for a new edition, or as the site's first ruleset">
+          <Icon name="plus" />
+          New from the printed rules
+        </button>
+      </div>
       <p className="small muted">
-        Public rulesets appear for everyone in the ruleset picker. The default ruleset is what visitors see until they pick another. Only public rulesets can be the default.
+        No ruleset is <i>the</i> rulebook: rulebooks get editions too. Public rulesets appear for everyone in the ruleset picker, grouped by their label (<i>Official</i>,{' '}
+        <i>Community</i> or <i>Experimental</i>). The default ruleset, whatever its label, is what visitors see until they pick another; only a public ruleset can be the
+        default. Rename a ruleset with the pencil.
       </p>
+      {!hasPublic && !sets.loading && (
+        <p className="callout small">
+          The site has no public ruleset yet, so readers see the <b>{RULEBOOK_SET.name}</b>. Use <b>New from the printed rules</b> to make it a real ruleset.
+        </p>
+      )}
       {sets.loading ? (
         <Spinner />
       ) : (
@@ -714,6 +759,7 @@ function RulesetsAdmin() {
             <tr>
               <th>Default</th>
               <th>Name</th>
+              <th>Label</th>
               <th>Owner</th>
               <th>Rules</th>
               <th>Updated</th>
@@ -722,21 +768,6 @@ function RulesetsAdmin() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>
-                <input type="radio" name="default-set" checked={site.defaultRulesetId === RULEBOOK_SET.id} onChange={() => setDefault(RULEBOOK_SET.id)} aria-label="Make default" />
-              </td>
-              <td>
-                <b>{RULEBOOK_SET.name}</b>
-              </td>
-              <td className="muted">built in</td>
-              <td className="muted">—</td>
-              <td className="muted">always current</td>
-              <td>
-                <span className="tag t-community">Public</span>
-              </td>
-              <td />
-            </tr>
             {list.map((s) => (
               <tr key={s.id}>
                 <td>
@@ -750,8 +781,25 @@ function RulesetsAdmin() {
                   />
                 </td>
                 <td>
-                  <a href={href('rules', [], { set: s.id })}>{s.name}</a>
+                  <a href={href('rules', [], { set: s.id })}>{s.name}</a>{' '}
+                  <button className="icon-btn" onClick={() => rename(s)} aria-label={`Rename ${s.name}`} title="Rename">
+                    <Icon name="edit" size={14} />
+                  </button>
                   {s.description && <p className="small muted clamp">{s.description}</p>}
+                </td>
+                <td>
+                  <select
+                    value={s.label in SET_LABELS ? s.label : ''}
+                    onChange={(e) => attempt(() => updateRuleset(s.id, { label: e.target.value || null }), e.target.value ? `Labeled ${e.target.value}` : 'Label removed')}
+                    aria-label={`Label of ${s.name}`}
+                  >
+                    <option value="">No label</option>
+                    {Object.keys(SET_LABELS).map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td>
                   <UserName uid={s.ownerUid} fallback={s.ownerName} />
@@ -824,7 +872,8 @@ const RIGHTS = [
 ];
 
 function RightsGuide() {
-  const [open, setOpen] = useLocalStorage('brv-rights-open', true);
+  // Collapsed until opened; the choice is remembered (under a new key, so everyone starts collapsed).
+  const [open, setOpen] = useLocalStorage('brv-rights-open-v2', false);
   const mark = (v) => (v === true ? <Icon name="check" size={14} className="yes" /> : v === false ? <span className="muted">—</span> : <span className="small">{v}</span>);
   return (
     <details className="rights-guide" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>

@@ -220,8 +220,9 @@ const TOPICS = [
     body: (
       <>
         <p>
-          A ruleset decides which rules are active and which version of each rule (and of each card) applies. The built-in <b>Rulebook (as printed)</b> set uses every printed rule
-          and card.
+          A ruleset decides which rules are active and which version of each rule (and of each card) applies. No ruleset is <i>the</i> rulebook, since rulebooks get
+          editions too: public rulesets are labeled <span className="tag t-official">Official</span>, <span className="tag t-community">Community</span> or{' '}
+          <span className="tag t-warn">Experimental</span>, and the site opens on the one admins chose as the default.
         </p>
         <ul>
           <li>
@@ -244,7 +245,10 @@ const TOPICS = [
           <li>
             Share a ruleset with the link button <Icon name="link" size={14} />. New rulesets are private but anyone with the link can view them.
           </li>
-          <li>Admins can make a ruleset public for everyone and choose the site's default ruleset.</li>
+          <li>
+            Admins can make a ruleset public, rename it, label it Official, Community or Experimental, and choose the site's default ruleset (whatever its label). <b>New
+            from the printed rules</b> in Admin → Rulesets makes a ruleset with every rule as printed, for example for a new edition.
+          </li>
         </ul>
       </>
     ),

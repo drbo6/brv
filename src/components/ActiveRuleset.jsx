@@ -4,7 +4,7 @@ import { db } from '../lib/firebase.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { autoFollow, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, rulebookEntries, sectionTree, SET_LABELS, sortRules, updateRuleset } from '../lib/rules.js';
 import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
 import { useLive } from '../lib/hooks.js';
 import { compareValues, displayTitle, idField, loadComponents } from '../lib/components.js';
@@ -362,6 +362,7 @@ export function RulesetBar({ page }) {
             <>Choose rules and versions with the switches on each rule.</>
           ) : (
             <span className="muted">
+              {selectedSet.label in SET_LABELS && <span className={`tag ${SET_LABELS[selectedSet.label]}`}>{selectedSet.label}</span>}{' '}
               {selectedSet.description ||
                 (selectedSet.builtIn ? (
                   'The rules and cards exactly as printed.'

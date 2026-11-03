@@ -271,6 +271,17 @@ button.big {
   color: var(--text-2);
 }
 
+/* Icon links (the inbox bell) sit exactly like icon buttons. */
+a.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
 .icon-btn:hover:not(:disabled) {
   background: var(--surface-3);
   border-color: transparent;
@@ -4483,4 +4494,12 @@ summary.primary-summary {
 
 .pdf-custom input {
   width: 96px;
+}
+
+.callout {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: rgba(209, 165, 75, 0.08);
 }

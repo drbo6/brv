@@ -235,12 +235,14 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.visibility == 'private'
+        && request.resource.data.get('label', null) == null
         && shortText('name', 200);
-      // Owners edit their own sets; only admins can change visibility (make a set public).
+      // Owners edit their own sets; only staff make a set public or label it Official, Community or Experimental.
       allow update: if isEditor() || (signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
-        && request.resource.data.visibility == resource.data.visibility);
+        && request.resource.data.visibility == resource.data.visibility
+        && request.resource.data.get('label', null) == resource.data.get('label', null));
       allow delete: if isEditor() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
