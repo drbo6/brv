@@ -9,6 +9,10 @@ import { alertDialog, confirmDialog } from '../dialogs.jsx';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 // The editor always works on an explicit layout, even for types that still use the automatic one.
+// Compares saved and edited types regardless of key order (Firestore may return maps reordered).
+const stable = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, v[key]])) : v));
+const same = (a, b) => stable(a) === stable(b);
+
 const editable = (type) => ({ ...clone(type), layout: cardLayout(type) });
 
 const ASPECTS = [
@@ -53,15 +57,18 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   const [sampleId, setSampleId] = useState(comps[0]?.id || '');
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
+  const dirty = !same({ ...draft, rev: 0 }, { ...base, rev: 0 });
 
   // When the saved type changes underneath us (save, undo, redo) and there are no local edits, follow it.
+  // Our own save comes back the same way; `justSaved` is what we wrote, so it isn't taken for someone else's.
   const prevBase = useRef(base);
+  const justSaved = useRef(null);
   const [conflict, setConflict] = useState(false);
   useEffect(() => {
-    if (prevBase.current !== base && JSON.stringify(prevBase.current) !== JSON.stringify(base)) {
-      if (JSON.stringify(draft) === JSON.stringify(prevBase.current)) history.reset(clone(base));
-      else if (JSON.stringify(draft) !== JSON.stringify(base)) setConflict(true);
+    if (prevBase.current !== base && !same(prevBase.current, base)) {
+      if (same(draft, prevBase.current) || (justSaved.current && same(justSaved.current, base))) history.reset(clone(base));
+      else if (!same(draft, base)) setConflict(true);
+      justSaved.current = null;
     }
     prevBase.current = base;
   }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -141,8 +148,10 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
       });
       if (!overwrite) return setBusy(false);
     }
-    const ok = await attempt(() => saveType({ ...draft, rev: current + 1 }), 'Component type saved');
+    justSaved.current = { ...draft, rev: current + 1 };
+    const ok = await attempt(() => saveType(justSaved.current), 'Component type saved');
     setBusy(false);
+    if (!ok) justSaved.current = null;
     if (ok) onSaved();
   };
 
