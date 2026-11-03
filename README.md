@@ -72,7 +72,9 @@ From then on, give other people roles in **Admin → People**. You find them by 
 | Admin | Everything an editor can, plus roles and restrictions for other people |
 | Owner | Everything an admin can; can't be demoted or restricted from the site |
 
-Admins can also restrict a user with **No suggestions** (they can still comment and react) or **Silenced** (read only), with a reason that user sees. Role and restriction changes can be undone and are listed in the moderation log. The security rules enforce all of this.
+Table access (Admin → Rules → Table and the component tables) is a separate permission, off by default even for admins: tick **Tables** for an editor or admin. The owner always has it. *Who can do what* at the top of People explains every right.
+
+Admins can also restrict a user or editor (not an admin) with **No suggestions** (they can still comment and react) or **Silenced** (read only), with a reason that user sees. Role and restriction changes can be undone and are listed in the moderation log. The security rules enforce all of this.
 
 ### 6. Load the content
 

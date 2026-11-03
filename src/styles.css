@@ -3845,6 +3845,67 @@ summary.primary-summary {
   border-top: 1px solid var(--border);
 }
 
+/* ---------- rights guide (People) ---------- */
+
+.rights-guide {
+  margin: 4px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+}
+
+.rights-guide summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--gold-2);
+}
+
+.rights-table {
+  margin-top: 10px;
+  font-size: 0.88rem;
+}
+
+.rights-table th[scope='row'] {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rights-table td,
+.rights-table thead th:not(:first-child) {
+  text-align: center;
+}
+
+.rights-table .yes {
+  color: var(--ok);
+}
+
+.rights-notes {
+  margin: 12px 0 2px;
+  font-size: 0.9rem;
+}
+
+.rights-notes dt {
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.rights-notes dd {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.tables-toggle {
+  font-size: 0.85rem;
+}
+
+.tables-toggle.is-na {
+  opacity: 0.45;
+}
+
 @media (max-width: 1100px) {
   .layout-split {
     grid-template-columns: minmax(0, 1fr);

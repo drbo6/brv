@@ -16,6 +16,7 @@ const SUBTABS = [
 ];
 
 export default function ComponentsAdmin({ route }) {
+  const { canUseTables } = useSession();
   const [data, setData] = useState(null);
   const reload = useCallback(() => loadComponents({ force: true }).then(setData), []);
   useEffect(() => {
@@ -40,7 +41,8 @@ export default function ComponentsAdmin({ route }) {
 
   const typeId = route.parts[1];
   const type = data.types.find((t) => t.id === typeId);
-  const sub = SUBTABS.find((s) => s.id === route.params.get('tab'))?.id || (route.params.get('edit') ? 'list' : 'layout');
+  const subtabs = SUBTABS.filter((s) => s.id !== 'list' || canUseTables);
+  const sub = subtabs.find((s) => s.id === route.params.get('tab'))?.id || (route.params.get('edit') && canUseTables ? 'list' : 'layout');
   const comps = type ? data.components.filter((c) => c.typeId === type.id) : [];
 
   const createType = async () => {
@@ -113,7 +115,7 @@ export default function ComponentsAdmin({ route }) {
         ) : (
           <>
             <nav className="tabs small" aria-label="Type sections">
-              {SUBTABS.map((s) => (
+              {subtabs.map((s) => (
                 <a key={s.id} href={href('admin', ['components', type.id], { tab: s.id })} className={sub === s.id ? 'on' : ''} title={s.tip}>
                   {s.label}
                 </a>

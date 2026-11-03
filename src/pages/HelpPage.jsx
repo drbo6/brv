@@ -491,9 +491,10 @@ const TOPICS = [
       <>
         <h4>People</h4>
         <p>
-          Admins only. Everyone who has chosen a username is listed; find people by name, or show only staff or restricted users. For each person choose a <b>role</b>{' '}
-          (User, Editor, Admin) and, if needed, a <b>restriction</b>: <i>No suggestions</i> (they can still comment and react) or <i>Silenced</i> (read only), with a
-          reason they will see. Changes can be undone and are listed in the <b>moderation log</b>. If the site has no owner yet, an admin from the original setup can
+          Admins only. Everyone who has chosen a username is listed; find people by name, or show only staff or restricted users. <i>Who can do what</i> at the top
+          explains every right. For each person choose a <b>role</b> (User, Editor, Admin), whether they get the bulk <b>Tables</b> (off by default, also for admins),
+          and, for users and editors, a <b>restriction</b>: <i>No suggestions</i> (they can still comment and react) or <i>Silenced</i> (read only), with a reason they will
+          see. Admins can't be restricted. Changes can be undone and are listed in the <b>moderation log</b>. If the site has no owner yet, an admin from the original setup can
           claim it here once.
         </p>
         <h4>Backup</h4>

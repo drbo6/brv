@@ -3,7 +3,7 @@ import { collection, doc, limit, orderBy, query, serverTimestamp, where } from '
 import { addDoc, deleteDoc, setDoc, updateDoc, writeBatch } from '../lib/store.js';
 import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
-import { useLive } from '../lib/hooks.js';
+import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
@@ -164,14 +164,15 @@ function AdminChat() {
 
 /** Structure first (sections and kinds), then all rules as a table for bulk work. */
 function RulesAdmin({ route }) {
+  const { canUseTables } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const subs = [
     { id: 'sections', label: 'Sections', tip: 'The sections rules are grouped in, and their order' },
     { id: 'kinds', label: 'Kinds', tip: 'The kinds of rule (Note, Tip, FAQ…) with their colors' },
-    { id: 'table', label: 'Table', tip: 'All rules as a table, for bulk work on their details' },
-  ];
+    canUseTables && { id: 'table', label: 'Table', tip: 'All rules as a table, for bulk work on their details' },
+  ].filter(Boolean);
   const sub = subs.find((s) => s.id === route.params.get('tab'))?.id || 'sections';
   return (
     <>
@@ -636,6 +637,74 @@ function RulesetsAdmin() {
 
 // ---------------------------------------------------------------- people
 
+// What each role, permission and restriction allows, shown at the top of People.
+const RIGHTS = [
+  ['Read everything: rules, versions, discussions, rulesets, cards', true, true, true, true, true],
+  ['React, comment, follow, inbox, save own rulesets', false, true, true, true, true],
+  ['Suggest rules, rule versions and card changes', false, true, true, true, true],
+  ['Edit rules and versions, approve and adopt suggestions', false, false, true, true, true],
+  ['Sections, rule kinds, component types, card layouts, shorthands', false, false, true, true, true],
+  ['Add, edit and delete cards; publish rulesets and pick the default', false, false, true, true, true],
+  ['Staff chat and the suggestions queue', false, false, true, true, true],
+  ['Bulk tables (rules and components)', false, false, 'if given', 'if given', true],
+  ['People: roles, table access, restrictions, moderation log', false, false, false, true, true],
+  ['Backup (download the whole database)', false, false, false, false, true],
+  ['Can be demoted or restricted', false, true, true, 'demoted only', false],
+];
+
+function RightsGuide() {
+  const [open, setOpen] = useLocalStorage('brv-rights-open', true);
+  const mark = (v) => (v === true ? <Icon name="check" size={14} className="yes" /> : v === false ? <span className="muted">—</span> : <span className="small">{v}</span>);
+  return (
+    <details className="rights-guide" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>Who can do what</summary>
+      <div className="table-wrap">
+        <table className="table rights-table">
+          <thead>
+            <tr>
+              <th />
+              <th>Visitor</th>
+              <th>User</th>
+              <th>Editor</th>
+              <th>Admin</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {RIGHTS.map(([what, ...cells]) => (
+              <tr key={what}>
+                <th scope="row">{what}</th>
+                {cells.map((v, i) => (
+                  <td key={i}>{mark(v)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="rights-notes">
+        <dt>Roles</dt>
+        <dd>
+          <b>Visitors</b> aren't signed in. Everyone who signs in and picks a username is a <b>user</b>. <b>Editors</b> look after all content; <b>admins</b> also look after
+          people. The <b>owner</b> is the admin who set the site up: nobody can demote or restrict them from the site.
+        </dd>
+        <dt>Table access</dt>
+        <dd>
+          The bulk tables (Admin → Rules → Table, and each component type's Table) change many things at once, so they are a separate permission, off by default. Tick{' '}
+          <b>Tables</b> on an editor or admin to allow them. The owner always has them.
+        </dd>
+        <dt>Restrictions</dt>
+        <dd>
+          For users and editors who misbehave: <b>No suggestions</b> keeps them from proposing rules, versions or card changes (they can still comment and react);{' '}
+          <b>Silenced</b> makes them read-only. They see the reason you give. Admins can't be restricted; take away their admin role instead.
+        </dd>
+        <dt>Undo and log</dt>
+        <dd>Every change here can be undone, and is listed in the moderation log below.</dd>
+      </dl>
+    </details>
+  );
+}
+
 function PeopleAdmin() {
   const { user, ownerUid, ownerLoaded } = useSession();
   const users = useLive(() => collection(db, 'users'), []);
@@ -672,12 +741,21 @@ function PeopleAdmin() {
       return;
     const ok = await attempt(async () => {
       const batch = writeBatch();
-      batch.set(doc(db, 'roles', u.id), { role, updatedBy: user.uid, updatedAt: serverTimestamp() }, { merge: true });
+      // Admins can't be restricted: becoming one lifts any restriction.
+      batch.set(doc(db, 'roles', u.id), { role, ...(role === 'admin' ? { block: 'none', reason: '' } : {}), updatedBy: user.uid, updatedAt: serverTimestamp() }, { merge: true });
       // The original admin list would keep them an admin: take them off it.
       if (legacy.has(u.id) && role !== 'admin') batch.delete(doc(db, 'admins', u.id));
       await batch.commit();
     }, `${u.name} is now ${role === 'user' ? 'a regular user' : `an ${ROLES[role].toLowerCase()}`}`);
     if (ok) logAction(u, 'role', from, role);
+  };
+
+  const setTables = async (u, on) => {
+    const ok = await attempt(
+      () => setDoc(doc(db, 'roles', u.id), { tables: on, updatedBy: user.uid, updatedAt: serverTimestamp() }, { merge: true }),
+      on ? `${u.name} can now use the tables` : `${u.name} no longer has table access`,
+    );
+    if (ok) logAction(u, 'tables', on ? 'off' : 'on', on ? 'on' : 'off');
   };
 
   const setBlock = async (u, block) => {
@@ -744,10 +822,7 @@ function PeopleAdmin() {
             ))}
           </div>
         </div>
-        <p className="small muted">
-          Everyone who has signed in and chosen a username. <b>Editors</b> manage all content; <b>admins</b> also manage people here. The <b>owner</b> can't be changed from
-          the site. Changes can be undone and are kept in the moderation log.
-        </p>
+        <RightsGuide />
         <input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find someone by username…" aria-label="Find people" className="wide-search" />
         {users.loading || roles.loading ? (
           <Spinner />
@@ -787,9 +862,18 @@ function PeopleAdmin() {
                           <option value="admin">Admin</option>
                         </select>
                       </label>
+                      <label className={`check tables-toggle ${role === 'user' ? 'is-na' : ''}`} title={role === 'user' ? 'Only editors and admins can be given table access' : 'Allow the bulk tables (Admin → Rules → Table, component tables)'}>
+                        <input type="checkbox" checked={role !== 'user' && Boolean(roleOf.get(u.id)?.tables)} disabled={role === 'user'} onChange={(e) => setTables(u, e.target.checked)} />
+                        Tables
+                      </label>
                       <label>
                         <span className="sr-only">Restriction for {u.name}</span>
-                        <select value={block} onChange={(e) => setBlock(u, e.target.value)} disabled={u.id === user.uid} title={u.id === user.uid ? 'You can’t restrict yourself' : 'Restrict what this person can do'}>
+                        <select
+                          value={role === 'admin' ? 'none' : block}
+                          onChange={(e) => setBlock(u, e.target.value)}
+                          disabled={u.id === user.uid || role === 'admin'}
+                          title={role === 'admin' ? 'Admins can’t be restricted' : u.id === user.uid ? 'You can’t restrict yourself' : 'Restrict what this person can do'}
+                        >
                           {Object.entries(BLOCKS).map(([k, v]) => (
                             <option key={k} value={k}>
                               {v}
@@ -820,7 +904,11 @@ function PeopleAdmin() {
                 <b>
                   <UserName uid={e.actorUid} fallback={e.actorName} />
                 </b>{' '}
-                {e.action === 'role' ? (
+                {e.action === 'tables' ? (
+                  <>
+                    {e.to === 'on' ? 'gave' : 'removed'} table access {e.to === 'on' ? 'to' : 'from'} <UserName uid={e.targetUid} fallback={e.targetName} />
+                  </>
+                ) : e.action === 'role' ? (
                   <>
                     changed <UserName uid={e.targetUid} fallback={e.targetName} /> from {ROLES[e.from] || e.from} to <b>{ROLES[e.to] || e.to}</b>
                   </>

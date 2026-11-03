@@ -93,8 +93,11 @@ service cloud.firestore {
     match /roles/{uid} {
       allow read: if true;
       allow create, update: if isAdmin() && !isOwnerUid(uid)
-        && request.resource.data.keys().hasOnly(['role', 'block', 'reason', 'updatedBy', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['role', 'block', 'reason', 'tables', 'updatedBy', 'updatedAt'])
+        && request.resource.data.get('tables', false) is bool
         && request.resource.data.get('role', 'user') in ['user', 'editor', 'admin']
+        // Admins can't be restricted.
+        && !(request.resource.data.get('role', 'user') == 'admin' && request.resource.data.get('block', 'none') != 'none')
         && request.resource.data.get('block', 'none') in ['none', 'suggest', 'silence'];
       allow delete: if isAdmin() && !isOwnerUid(uid);
     }

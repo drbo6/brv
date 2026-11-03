@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
@@ -70,8 +70,6 @@ export function SessionProvider({ children }) {
     () =>
       onAuthStateChanged(auth, (u) => {
         setAuthUser(u || null);
-        // Only a timestamp: the public profile is what the user chooses in the profile dialog.
-        if (u) setDoc(doc(db, 'users', u.uid), { lastSeen: serverTimestamp() }, { merge: true }).catch((e) => console.warn('Could not update profile', e));
       }),
     [],
   );
@@ -80,6 +78,16 @@ export function SessionProvider({ children }) {
   const user = useMemo(() => (authUser ? asUser(authUser, profile.data) : authUser), [authUser, profile.data]);
   // New users choose a username and avatar before they can take part.
   const needsProfile = Boolean(authUser && !profile.loading && !profile.data?.setup);
+
+  // Record the visit only once the stored profile has arrived. Writing earlier makes Firestore show
+  // a local copy holding nothing but the timestamp, which looks like "no profile yet" for a moment.
+  const seenFor = useRef(null);
+  useEffect(() => {
+    if (!authUser || profile.loading || seenFor.current === authUser.uid) return;
+    seenFor.current = authUser.uid;
+    // Only a timestamp: the public profile is what the user chooses in the profile dialog.
+    setDoc(doc(db, 'users', authUser.uid), { lastSeen: serverTimestamp() }, { merge: true }).catch((e) => console.warn('Could not update profile', e));
+  }, [authUser, profile.loading]);
   const [profileOpen, setProfileOpen] = useState(false);
 
   // Role sources: config/owner (the owner), roles/{uid} (role and restriction), admins/{uid} (original setup).
@@ -152,6 +160,8 @@ export function SessionProvider({ children }) {
       isEditor: rank(role) <= rank('editor'),
       isAdmin: rank(role) <= rank('admin'),
       isOwner: role === 'owner',
+      // The bulk tables (Admin → Rules → Table, components tables): the owner, or staff granted it.
+      canUseTables: role === 'owner' || (rank(role) <= rank('editor') && Boolean(roleDoc.data?.tables)),
       ownerUid: ownerDoc.data?.uid || null,
       ownerLoaded: !ownerDoc.loading,
       block: role === 'visitor' ? 'none' : block,
@@ -171,7 +181,7 @@ export function SessionProvider({ children }) {
       editProfile: () => setProfileOpen(true),
       closeProfile: () => setProfileOpen(false),
     }),
-    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen, ownerDoc.data, ownerDoc.loading, block, blockReason],
+    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen, ownerDoc.data, ownerDoc.loading, block, blockReason, roleDoc.data],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;
