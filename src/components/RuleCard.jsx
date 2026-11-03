@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { absoluteLink, href } from '../lib/router.js';
-import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, react, ruleName, updateRule } from '../lib/rules.js';
+import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, react, ruleName, updateRule, versionRef } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
@@ -28,8 +28,10 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
   };
 
   const copyLink = async () => {
-    await copyText(absoluteLink('rules', [rule.id]));
-    toast(`Link to ${ruleName(rule)} copied`, 'ok');
+    // Viewing another version than the ruleset's? Link to exactly that version.
+    const ref = shown && !shownInSet ? versionRef(rule, shown) : rule.sid;
+    await copyText(absoluteLink('rules', [ref || rule.id]));
+    toast(`Link to ${ref || ruleName(rule)} copied`, 'ok');
   };
 
   const approve = () =>
@@ -53,7 +55,9 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
     <article id={`rule-${rule.id}`} className={classes.join(' ')} aria-label={ruleName(rule)} style={hasKind && kind.color ? { '--kind': kind.color } : undefined}>
       <div className="rule-read" onClick={onBodyClick}>
         <header className="rule-head">
-          {rule.number && <span className="rule-code">{rule.number}</span>}
+          <span className="rule-code" title="This rule's permanent id: use it to cite the rule">
+            {rule.sid}
+          </span>
           <h3 className="rule-title">
             <button type="button" className="rule-toggle" onClick={() => onToggle(rule.id)} aria-expanded={open} title={open ? 'Hide tools' : 'Show versions, reactions and discussion'}>
               {rule.title}
@@ -105,6 +109,11 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                   </button>
                 )}
                 <span className={`label l-${LABEL_CLASS[shown.label] || 'other'}`}>{shown.label}</span>
+                {versionRef(rule, shown) && (
+                  <span className="version-ref" title="Cite this exact version with this reference">
+                    {versionRef(rule, shown)}
+                  </span>
+                )}
                 {shown.label === 'Rulebook' && rule.page != null && <span className="page-ref">p. {rule.page}</span>}
                 {vs.length > 1 && (
                   <>

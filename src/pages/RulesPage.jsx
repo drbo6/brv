@@ -4,7 +4,7 @@ import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, numberRules, RULEBOOK_SET, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
+import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { exportRulesPdf } from '../lib/pdf.js';
@@ -29,17 +29,17 @@ export default function RulesPage({ route }) {
   // ----- derived rule data -----
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const vByRule = useMemo(() => groupVersions(versions.data || []), [versions.data]);
-  // Every rule carries its display number (from its position), computed fresh as rules move.
+  // Every rule carries its short, permanent id (sid).
   const allRules = useMemo(() => {
-    const numbers = numberRules(rules.data || [], tree);
-    return sortRules(rules.data || []).map((r) => ({ ...r, number: numbers.get(r.id) || '' }));
-  }, [rules.data, tree]);
+    const sids = shortIds(rules.data || []);
+    return sortRules(rules.data || []).map((r) => ({ ...r, sid: sids.get(r.id) }));
+  }, [rules.data]);
   const rulebook = useMemo(() => rulebookEntries(allRules, vByRule), [allRules, vByRule]);
   const index = useMemo(
     () =>
       allRules.map((rule) => {
         const vs = vByRule.get(rule.id) || [];
-        return { rule, vs, searchText: `${rule.number} ${rule.title} ${vs.map((v) => `${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`.toLowerCase() };
+        return { rule, vs, searchText: `${rule.sid} ${rule.title} ${vs.map((v) => `${rule.sid}.${v.num} ${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`.toLowerCase() };
       }),
     [allRules, vByRule],
   );
@@ -137,9 +137,18 @@ export default function RulesPage({ route }) {
   const [showInactive, setShowInactive] = useLocalStorage('brv-show-inactive', false);
   const [labelFilter, setLabelFilter] = useState('');
   const [kindFilter, setKindFilter] = useState('');
-  // Links point at a rule's id; links from before rules were numbered used its old code.
+  // Links name a rule by its short id, optionally with a version ("k7q2m.2"). Older links used the
+  // document id or a section code; those still work.
   const focusParam = route.parts[0] || null;
-  const focusId = useMemo(() => (focusParam ? (allRules.find((r) => r.id === focusParam || r.code === focusParam)?.id ?? null) : null), [focusParam, allRules]);
+  const focus = useMemo(() => {
+    if (!focusParam) return null;
+    const [sid, num] = focusParam.split('.');
+    const byShort = allRules.find((r) => r.sid === sid);
+    if (byShort) return { id: byShort.id, num: num ? Number(num) : null };
+    const legacy = allRules.find((r) => r.id === focusParam || r.code === focusParam);
+    return legacy ? { id: legacy.id, num: null } : null;
+  }, [focusParam, allRules]);
+  const focusId = focus?.id ?? null;
 
   const items = useMemo(() => {
     const tokens = q.split(/\s+/).filter(Boolean);
@@ -182,14 +191,17 @@ export default function RulesPage({ route }) {
   // ----- focus a linked rule -----
   const focusedOnce = useRef(null);
   useEffect(() => {
-    if (!focusId || focusedOnce.current === focusId || rules.loading || versions.loading) return;
+    if (!focusId || focusedOnce.current === focusParam || rules.loading || versions.loading) return;
     const el = document.getElementById(`rule-${focusId}`);
     if (el) {
-      focusedOnce.current = focusId;
+      focusedOnce.current = focusParam;
       setOpenId(focusId);
+      // A link to a specific version shows that version.
+      const v = focus.num && (vByRule.get(focusId) || []).find((x) => x.num === focus.num);
+      if (v) setViewVersion((m) => ({ ...m, [focusId]: v.id }));
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [focusId, rules.loading, versions.loading, groups]);
+  }, [focusId, focusParam, rules.loading, versions.loading, groups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- actions -----
   const onMove = useCallback(
@@ -240,7 +252,8 @@ export default function RulesPage({ route }) {
       heading: section.number ? `${section.number}  ${section.title}` : section.title,
       depth: section.depth,
       rules: its.map((it) => ({
-        number: it.rule.number,
+        sid: it.rule.sid,
+        ref: it.shown && it.shown.id !== it.activeVersion?.id ? `${it.rule.sid}.${it.shown.num}` : '',
         title: it.rule.title,
         label: it.shown?.label,
         kindLabel: it.rule.kind && it.rule.kind !== 'rule' ? kindInfo(kinds, it.rule.kind).label : '',
@@ -514,7 +527,7 @@ export default function RulesPage({ route }) {
           onClose={() => setDialog(null)}
           onCreated={(id) => {
             if (!isAdmin) setShowInactive(true);
-            setTimeout(() => navigate('rules', [id]), 300);
+            setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
           }}
         />
       )}

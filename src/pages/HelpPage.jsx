@@ -59,8 +59,9 @@ const TOPICS = [
             time.
           </li>
           <li>
-            <b>Rule numbers</b> like <i>5.3.1.2</i> are the section number plus the rule's place in it. They follow the current order, so they can change when rules or
-            sections are moved; a rule's <b>link</b> never changes.
+            <b>Rule ids</b> like <code>k7q2m</code> are short, permanent and unique: they never change, however rules and sections are moved, so they are safe to cite.
+            Versions are numbered after the id in the order they were added: <code>k7q2m.1</code> is usually the rulebook text, <code>k7q2m.2</code> the next version.
+            Section numbers such as <i>5.3.1</i> only show where you are in the book.
           </li>
           <li>
             <b>Copy link</b> <Icon name="link" size={14} /> gives a direct link that opens the site on that rule.
@@ -172,7 +173,7 @@ const TOPICS = [
             <b>Suggest change</b> on an open rule adds your wording as a new <i>Suggestion</i> version. Add a rationale or source so others understand why.
           </li>
           <li>
-            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It has no number until an admin approves it.
+            <b>Suggest rule</b> in the toolbar proposes a brand-new rule. It gets its permanent id right away, so it can be discussed by id while admins consider it.
             Turn on <i>Show inactive</i> to see suggested rules.
           </li>
           <li>You can edit your own suggestions at any time, and withdraw a suggested rule as long as nobody has commented on it.</li>
@@ -367,7 +368,7 @@ const TOPICS = [
             Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>), which gives them a permanent ID.
           </li>
           <li>
-            <b>Sections:</b> add sections, rename them, nest them and reorder them. Numbers follow the new order; links to rules keep working.
+            <b>Sections:</b> add sections, rename them, nest them and reorder them. Section numbers follow the new order; rule ids never change.
           </li>
           <li>
             <b>Rule kinds:</b> the list of kinds with their name and color.
@@ -545,8 +546,8 @@ const TOPICS = [
         <dd>It may not be part of the current ruleset (turn on Show inactive), or a search or filter hides it.</dd>
         <dt>How do I cite a rule?</dt>
         <dd>
-          Use its number, for example <i>5.3.1.2</i>, in conversation. For something lasting, share the link from the rule's link button: it keeps working even
-          if the rule is renumbered.
+          Use its id, for example <code>k7q2m</code>, or <code>k7q2m.2</code> for a specific version. Typing an id in the search box finds the rule, and the link
+          button copies a link (to the exact version you are looking at, if it isn't the one your ruleset uses).
         </dd>
         <dt>Who can change what?</dt>
         <dd>

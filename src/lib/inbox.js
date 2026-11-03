@@ -12,7 +12,7 @@ import { setDoc } from './store.js';
 export const subKey = (type, id) => (id ? `${type}_${id}` : type);
 
 /** What can be followed, with how it is named and linked in the inbox. */
-export const ruleTarget = (rule) => ({ key: subKey('rule', rule.id), label: rule.number ? `${rule.number} ${rule.title}` : rule.title, link: { page: 'rules', parts: [rule.id] } });
+export const ruleTarget = (rule) => ({ key: subKey('rule', rule.id), label: rule.sid ? `${rule.sid} ${rule.title}` : rule.title, link: { page: 'rules', parts: [rule.sid || rule.id] } });
 export const cardTarget = (comp, name) => ({ key: subKey('component', comp.id), label: name, link: { page: 'components', parts: [comp.typeId, comp.id] } });
 export const rulesetTarget = (set) => ({ key: subKey('ruleset', set.id), label: set.name, link: { page: 'rules', parts: [], params: { set: set.id } } });
 export const SUGGESTIONS = { key: 'suggestions', label: 'All new suggestions', link: { page: 'admin', parts: ['rules'] } };

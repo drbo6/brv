@@ -15,7 +15,7 @@ import { confirmDialog } from './dialogs.jsx';
  */
 export default function Discussion({ rule, target: given, follow: givenFollow, versions, shownVersion }) {
   const { user, isAdmin, requireUser, signIn } = useSession();
-  const target = given || { field: 'ruleId', id: rule.id, name: rule.number || rule.title };
+  const target = given || { field: 'ruleId', id: rule.id, name: rule.sid || rule.title };
   const follow = givenFollow || ruleTarget(rule);
   const comments = useLive(() => query(collection(db, 'comments'), where(target.field, '==', target.id)), [target.field, target.id]);
   const [text, setText] = useState('');
@@ -26,7 +26,9 @@ export default function Discussion({ rule, target: given, follow: givenFollow, v
 
   const versionTag = (vid) => {
     const i = versions.findIndex((v) => v.id === vid);
-    return i < 0 ? null : `${versions[i].label} · v${i + 1}`;
+    if (i < 0) return null;
+    const v = versions[i];
+    return rule?.sid && v.num ? `${v.label} · ${rule.sid}.${v.num}` : `${v.label} · v${v.num || i + 1}`;
   };
 
   const post = async (e) => {

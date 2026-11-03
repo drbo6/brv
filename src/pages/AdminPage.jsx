@@ -4,7 +4,7 @@ import { addDoc, deleteDoc, setDoc, updateDoc } from '../lib/store.js';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, numberRules, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
+import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, RULEBOOK_SET, sectionTree, updateRuleset, updateVersion } from '../lib/rules.js';
 import { plainToHtml } from '../lib/html.js';
 import { deleteCardVersion, updateCardVersion } from '../lib/cardVersions.js';
 import { useSession } from '../lib/session.jsx';
@@ -162,9 +162,9 @@ function RulesAdmin() {
   const cardSuggestions = useLive(() => query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
   const ruleById = useMemo(() => {
-    const numbers = numberRules(rules.data || [], tree);
-    return new Map((rules.data || []).map((r) => [r.id, { ...r, number: numbers.get(r.id) || '' }]));
-  }, [rules.data, tree]);
+    const sids = shortIds(rules.data || []);
+    return new Map((rules.data || []).map((r) => [r.id, { ...r, sid: sids.get(r.id) }]));
+  }, [rules.data]);
 
   const suggestedRules = (rules.data || []).filter((r) => r.status === 'suggested');
 
@@ -205,8 +205,8 @@ function RulesAdmin() {
                 <li key={v.id}>
                   <div className="queue-head">
                     {r ? (
-                      <a href={href('rules', [r.id])}>
-                        {r.number && <b>{r.number}</b>} {r.title}
+                      <a href={href('rules', [r.sid])}>
+                        <b className="rule-code">{r.sid}</b> {r.title}
                       </a>
                     ) : (
                       <span className="muted">Deleted rule</span>
@@ -410,7 +410,7 @@ function SectionsEditor({ tree, rules, loading }) {
     <section className="panel span-2">
       <h2>Sections</h2>
       <p className="small muted">
-        Section and rule numbers follow the order here. Moving sections or rules renumbers them; links to rules keep working because they don't use the numbers.
+        Section numbers follow the order here and change when you move sections. Rules are cited by their own permanent short id (like <code>k7q2m</code>), which never changes.
       </p>
       {loading ? (
         <Spinner />

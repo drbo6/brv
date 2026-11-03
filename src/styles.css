@@ -1440,6 +1440,13 @@ h4.section-heading {
   opacity: 0.85;
 }
 
+.version-ref {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0 2px;
+}
+
 .rule-title {
   margin: 0;
   font-family: var(--font-ui);

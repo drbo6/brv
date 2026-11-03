@@ -2,7 +2,7 @@
 
 A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rage: Valhalla*. It's a static site hosted on GitHub Pages, with Firebase handling sign-in and data.
 
-- **Rules.** Every rule from the rulebook is a separate, numbered entry (such as 5.3.1.2) with its own permanent link. The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
+- **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓, discuss, and suggest new rules or new wording. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Admins define component types and their fields, arrange them on a simple card layout, import and export spreadsheets, and define `[shorthand]` icons.
 - **Admin.** Admin chat, a suggestions queue, section management, ruleset publishing, component management, the admin list, and JSON backup & import of the whole database.
@@ -82,11 +82,13 @@ node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
 
 ## How it works
 
-### Rule numbers and links
+### Rule ids
 
-Sections and rules have no codes. A section's number (*5.3.1*) comes from its place in the section tree, and a rule's number (*5.3.1.2*) adds its place among the active rules of its section. Numbers are computed on the fly, so moving rules or sections renumbers them. Suggested rules have no number until they are approved.
+Each rule has a short id such as `k7q2m`, derived from its permanent Firestore document id (a hash in a 31-character alphabet without look-alike characters). Nobody chooses or stores it, existing rules get one automatically, and it never changes when rules or sections move. In the unlikely event two rules hash alike, the newer one gets a longer id.
 
-Links point at a rule's document id, which never changes, so links, discussions and inbox notices survive renumbering. (Links from older versions of the site, which used codes such as `SUM.1`, still open the right rule.)
+Versions are numbered after the id in the order they were added (`k7q2m.1`, `k7q2m.2`). New versions store their number (`n`), so deleting one never renumbers the others.
+
+Links use the id (`#/rules/k7q2m`, or `#/rules/k7q2m.2` for a version). Older links with a document id or a section code (`SUM.1`) still open the right rule. Section numbers (*5.3.1*) are positional and only used as headings.
 
 ### Rulesets
 

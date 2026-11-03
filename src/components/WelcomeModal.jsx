@@ -34,8 +34,8 @@ export default function WelcomeModal({ onClose }) {
             <li>
               <Icon name="book" size={18} />
               <span>
-                <b>Every rule, one at a time.</b> The rulebook is split into individual, numbered rules (like <b>5.3.1.2</b>), each with its own link, so
-                you can point at exactly what you mean.
+                <b>Every rule, one at a time.</b> The rulebook is split into individual rules, each with a short permanent id like{' '}
+                <code>k7q2m</code>, so you can point at exactly what you mean.
               </span>
             </li>
             <li>

@@ -59,32 +59,75 @@ export function groupVersions(versions = []) {
     if (!map.has(v.ruleId)) map.set(v.ruleId, []);
     map.get(v.ruleId).push(v);
   }
-  for (const list of map.values()) list.sort((a, b) => labelRank(a.label) - labelRank(b.label) || millis(a.createdAt) - millis(b.createdAt));
+  for (const [ruleId, list] of map) {
+    const nums = numberVersions(list);
+    map.set(
+      ruleId,
+      list.map((v) => ({ ...v, num: nums.get(v.id) })).sort((a, b) => labelRank(a.label) - labelRank(b.label) || millis(a.createdAt) - millis(b.createdAt)),
+    );
+  }
   return map;
 }
 
 export const sortRules = (rules) => [...rules].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || millis(a.createdAt) - millis(b.createdAt) || String(a.id).localeCompare(String(b.id)));
 
-/**
- * Rule numbers come from position: the section's number plus the rule's place among the active
- * rules of that section (e.g. 5.3.1.2). Suggested and rejected rules have no number yet.
- * Links use the rule's document id, so they survive reordering.
- */
-export function numberRules(rules, tree) {
-  const out = new Map();
-  const count = new Map();
-  for (const r of sortRules(rules)) {
-    if (r.status && r.status !== 'active') continue;
-    const n = (count.get(r.sectionId) || 0) + 1;
-    count.set(r.sectionId, n);
-    const sec = tree.byId.get(r.sectionId)?.number;
-    out.set(r.id, sec ? `${sec}.${n}` : String(n));
+// ---------- rule ids ----------
+// Each rule is cited by a short id such as "k7q2m", derived from its (permanent) document id: nobody
+// has to choose one, existing rules get one automatically, and it never changes. Versions are
+// numbered in the order they were added: k7q2m.1, k7q2m.2…
+
+const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz'; // no 0/o, 1/l/i
+
+function hashId(str, len) {
+  // FNV-1a, extended by re-hashing for longer ids.
+  let out = '';
+  let seed = 0x811c9dc5;
+  while (out.length < len) {
+    let h = seed;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    for (let i = 0; i < 6 && out.length < len; i++) {
+      out += ALPHABET[h % ALPHABET.length];
+      h = Math.floor(h / ALPHABET.length);
+    }
+    seed = (h ^ 0x9e3779b9) >>> 0;
   }
   return out;
 }
 
-/** How a rule is named in messages and lists: its number and title. */
-export const ruleName = (rule) => (rule.number ? `${rule.number} ${rule.title}` : `“${rule.title}”`);
+/** docId → short id for every rule. On the (rare) clash, the newer rule gets a longer id. */
+export function shortIds(rules) {
+  const out = new Map();
+  const seen = new Set();
+  for (const r of [...rules].sort((a, b) => millis(a.createdAt) - millis(b.createdAt) || String(a.id).localeCompare(String(b.id)))) {
+    let sid = hashId(r.id, 5);
+    for (let len = 7; seen.has(sid); len++) sid = hashId(`${r.id}#`, len);
+    seen.add(sid);
+    out.set(r.id, sid);
+  }
+  return out;
+}
+
+/** Version numbers by order of creation. New versions store theirs (`n`), so deleting one renumbers nothing. */
+function numberVersions(list) {
+  let next = 1;
+  const byAge = [...list].sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity) || millis(a.createdAt) - millis(b.createdAt));
+  const nums = new Map();
+  for (const v of byAge) {
+    const num = v.n ?? next;
+    nums.set(v.id, num);
+    next = Math.max(next, num + 1);
+  }
+  return nums;
+}
+
+/** How a rule is named in messages and lists: its short id and title. */
+export const ruleName = (rule) => (rule.sid ? `${rule.sid} “${rule.title}”` : `“${rule.title}”`);
+
+/** A version's citable reference, e.g. "k7q2m.2". */
+export const versionRef = (rule, version) => (rule.sid && version?.num ? `${rule.sid}.${version.num}` : '');
 
 export function rulebookEntries(rules, versionsByRule) {
   const entries = {};
@@ -111,9 +154,14 @@ export function react(col, id, uid, current, type) {
   return updateDoc(doc(db, col, id), { [`reactions.${uid}`]: current === type ? deleteField() : type });
 }
 
-export function createVersion({ ruleId, label, text, note }, user) {
+export async function createVersion({ ruleId, label, text, note }, user) {
+  // The next version number of this rule, kept with the version so it never changes.
+  const existing = await getDocs(query(collection(db, 'versions'), where('ruleId', '==', ruleId)));
+  const nums = numberVersions(existing.docs.map((d) => ({ id: d.id, ...d.data() })));
+  const n = Math.max(0, ...nums.values()) + 1;
   const ref = doc(collection(db, 'versions'));
-  return setDoc(ref, { ruleId, label, text, note: note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) }).then(() => ref.id);
+  await setDoc(ref, { ruleId, label, text, n, note: note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
+  return ref.id;
 }
 
 export const updateVersion = (id, patch) => updateDoc(doc(db, 'versions', id), { ...patch, updatedAt: serverTimestamp() });
@@ -124,7 +172,7 @@ export async function createRule(rule, version, user) {
   const versionRef = doc(collection(db, 'versions'));
   const batch = writeBatch();
   batch.set(ruleRef, { commentCount: 0, page: null, ...rule, createdAt: serverTimestamp(), ...author(user) });
-  batch.set(versionRef, { ruleId: ruleRef.id, label: version.label, text: version.text, note: version.note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
+  batch.set(versionRef, { ruleId: ruleRef.id, label: version.label, text: version.text, n: 1, note: version.note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
   await batch.commit();
   return ruleRef.id;
 }
