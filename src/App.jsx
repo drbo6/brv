@@ -6,6 +6,7 @@ import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
 import { useHistory, useUndoKeys } from './lib/history.js';
 import { Avatar, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
+import { ActiveRulesetProvider, RulesetBar } from './components/ActiveRuleset.jsx';
 import { DialogHost } from './components/dialogs.jsx';
 import ProfileDialog from './components/ProfileDialog.jsx';
 import Tooltips from './components/Tooltips.jsx';
@@ -137,6 +138,8 @@ function Shell() {
           Demo mode — data is stored only in this browser. Sign in with the name “Admin” to try the admin tools.
         </div>
       )}
+      <ActiveRulesetProvider route={route}>
+      {(route.page === 'rules' || route.page === 'components') && <RulesetBar page={route.page} />}
       <main id="main">
         <ErrorBoundary key={route.page}>
         <Suspense fallback={<Spinner />}>
@@ -156,6 +159,7 @@ function Shell() {
         </Suspense>
         </ErrorBoundary>
       </main>
+      </ActiveRulesetProvider>
       <footer className="site-footer">
         <p>
           A fan-made, community-maintained resource. Not affiliated with or endorsed by the publishers of Blood Rage or Blood Rage: Valhalla. Rules text © its respective owners.

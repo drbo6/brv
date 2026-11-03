@@ -1,30 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { collection, deleteField } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
-import { useDraftHistory, useUndoScope } from '../lib/history.js';
-import { absoluteLink, navigate } from '../lib/router.js';
-import { createRuleset, groupVersions, kindInfo, LABELS, moveRule, RULEBOOK_SET, rulebookEntries, sectionTree, shortIds, sortRules, updateRuleset } from '../lib/rules.js';
+import { navigate } from '../lib/router.js';
+import { groupVersions, kindInfo, LABELS, moveRule, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { exportRulesPdf } from '../lib/pdf.js';
 import RuleCard from '../components/RuleCard.jsx';
-import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx';
-import { RuleDialog, SaveRulesetDialog } from '../components/RuleDialogs.jsx';
-import { attempt, copyText, Empty, Icon, Spinner, toast, UserName } from '../components/ui.jsx';
-import { confirmDialog } from '../components/dialogs.jsx';
-import FollowButton from '../components/FollowButton.jsx';
-import { autoFollow, notify, rulesetTarget } from '../lib/inbox.js';
+import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
+import { RuleDialog } from '../components/RuleDialogs.jsx';
+import { attempt, Empty, Icon, Spinner } from '../components/ui.jsx';
 
 export default function RulesPage({ route }) {
-  const { user, isEditor, shorthands, requireUser, kinds } = useSession();
+  const { isEditor, shorthands, requireUser, kinds } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const versions = useLive(() => collection(db, 'versions'), []);
 
-  // ----- ruleset selection -----
-  const choice = useRulesetChoice(route.params.get('set'));
-  const { selectedSet, setStoredSetId } = choice;
+  // ----- the active ruleset (shared with the Components page, shown in the site-wide bar) -----
+  const rs = useActiveRuleset();
+  const { selectedSet, unsaved, customizing } = rs;
 
   // ----- derived rule data -----
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
@@ -44,47 +40,26 @@ export default function RulesPage({ route }) {
     [allRules, vByRule],
   );
 
-  // ----- editing a ruleset -----
-  // { baseId, entries } while customizing. Each toggle is one undo step (Ctrl+Z works too).
-  const [draft, setDraft, draftHistory] = useDraftHistory(null, 0);
-  useUndoScope(draftHistory);
-  const endDraft = draftHistory.reset;
-  const baseEntries = selectedSet.builtIn ? rulebook : selectedSet.entries || {};
-  const entries = draft ? draft.entries : baseEntries;
-  const changeCount = useMemo(() => {
-    if (!draft) return 0;
-    const keys = new Set([...Object.keys(draft.entries), ...Object.keys(baseEntries)]);
-    let n = 0;
-    keys.forEach((k) => draft.entries[k] !== baseEntries[k] && n++);
-    return n;
-  }, [draft, baseEntries]);
+  const baseEntries = useMemo(() => (selectedSet.builtIn ? rulebook : selectedSet.entries || {}), [selectedSet, rulebook]);
+  const { apply } = rs;
+  const entries = useMemo(() => apply(baseEntries, 'rules'), [apply, baseEntries]);
+  useEffect(() => {
+    rs.setRulebook(rulebook);
+  }, [rulebook]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Edits while customizing or reading keep inactive rules visible, so they can be switched back on.
+  const editing = unsaved || customizing;
 
   const [viewVersion, setViewVersion] = useState({});
   // One rule at a time shows its tools; a linked rule starts open.
   const [openId, setOpenId] = useState(null);
   const onToggle = useCallback((ruleId) => setOpenId((id) => (id === ruleId ? null : ruleId)), []);
   const onShowVersion = useCallback((ruleId, vid) => setViewVersion((m) => ({ ...m, [ruleId]: vid })), []);
-  // Changing a rule's version or switching it off starts an unsaved draft of the ruleset if needed.
-  const baseRef = useRef(null);
-  baseRef.current = { baseId: selectedSet.id, entries: baseEntries };
-  const editDraft = useCallback(
-    (fn) => setDraft((d) => {
-      const cur = d || { ...baseRef.current, customizing: false };
-      return { ...cur, entries: fn({ ...cur.entries }) };
-    }),
-    [setDraft],
-  );
-  const onSetActive = useCallback(
-    (ruleId, vid) =>
-      editDraft((e) => {
-        if (vid) e[ruleId] = vid;
-        else delete e[ruleId];
-        return e;
-      }),
-    [editDraft],
-  );
-  const onUseVersion = useCallback((ruleId, vid) => editDraft((e) => ({ ...e, [ruleId]: vid })), [editDraft]);
-  const unsaved = Boolean(draft) && changeCount > 0;
+  // Changing a rule's version or leaving it out is an unsaved change to the active ruleset.
+  const baseRef = useRef(baseEntries);
+  baseRef.current = baseEntries;
+  const setRule = rs.setRule;
+  const onSetActive = useCallback((ruleId, vid) => setRule(ruleId, vid, baseRef.current[ruleId]), [setRule]);
+  const onUseVersion = onSetActive;
   // Rules of the set that the reader stepped to another version of: the page no longer shows the set as it is.
   const browsed = useMemo(() => Object.keys(viewVersion).filter((rid) => entries[rid] && viewVersion[rid] !== entries[rid]), [viewVersion, entries]);
   const showBrowsed = () => {
@@ -95,23 +70,21 @@ export default function RulesPage({ route }) {
     }
   };
 
-  const selectSet = async (id) => {
-    if (draft && changeCount && !(await confirmDialog({ title: 'Discard changes', message: 'Discard your unsaved ruleset changes?', confirmLabel: 'Discard', danger: true }))) return;
-    endDraft(null);
+  // A different ruleset starts from its own versions.
+  useEffect(() => {
     setViewVersion({});
-    setStoredSetId(id);
-    navigate('rules', route.parts, {}, { replace: true });
-  };
+  }, [selectedSet.id]);
 
-  // ----- pinned top area (ruleset + search), pinned by default -----
+  // ----- pinned search area, pinned by default (below the site-wide ruleset bar) -----
   const [pinned, setPinned] = useLocalStorage('brv-pin-rules-top', true);
   const [stuck, setStuck] = useState(false);
   const topRef = useRef(null);
   const sentinelRef = useRef(null);
   useEffect(() => {
     // "Stuck" once the page scrolled past the top of the area: it then compacts.
-    const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
-    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { rootMargin: `-${header + 1}px 0px 0px 0px` });
+    const css = getComputedStyle(document.documentElement);
+    const above = (parseFloat(css.getPropertyValue('--header-h')) || 64) + (parseFloat(css.getPropertyValue('--ruleset-bar-h')) || 0);
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { rootMargin: `-${above + 1}px 0px 0px 0px` });
     if (sentinelRef.current) io.observe(sentinelRef.current);
     return () => io.disconnect();
   }, []);
@@ -162,12 +135,12 @@ export default function RulesPage({ route }) {
         if (it.rule.id === focusId) return true;
         if (it.rule.status === 'rejected' && !(isEditor && showInactive)) return false;
         // While customizing a ruleset, inactive rules stay visible so they can be switched back on.
-        if (!it.active && !showInactive && !draft) return false;
+        if (!it.active && !showInactive && !editing) return false;
         if (labelFilter && !it.vs.some((v) => v.label === labelFilter)) return false;
         if (kindFilter && (it.rule.kind || 'rule') !== kindFilter) return false;
         return tokens.every((t) => it.searchText.includes(t));
       });
-  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isEditor, focusId, draft]);
+  }, [index, entries, viewVersion, q, showInactive, labelFilter, kindFilter, isEditor, focusId, editing]);
 
   const groups = useMemo(() => {
     const bySection = new Map();
@@ -216,36 +189,6 @@ export default function RulesPage({ route }) {
   const [dialog, setDialog] = useState(null);
   // The contents list starts collapsed on narrow screens, where it sits above the rules.
   const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
-  const ownsSet = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor);
-
-  const saveExisting = () =>
-    requireUser(async () => {
-      // Write only the rules that changed, so edits others made to other rules in this set survive.
-      const patch = {};
-      for (const k of new Set([...Object.keys(draft.entries), ...Object.keys(baseEntries)])) {
-        if (draft.entries[k] !== baseEntries[k]) patch[`entries.${k}`] = draft.entries[k] ?? deleteField();
-      }
-      const ok = await attempt(() => updateRuleset(selectedSet.id, patch), 'Ruleset saved');
-      if (ok) {
-        endDraft(null);
-        const t = rulesetTarget(selectedSet);
-        const n = Object.keys(patch).length;
-        notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'Someone'} updated the ruleset “${t.label}”`, text: `${n} rule${n === 1 ? '' : 's'} changed.`, link: t.link });
-      }
-    });
-
-  const saveAsNew = async ({ name, description }) =>
-    requireUser(async (u) => {
-      const id = await attempt(() => createRuleset({ name, description, entries: draft.entries }, u), 'Ruleset saved');
-      if (id) {
-        endDraft(null);
-        setStoredSetId(id);
-        // You follow your own rulesets, to hear when admins publish them or others change them.
-        autoFollow(rulesetTarget({ id, name }).key, u.uid, rulesetTarget({ id, name }));
-        navigate('rules', [], {}, { replace: true });
-      }
-      return id;
-    });
 
   const exportPdf = () => {
     const pdfGroups = groups.map(({ section, items: its }) => ({
@@ -278,7 +221,7 @@ export default function RulesPage({ route }) {
   const anyError = sections.error || rules.error || versions.error;
 
   return (
-    <div className={`rules-layout ${draft ? 'is-editing' : ''}`}>
+    <div className={`rules-layout ${customizing ? 'is-editing' : ''}`}>
       <aside className="toc" aria-label="Contents">
         <details open={tocOpen} className="toc-details">
           <summary>Contents</summary>
@@ -305,79 +248,6 @@ export default function RulesPage({ route }) {
       <div className="rules-main">
         <div ref={sentinelRef} className="rules-top-sentinel" aria-hidden="true" />
         <div ref={topRef} className={`rules-top ${pinned ? 'pinned' : ''} ${pinned && stuck ? 'stuck' : ''}`}>
-        <section className="ruleset-bar" aria-label="Ruleset">
-          <div className="ruleset-pick">
-            <label htmlFor="ruleset-select">Ruleset</label>
-            <RulesetSelect choice={choice} onChange={selectSet} unsaved={unsaved} differs={browsed.length > 0} />
-            {unsaved && (
-              <span className="tag t-warn unsaved-tag" title="You changed which rules or versions this ruleset uses. Save or discard below.">
-                Unsaved changes
-              </span>
-            )}
-          </div>
-          {(unsaved || browsed.length > 0) && (
-            <div className="ruleset-status" role="status">
-              <Icon name="info" />
-              <span>
-                {unsaved && (
-                  <>
-                    You changed {changeCount} rule{changeCount === 1 ? '' : 's'} in “{selectedSet.name}”: the page shows your unsaved version of the ruleset.{' '}
-                  </>
-                )}
-                {browsed.length > 0 && (
-                  <>
-                    {browsed.length === 1 ? 'One rule is' : `${browsed.length} rules are`} shown in a version that “{selectedSet.name}”{unsaved ? ' (with your changes)' : ''} doesn't use.{' '}
-                  </>
-                )}
-              </span>
-              <span className="ruleset-status-actions">
-                {browsed.length > 0 && (
-                  <>
-                    <button className="small" onClick={showBrowsed} title="Scroll to the first rule shown in another version">
-                      Show {browsed.length === 1 ? 'it' : 'them'}
-                    </button>
-                    <button className="small" onClick={() => editDraft((e) => ({ ...e, ...Object.fromEntries(browsed.map((rid) => [rid, viewVersion[rid]])) }))} title="Make the ruleset use the versions you are looking at (as unsaved changes)">
-                      Use {browsed.length === 1 ? 'this version' : 'these versions'}
-                    </button>
-                    <button className="small" onClick={() => setViewVersion({})} title={`Show every rule in the version “${selectedSet.name}” uses`}>
-                      Back to the ruleset's versions
-                    </button>
-                  </>
-                )}
-              </span>
-            </div>
-          )}
-          <p className="ruleset-desc">
-            {selectedSet.description || (selectedSet.builtIn ? '' : <>A ruleset by <UserName uid={selectedSet.ownerUid} fallback={selectedSet.ownerName || 'a community member'} />.</>)}
-            {!selectedSet.builtIn && <span className="muted"> · {Object.keys(selectedSet.entries || {}).length} rules</span>}
-          </p>
-          <div className="ruleset-actions">
-            {!draft?.customizing ? (
-              <button
-                onClick={() => (draft ? setDraft((d) => ({ ...d, customizing: true })) : endDraft({ baseId: selectedSet.id, entries: { ...baseEntries }, customizing: true }))}
-                title="Show an “In ruleset” switch on every rule, to choose which rules and versions are part of this ruleset"
-              >
-                <Icon name="layers" />
-                Customize
-              </button>
-            ) : null}
-            {!selectedSet.builtIn && <FollowButton target={rulesetTarget(selectedSet)} what={`the ruleset “${selectedSet.name}”`} className="small" />}
-            {!selectedSet.builtIn && (
-              <button
-                className="icon-btn"
-                title="Copy a link to this ruleset"
-                aria-label="Copy a link to this ruleset"
-                onClick={async () => {
-                  await copyText(absoluteLink('rules', [], { set: selectedSet.id }));
-                  toast('Ruleset link copied', 'ok');
-                }}
-              >
-                <Icon name="link" />
-              </button>
-            )}
-          </div>
-        </section>
-
         <section className="toolbar" aria-label="Search and filters">
           <div className="search">
             <Icon name="search" />
@@ -417,13 +287,32 @@ export default function RulesPage({ route }) {
               className={`icon-btn pin-btn ${pinned ? 'on' : ''}`}
               onClick={() => setPinned(!pinned)}
               aria-pressed={pinned}
-              title={pinned ? 'Unpin: let the ruleset and search scroll away with the page' : 'Pin the ruleset and search to the top while you scroll'}
-              aria-label={pinned ? 'Unpin the ruleset and search bar' : 'Pin the ruleset and search bar'}
+              title={pinned ? 'Unpin: let the search bar scroll away with the page' : 'Pin the search bar to the top while you scroll'}
+              aria-label={pinned ? 'Unpin the search bar' : 'Pin the search bar'}
             >
               <Icon name={pinned ? 'pin' : 'pinOff'} />
             </button>
           </div>
         </section>
+        {browsed.length > 0 && (
+          <div className="ruleset-status" role="status">
+            <Icon name="info" />
+            <span>
+              {browsed.length === 1 ? 'One rule is' : `${browsed.length} rules are`} shown in a version that “{selectedSet.name}”{unsaved ? ' (with your changes)' : ''} doesn't use.
+            </span>
+            <span className="ruleset-status-actions">
+              <button className="small" onClick={showBrowsed} title="Scroll to the first rule shown in another version">
+                Show {browsed.length === 1 ? 'it' : 'them'}
+              </button>
+              <button className="small" onClick={() => browsed.forEach((rid) => onUseVersion(rid, viewVersion[rid]))} title={`Make ${rs.setLabel} use the versions you are looking at (unsaved until you save)`}>
+                Use {browsed.length === 1 ? 'it' : 'them'} in {rs.setLabel}
+              </button>
+              <button className="small" onClick={() => setViewVersion({})} title={`Show every rule in the version “${selectedSet.name}” uses`}>
+                Back to the ruleset's versions
+              </button>
+            </span>
+          </div>
+        )}
         </div>
 
         {anyError ? (
@@ -461,7 +350,7 @@ export default function RulesPage({ route }) {
                         key={it.rule.id}
                         item={it}
                         setName={unsaved ? `${selectedSet.name} (unsaved)` : selectedSet.name}
-                        editing={Boolean(draft?.customizing)}
+                        editing={customizing}
                         focused={it.rule.id === focusId}
                         open={openId === it.rule.id}
                         onToggle={onToggle}
@@ -483,43 +372,6 @@ export default function RulesPage({ route }) {
         )}
       </div>
 
-      {draft && (
-        <div className="draft-bar" role="region" aria-label="Ruleset editor">
-          <div>
-            <b>{draft.customizing ? `Customizing “${selectedSet.name}”` : `Unsaved changes to “${selectedSet.name}”`}</b>
-            <span className="muted">
-              {' '}
-              · {Object.keys(draft.entries).length} rules active · {changeCount} change{changeCount === 1 ? '' : 's'}
-            </span>
-            <p className="small muted">
-              {draft.customizing
-                ? 'Toggle “In ruleset” on each rule, or browse to another version and choose “Use this version”.'
-                : selectedSet.builtIn
-                  ? 'The printed rulebook can’t be changed: save your changes as a new ruleset.'
-                  : 'Save them to the ruleset, save them as a new ruleset, or discard them.'}
-            </p>
-          </div>
-          <div className="row gap">
-            <button className="icon-btn" onClick={draftHistory.undo} disabled={!draftHistory.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-              <Icon name="undo" />
-            </button>
-            <button className="icon-btn" onClick={draftHistory.redo} disabled={!draftHistory.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-              <Icon name="redo" />
-            </button>
-            <button onClick={async () => (!changeCount || (await confirmDialog({ title: 'Discard changes', message: `Discard your ${changeCount} unsaved change${changeCount === 1 ? '' : 's'}?`, confirmLabel: 'Discard', danger: true }))) && endDraft(null)}>Discard</button>
-            {ownsSet && (
-              <button className="primary" onClick={saveExisting} disabled={!changeCount}>
-                <Icon name="save" />
-                Save
-              </button>
-            )}
-            <button className={ownsSet ? '' : 'primary'} onClick={() => requireUser(() => setDialog('saveAs'))}>
-              Save as new…
-            </button>
-          </div>
-        </div>
-      )}
-
       {dialog === 'newRule' && (
         <RuleDialog
           tree={tree}
@@ -529,14 +381,6 @@ export default function RulesPage({ route }) {
             if (!isEditor) setShowInactive(true);
             setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
           }}
-        />
-      )}
-      {dialog === 'saveAs' && (
-        <SaveRulesetDialog
-          initialName={selectedSet.builtIn ? '' : `${selectedSet.name} (copy)`}
-          initialDescription={selectedSet.builtIn ? '' : selectedSet.description}
-          onSave={saveAsNew}
-          onClose={() => setDialog(null)}
         />
       )}
     </div>

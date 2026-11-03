@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, setCardVersionIn, updateCardVersion } from '../lib/cardVersions.js';
+import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
 import { displayTitle, FIELD_KINDS, imageUrl, isEmptyValue } from '../lib/components.js';
 import { LABEL_CLASS } from '../lib/rules.js';
 import { absoluteLink, href } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from './ComponentCard.jsx';
+import { RulesetChoiceRow, useActiveRuleset } from './ActiveRuleset.jsx';
 import Discussion from './Discussion.jsx';
 import { alertDialog, confirmDialog } from './dialogs.jsx';
 import { attempt, copyText, Icon, Modal, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
@@ -15,7 +16,7 @@ import { autoFollow, cardTarget, notify, rulesetTarget, SUGGESTIONS } from '../l
  * A component in detail: its card, all its data, alternate states, and its versions with
  * reactions and discussion, the same way rules work.
  */
-export default function ComponentDetail({ type, comp, states, versionsOf, metaOf, commentCount, selectedSet, onClose }) {
+export default function ComponentDetail({ type, comp, states, versionsOf, metaOf, commentCount, onClose }) {
   const { shorthands, isEditor, user, requireUser } = useSession();
   const { byIdValue, statesOf, idf, sf } = states;
   // The family: the base component plus all its alternate states.
@@ -28,7 +29,11 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   }, [comp]);
 
   const vs = cardVersions(current, versionsOf(current.id), metaOf(current.id));
-  const chosenId = selectedSet.cards?.[current.id];
+  // The version the active ruleset uses, including unsaved changes.
+  const rs = useActiveRuleset();
+  const { selectedSet } = rs;
+  const savedId = selectedSet.cards?.[current.id];
+  const chosenId = current.id in rs.overrides.cards ? rs.overrides.cards[current.id] : savedId;
   const active = vs.find((v) => v.id === chosenId) || vs[0];
   const [shownId, setShownId] = useState(null);
   useEffect(() => {
@@ -40,7 +45,6 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const [discuss, setDiscuss] = useState(false);
   const [dialog, setDialog] = useState(null);
 
-  const canChoose = !selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor);
   const ownsShown = !shown.printed && user && shown.createdBy === user.uid && shown.label === 'Suggestion';
   const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(data[f.key], type));
   const name = displayTitle(type, { ...current, data });
@@ -132,6 +136,8 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
             })}
           </dl>
 
+          <RulesetChoiceRow what="card" inSet={shown.id === active.id} active onUse={() => rs.setCard(current.id, shown.printed ? null : shown.id, savedId)} />
+
           <div className="rule-foot">
             <Reactions
               reactions={shown.reactions}
@@ -147,17 +153,6 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 <Icon name="bulb" />
                 {isEditor ? 'Add version' : 'Suggest change'}
               </button>
-              {canChoose && shown.id !== active.id && (
-                <button className="chip ok" onClick={() =>
-                    attempt(() => setCardVersionIn(selectedSet.id, current.id, shown.id), `${selectedSet.name} now uses the ${shown.label} version`).then((ok) => {
-                      const t = rulesetTarget(selectedSet);
-                      if (ok) notify(t.key, user, { type: 'ruleset', title: `${user.displayName || 'Someone'} changed “${t.label}”: ${follow.label} now uses the ${shown.label} version`, text: '', link: t.link });
-                    })
-                  } title={`Use this version of the card in your ruleset “${selectedSet.name}”`}>
-                  <Icon name="check" />
-                  Use in {selectedSet.name}
-                </button>
-              )}
               <FollowButton target={follow} what={`${follow.label} (its discussion and versions)`} />
               <button
                 className="chip"

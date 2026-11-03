@@ -19,6 +19,7 @@ const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
 
 const TABS = [
   { id: 'chat', label: 'Staff chat' },
+  { id: 'suggestions', label: 'Suggestions' },
   { id: 'rules', label: 'Rules' },
   { id: 'rulesets', label: 'Rulesets' },
   { id: 'components', label: 'Components' },
@@ -28,6 +29,10 @@ const TABS = [
 
 export default function AdminPage({ route }) {
   const { user, isEditor, isAdmin, authLoading } = useSession();
+  // Waiting suggestions are counted on their tab.
+  const pendingRules = useLive(() => (isEditor ? query(collection(db, 'versions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
+  const pendingCards = useLive(() => (isEditor ? query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
+  const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0);
   if (authLoading) return <Spinner />;
   if (!user || !isEditor)
     return (
@@ -56,10 +61,12 @@ export default function AdminPage({ route }) {
         {tabs.map((t) => (
           <a key={t.id} href={href('admin', [t.id])} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined}>
             {t.label}
+            {t.id === 'suggestions' && pending > 0 && <span className="tab-count">{pending}</span>}
           </a>
         ))}
       </nav>
       {tab === 'chat' && <AdminChat />}
+      {tab === 'suggestions' && <SuggestionsAdmin />}
       {tab === 'rules' && <RulesAdmin />}
       {tab === 'rulesets' && <RulesetsAdmin />}
       {tab === 'components' && (
@@ -154,7 +161,21 @@ function AdminChat() {
 
 // ---------------------------------------------------------------- rules
 
+/** Content sections and rule kinds. */
 function RulesAdmin() {
+  const sections = useLive(() => collection(db, 'sections'), []);
+  const rules = useLive(() => collection(db, 'rules'), []);
+  const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
+  return (
+    <div className="admin-grid">
+      <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
+      <KindsEditor rules={rules.data || []} />
+    </div>
+  );
+}
+
+/** Community suggestions for rules and cards, newest first. */
+function SuggestionsAdmin() {
   const { user } = useSession();
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
@@ -186,7 +207,7 @@ function RulesAdmin() {
 
   return (
     <div className="admin-grid">
-      <section className="panel">
+      <section className="panel span-2">
         <div className="panel-head">
           <h2>Suggestions queue</h2>
           <FollowButton target={SUGGESTIONS} what="new suggestions from the community" className="small" />
@@ -278,9 +299,6 @@ function RulesAdmin() {
           </ul>
         )}
       </section>
-
-      <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
-      <KindsEditor rules={rules.data || []} />
     </div>
   );
 }

@@ -230,12 +230,13 @@ export const editComment = (id, text) => updateDoc(doc(db, 'comments', id), { te
 
 // ---------- rulesets ----------
 
-export async function createRuleset({ name, description, entries }, user) {
+export async function createRuleset({ name, description, entries, cards }, user) {
   const ref = doc(collection(db, 'rulesets'));
   await setDoc(ref, {
     name,
     description: description || '',
     entries,
+    ...(cards ? { cards } : {}),
     visibility: 'private',
     ownerUid: user.uid,
     ownerName: user.displayName || 'Anonymous',

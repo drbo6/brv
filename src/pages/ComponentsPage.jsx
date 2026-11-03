@@ -11,7 +11,7 @@ import { href, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from '../components/ComponentCard.jsx';
 import ComponentDetail from '../components/ComponentDetail.jsx';
-import RulesetSelect, { useRulesetChoice } from '../components/RulesetSelect.jsx';
+import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
 import { Empty, Icon, Spinner } from '../components/ui.jsx';
 
 /** Index the components of a type: lookup by ID value and alternate states per base component. */
@@ -75,8 +75,8 @@ export default function ComponentsPage({ route }) {
     return m;
   }, [cardComments.data]);
 
-  const choice = useRulesetChoice(route.params.get('set'));
-  const { selectedSet } = choice;
+  const rs = useActiveRuleset();
+  const cardChoices = useMemo(() => rs.apply(rs.selectedSet.cards, 'cards'), [rs.apply, rs.selectedSet.cards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const types = state.types || [];
   const type = types.find((t) => t.id === route.parts[0]) || types[0];
@@ -87,10 +87,10 @@ export default function ComponentsPage({ route }) {
     return (state.components || [])
       .filter((c) => c.typeId === type.id)
       .map((c) => {
-        const v = byId.get(selectedSet.cards?.[c.id]);
+        const v = byId.get(cardChoices[c.id]);
         return v && v.componentId === c.id ? { ...c, data: dataIn(c, v), version: v } : c;
       });
-  }, [state.components, type, selectedSet, cardVersionDocs.data]);
+  }, [state.components, type, cardChoices, cardVersionDocs.data]);
   // States are indexed on the printed cards; the detail view applies versions itself.
   const printedComps = useMemo(() => (type ? (state.components || []).filter((c) => c.typeId === type.id) : []), [state.components, type]);
   const states = useMemo(() => (type ? indexStates(type, printedComps) : null), [type, printedComps]);
@@ -187,10 +187,6 @@ export default function ComponentsPage({ route }) {
       <div className="page-head">
         <h1>{type.name}</h1>
         <div className="page-head-side">
-          <label className="ruleset-inline" title="A ruleset can use community or official versions of cards">
-            <span className="muted small">Ruleset</span>
-            <RulesetSelect choice={choice} onChange={(id) => choice.setStoredSetId(id)} id="cards-ruleset" />
-          </label>
           <p className="muted small">
             {visible.length} of {comps.length - (showStates ? 0 : states.isState.size)} shown
           </p>
@@ -272,7 +268,6 @@ export default function ComponentsPage({ route }) {
           versionsOf={(id) => versionsByComp.get(id) || []}
           metaOf={(id) => metaById.get(id)}
           commentCount={(id) => commentsByComp.get(id) || 0}
-          selectedSet={selectedSet}
           onClose={() => navigate('components', [type.id])}
         />
       )}

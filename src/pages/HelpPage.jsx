@@ -199,18 +199,21 @@ const TOPICS = [
         </p>
         <ul>
           <li>
-            Pick a ruleset at the top of the Rules page. Your choice is remembered on this device.
+            The <b>ruleset bar</b> under the header, on the Rules and Components pages, shows the ruleset you are using. Pick another one there; your choice is remembered on
+            this device. The same ruleset decides both the rules and the cards you see.
           </li>
           <li>
-            <b>Customize</b> starts editing: switch rules <i>In ruleset</i> on or off, or browse to another version and choose <i>Use this version</i>. Undo and redo work while you customize.
-            Cards work differently: open a card, step to another version and choose <i>Use in …</i> to put it in a ruleset you own, so a ruleset can carry balance changes to cards too.
+            Changing a ruleset never changes the rules themselves, or anyone else's view. In an open rule or card, the <b>Your ruleset</b> row says what the ruleset does with
+            the version on screen and offers <i>Use this version</i>, <i>Add</i> or <i>Leave out</i>. On a ruleset that isn't yours (such as the printed rulebook) this starts
+            <b>your own copy</b>; on your own ruleset it changes that one.
           </li>
           <li>
-            You don't need Customize for a quick change: in an open rule, <b>Use this version</b>, <b>Add to ruleset</b> and <b>Make inactive</b> change the ruleset
-            directly. The ruleset picker then says <i>unsaved changes</i> until you save or discard. Just stepping to another version of a rule also shows a note under the picker, because the page no longer shows the ruleset as it is; from there you can jump to those rules, use those versions, or go back to the ruleset's versions.
+            Changes stay unsaved until you choose: the ruleset bar turns amber and offers Undo, Redo, <b>Discard</b>, <b>Save</b> (your own rulesets) and{' '}
+            <b>Save as new…</b>. <b>Customize</b> (Rules page) puts an <i>In ruleset</i> switch on every rule for bigger changes.
           </li>
           <li>
-            <b>Save</b> updates a ruleset you own; <b>Save as new…</b> makes a copy.
+            Just stepping to another version of a rule shows a note under the search bar, because the page no longer shows the ruleset as it is. From there you can jump to
+            those rules, use those versions, or go back to the ruleset's versions.
           </li>
           <li>
             Share a ruleset with the link button <Icon name="link" size={14} />. New rulesets are private but anyone with the link can view them.
@@ -298,7 +301,7 @@ const TOPICS = [
     body: (
       <ul>
         <li>
-          <b>Follow</b> a rule (in its tools), a card (in its details) or a ruleset (next to the ruleset picker). You then get a notice in your <b>Inbox</b> when someone comments,
+          <b>Follow</b> a rule (in its tools), a card (in its details) or a ruleset (in the ruleset bar). You then get a notice in your <b>Inbox</b> when someone comments,
           adds or changes a version, or updates the ruleset.
         </li>
         <li>Commenting on something or suggesting a change to it follows it automatically, so you hear about replies and whether your suggestion was adopted.</li>
@@ -306,7 +309,7 @@ const TOPICS = [
           The bell in the header shows how many notices are unread. In the Inbox you can open a notice, mark notices read or unread, and clear old ones. The <b>Following</b> tab
           lists everything you follow, with an Unfollow button.
         </li>
-        <li>Admins can follow the suggestion feed (Admin → Rules) to hear about every new suggestion.</li>
+        <li>Staff can follow the suggestion feed (Admin → Suggestions) to hear about every new suggestion.</li>
         <li>On the Rules page, the ruleset and search bars stay pinned at the top while you scroll. The pin button at the end of the search bar turns that off.</li>
       </ul>
     ),
@@ -364,12 +367,13 @@ const TOPICS = [
         </p>
         <h4>Staff chat</h4>
         <p>A private chat for editors and admins. Enter sends, Shift+Enter starts a new line.</p>
+        <h4>Suggestions</h4>
+        <p>
+          All waiting rule and card suggestions, with their count on the tab. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to
+          discuss, or delete it. Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>). Follow the feed to get a notice for each new suggestion.
+        </p>
         <h4>Rules</h4>
         <ul>
-          <li>
-            <b>Suggestions queue:</b> new rule and card suggestions. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to discuss, or delete it.
-            Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>).
-          </li>
           <li>
             <b>Sections:</b> add sections, rename them, nest them and reorder them. Section numbers follow the new order; rule ids never change.
           </li>

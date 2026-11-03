@@ -3,6 +3,7 @@ import { absoluteLink, href } from '../lib/router.js';
 import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, react, ruleName, updateRule, versionRef } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
+import { RulesetChoiceRow } from './ActiveRuleset.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
 import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
@@ -130,18 +131,6 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                     Not in {setName}
                   </span>
                 )}
-                {!editing && shown && !shownInSet && (
-                  <button className="chip ok" onClick={() => (active ? onUseVersion(rule.id, shown.id) : onSetActive(rule.id, shown.id))} title={`Make ${setName} use this version (saved when you save the ruleset)`}>
-                    <Icon name="check" />
-                    {active ? 'Use this version' : 'Add to ruleset'}
-                  </button>
-                )}
-                {!editing && active && (
-                  <button className="chip" onClick={() => onSetActive(rule.id, null)} title={`Make this rule inactive in ${setName} (saved when you save the ruleset)`}>
-                    <Icon name="eyeOff" />
-                    Make inactive
-                  </button>
-                )}
               </div>
             )}
 
@@ -174,6 +163,16 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
               )}
             </div>
           </div>
+
+          {shown && !editing && rule.status !== 'suggested' && rule.status !== 'rejected' && (
+            <RulesetChoiceRow
+              inSet={shownInSet}
+              active={active}
+              onUse={() => onUseVersion(rule.id, shown.id)}
+              onAdd={() => onSetActive(rule.id, shown.id)}
+              onRemove={() => onSetActive(rule.id, null)}
+            />
+          )}
 
           {isEditor && (
             <div className="admin-tools" role="group" aria-label="Admin tools">
