@@ -236,7 +236,8 @@ const TOPICS = [
             <b>card size</b> with the slider.
           </li>
           <li>
-            Click a card for its <b>details</b>: every field, including ones not shown on the card, and a link to it.
+            Click a card for its <b>details</b>: the card itself, the <b>rules for this card</b> (rules staff attached because they explain or clarify it, each in the version
+            your ruleset uses), its versions, reactions and discussion.
           </li>
           <li>
             A <b>⟲</b> badge means the card has alternate states (flipped, upgraded…). Switch between them in the details.
@@ -251,7 +252,8 @@ const TOPICS = [
         <h4>For editors</h4>
         <p>
           Editors work on cards right where they read them, like rules: <b>Add</b> in the toolbar creates a card, and a card's details have <b>Edit card</b> and{' '}
-          <b>Delete card</b>. Card types, fields and layout stay in Admin → Components.
+          <b>Delete card</b>. <b>Attach rule</b> in the details links a rule to the card, so it is shown beside the card; reorder or detach them with the arrows and ×. Card
+          types, fields and layout stay in Admin → Components.
         </p>
       </>
     ),

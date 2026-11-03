@@ -182,6 +182,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `components` | `typeId` and `data` {fieldKey: value}: the printed card |
 | `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions` |
 | `componentMeta` | `reactions` on a card's printed version |
+| `componentRules` | `rules` [ruleId, …]: the rules attached to a card, shown beside it in its details |
 | `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}] |
 | `config/shorthands` | `items` {keyword: {type, value}} |
 | `config/componentsMeta` | `version` (cache counter) |

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
-import { deleteComponents, displayTitle, FIELD_KINDS, imageUrl, isEmptyValue } from '../lib/components.js';
+import { deleteComponents, displayTitle } from '../lib/components.js';
 import ComponentForm from './ComponentForm.jsx';
+import AttachedRules from './AttachedRules.jsx';
 import { LABEL_CLASS } from '../lib/rules.js';
 import { absoluteLink, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
@@ -9,7 +10,7 @@ import ComponentCard from './ComponentCard.jsx';
 import { RulesetChoiceRow, useActiveRuleset } from './ActiveRuleset.jsx';
 import Discussion from './Discussion.jsx';
 import { alertDialog, confirmDialog } from './dialogs.jsx';
-import { attempt, copyText, Icon, Modal, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
+import { attempt, copyText, Icon, Modal, Reactions, timeAgo, toast, UserName } from './ui.jsx';
 import FollowButton from './FollowButton.jsx';
 import { autoFollow, cardTarget, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 
@@ -47,7 +48,6 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const [dialog, setDialog] = useState(null);
 
   const ownsShown = !shown.printed && user && shown.createdBy === user.uid && shown.label === 'Suggestion';
-  const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(data[f.key], type));
   const name = displayTitle(type, { ...current, data });
   const follow = cardTarget(current, displayTitle(type, current));
 
@@ -110,32 +110,8 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
             </p>
           )}
 
-          <dl>
-            {rows.map((f) => {
-              const changed = !shown.printed && f.key in (shown.data || {});
-              return (
-                <div key={f.key} className={`detail-row ${changed ? 'changed' : ''}`} title={changed ? `Printed: ${String(current.data[f.key] ?? '—')}` : undefined}>
-                  <dt>
-                    {f.label}
-                    <span className="kind-mini">{changed ? 'Changed' : FIELD_KINDS[f.kind]?.label}</span>
-                  </dt>
-                  <dd>
-                    {f.kind === 'image' ? (
-                      imageUrl(f, data[f.key]) ? (
-                        <a href={imageUrl(f, data[f.key])} target="_blank" rel="noreferrer">
-                          {String(data[f.key])}
-                        </a>
-                      ) : (
-                        <code>{String(data[f.key])}</code>
-                      )
-                    ) : (
-                      <RichText html={String(data[f.key])} as="span" />
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
+
+          <AttachedRules compId={current.id} name={name} />
 
           <RulesetChoiceRow what="card" inSet={shown.id === active.id} active onUse={() => rs.setCard(current.id, shown.printed ? null : shown.id, savedId)} />
 
