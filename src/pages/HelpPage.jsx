@@ -168,12 +168,6 @@ const TOPICS = [
     icon: 'bulb',
     body: (
       <>
-        <h4>Asking about interactions</h4>
-        <p>
-          Unsure how a card and a rule work together? Open the rule (or the card's details) and use <b>Ask about this</b>. Your question becomes an FAQ entry linked to it,
-          others can discuss it, and staff answer it. Every rule and card shows the clarifications about it under <b>Clarifications about this</b>; the gold chips in rule
-          text link straight to the rules and cards they name.
-        </p>
         <ul>
           <li>
             <b>Suggest change</b> on an open rule adds your wording as a new <i>Suggestion</i> version. Add a rationale or source so others understand why.
@@ -200,7 +194,8 @@ const TOPICS = [
     body: (
       <>
         <p>
-          A ruleset decides which rules are active and which version of each rule (and of each card) applies. The built-in <b>Rulebook (as printed)</b> set uses every printed rule and card, plus the <i>Official Ruling</i> of rules the book doesn't contain (such as answered FAQ entries).
+          A ruleset decides which rules are active and which version of each rule (and of each card) applies. The built-in <b>Rulebook (as printed)</b> set uses every printed rule
+          and card.
         </p>
         <ul>
           <li>
@@ -383,26 +378,6 @@ const TOPICS = [
           All waiting rule and card suggestions, with their count on the tab. Relabel a suggestion as <i>Community</i> or <i>Official Ruling</i> to adopt it, open it to
           discuss, or delete it. Suggested new rules are approved from the rule itself (turn on <i>Show inactive</i>). Follow the feed to get a notice for each new suggestion.
         </p>
-        <h4>Clarifications (FAQ)</h4>
-        <ul>
-          <li>
-            Questions players ask with <b>Ask about this</b> arrive here marked <i>Question</i>. They are suggested rules of the <i>FAQ</i> kind, in the “FAQ and
-            clarifications” section, already linked to the rule or card they are about.
-          </li>
-          <li>
-            <b>Open to answer</b> takes you to the question. Add the answer as a new version (<i>Official Ruling</i> for a designer or official answer, <i>Community</i>{' '}
-            for an agreed reading), edit the question's title if it needs tidying, then <b>Approve rule</b>. Approved, it becomes a regular FAQ entry, and everyone following it
-            (including the person who asked) gets a notice.
-          </li>
-          <li>
-            To write a clarification yourself, use <b>Add rule</b> with the FAQ kind, or <b>Ask about this</b> on the rule or card it's about. Link every rule and card involved
-            with <b>Rule or card</b> in the editor: each of them then lists the clarification under “Clarifications about this”.
-          </li>
-          <li>
-            Find open questions in Admin → Rules → Table: filter the kind by <i>FAQ</i> and the status by <i>Suggested</i>. Turn a question down by setting its status to
-            <i>Rejected</i>, or merge it into an existing entry by linking and discussing.
-          </li>
-        </ul>
         <h4>Rules</h4>
         <ul>
           <li>

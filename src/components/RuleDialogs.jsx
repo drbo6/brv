@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react';
 import { escapeHtml } from '../lib/html.js';
-import { createRule, createVersion, faqSection, LABELS, ruleName, updateRule, updateVersion, withArticle } from '../lib/rules.js';
+import { createRule, createVersion, LABELS, ruleName, updateRule, updateVersion } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 import { confirmDialog, promptDialog } from './dialogs.jsx';
-import RefPicker from './RefPicker.jsx';
 import { autoFollow, notify, ruleTarget, SUGGESTIONS } from '../lib/inbox.js';
 
 /** Insert text at the cursor through the browser, so the textarea's own Ctrl+Z still works. */
@@ -82,7 +81,6 @@ function ImageForm({ onInsert, onCancel }) {
 function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
   const [preview, setPreview] = useState(false);
   const [imageForm, setImageForm] = useState(false);
-  const [picking, setPicking] = useState(null); // cursor position while the rule/card picker is open
   const ref = useRef(null);
   const wrap = (before, after, placeholder) => ref.current && insertAtCursor(ref.current, before, after, placeholder);
   const addLink = async () => {
@@ -120,23 +118,8 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
             <button type="button" className="icon-btn" title="Bulleted list" aria-label="Bulleted list" onClick={() => wrap('\n<ul>\n  <li>', '</li>\n</ul>\n', 'item')}>
               <Icon name="list" />
             </button>
-            <button type="button" className="icon-btn" title="Link to a web page" aria-label="Link" onClick={addLink}>
+            <button type="button" className="icon-btn" title="Link" aria-label="Link" onClick={addLink}>
               <Icon name="link" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              title="Link to a rule or card: it shows as a chip, and that rule or card lists this one under “Clarifications about this”"
-              aria-label="Link rule or card"
-              onClick={() => {
-                const el = ref.current;
-                // Insert where the cursor is, or at the end when the text box wasn't being edited.
-                const end = el ? el.value.length : 0;
-                setPicking(el && document.activeElement === el ? [el.selectionStart, el.selectionEnd] : [end, end]);
-              }}
-            >
-              <Icon name="layers" />
-              <span>Rule or card</span>
             </button>
             <button
               type="button"
@@ -150,23 +133,6 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
               <span>Image</span>
             </button>
           </div>
-          {picking && (
-            <RefPicker
-              onClose={() => setPicking(null)}
-              onPick={(token) => {
-                const at = picking;
-                setPicking(null);
-                // Back in the textarea, at the spot the cursor was before the picker opened.
-                setTimeout(() => {
-                  const el = ref.current;
-                  if (!el) return onChange(`${value}${token}`);
-                  el.focus();
-                  el.setSelectionRange(...at);
-                  insertAtCursor(el, token);
-                }, 0);
-              }}
-            />
-          )}
           {imageForm && (
             <ImageForm
               onCancel={() => setImageForm(false)}
@@ -241,7 +207,7 @@ export function VersionDialog({ rule, version, onClose }) {
     } else {
       // Suggesting follows the rule, so the author hears about reactions to it in the discussion.
       autoFollow(t.key, user.uid, t);
-      const title = isEditor ? `${who} added ${withArticle(data.label)} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+      const title = isEditor ? `${who} added a ${data.label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
       notify(t.key, user, { type: 'version', title, text: data.text, link: t.link });
       if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: data.text, link: t.link });
     }
@@ -299,22 +265,17 @@ export function VersionDialog({ rule, version, onClose }) {
 }
 
 /** Create a new rule (users: as a suggestion) or edit an existing rule's details (admins). */
-/**
- * Create a rule (users: as a suggestion) or edit a rule's details (editors). `ask` starts it as a
- * question about a rule or card ({ key, label, token, sectionId }): a FAQ entry linked to it.
- */
-export function RuleDialog({ rule, tree, rules, defaultSectionId, ask, onClose, onCreated }) {
+export function RuleDialog({ rule, tree, rules, defaultSectionId, onClose, onCreated }) {
   const { isEditor, user, kinds } = useSession();
   const editing = Boolean(rule);
-  const faqKind = kinds.some((k) => k.id === 'faq') ? 'faq' : 'rule';
-  const firstSection = (ask && (faqSection(tree)?.id || ask.sectionId)) || defaultSectionId || tree.ordered[0]?.id || '';
+  const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(rule?.sectionId || firstSection);
   const [title, setTitle] = useState(rule?.title || '');
-  const [kind, setKind] = useState(rule?.kind || (ask ? faqKind : 'rule'));
+  const [kind, setKind] = useState(rule?.kind || 'rule');
   const [page, setPage] = useState(rule?.page ?? '');
   const [status, setStatus] = useState(rule?.status || 'active');
   const [label, setLabel] = useState('Community');
-  const [text, setText] = useState(() => (ask ? `About ${ask.token}: ` : ''));
+  const [text, setText] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -331,16 +292,14 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, ask, onClose, 
     } else {
       const meta = isEditor
         ? { sectionId, order, title: title.trim(), kind, page: page === '' ? null : Number(page), status }
-        : { sectionId, order, title: title.trim(), kind: ask ? faqKind : 'rule', status: 'suggested' };
+        : { sectionId, order, title: title.trim(), kind: 'rule', status: 'suggested' };
       const version = { label: isEditor ? label : 'Suggestion', text: normalizeText(text), note: note.trim() };
       ok = await attempt(() => createRule(meta, version, user), isEditor ? 'Rule added' : 'Thanks! Your rule suggestion was added.');
       if (ok) {
         onCreated?.(ok);
         const t = ruleTarget({ id: ok, title: meta.title });
         autoFollow(t.key, user.uid, t);
-        if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} ${ask ? 'asked' : 'suggested a new rule'}: ${meta.title}`, text: version.text, link: t.link });
-        // Followers of the rule or card the question is about hear about it too.
-        if (ask) notify(ask.key, user, { type: 'question', title: `${user.displayName || 'Someone'} asked about ${ask.label}: ${meta.title}`, text: version.text, link: t.link });
+        if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title: `${user.displayName || 'Someone'} suggested a new rule: ${meta.title}`, text: version.text, link: t.link });
       }
     }
     setBusy(false);
@@ -348,15 +307,9 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, ask, onClose, 
   };
 
   return (
-    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : ask ? `Ask about ${ask.label}` : isEditor ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
+    <Modal title={editing ? `Edit rule ${ruleName(rule)}` : isEditor ? 'Add a rule' : 'Suggest a new rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
-        {ask && (
-          <p className="muted">
-            Ask how {ask.label} works, or how it interacts with other rules or cards. Put the question in the title; use the text for details, and link other rules or cards with{' '}
-            <b>Rule or card</b>. {isEditor ? 'You can answer it right away with an Official Ruling or Community version.' : 'It appears as a suggested FAQ entry that others can discuss and staff can answer.'}
-          </p>
-        )}
-        {!ask && !editing && !isEditor && (
+        {!editing && !isEditor && (
           <p className="muted">
             Suggested rules are visible to everyone (turn on “Show inactive”) and can be discussed. Admins may adopt them into the official FAQ.
           </p>
@@ -374,8 +327,8 @@ export function RuleDialog({ rule, tree, rules, defaultSectionId, ask, onClose, 
             </select>
           </div>
           <div className="field">
-            <label htmlFor="r-title">{ask ? 'Question' : 'Short title'}</label>
-            <input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={ask ? 160 : 80} placeholder={ask ? 'e.g. Does Loki’s Poison trigger when my Elite is destroyed by a Monster?' : 'e.g. Summoning at 0 Rage'} />
+            <label htmlFor="r-title">Short title</label>
+            <input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="e.g. Summoning at 0 Rage" />
           </div>
         </div>
         {isEditor && (

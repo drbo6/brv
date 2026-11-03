@@ -1,10 +1,9 @@
 import { memo, useState } from 'react';
-import { absoluteLink, href, navigate } from '../lib/router.js';
+import { absoluteLink, href } from '../lib/router.js';
 import { deleteRule, deleteVersion, kindInfo, LABEL_CLASS, react, ruleName, updateRule, versionRef } from '../lib/rules.js';
 import { useSession } from '../lib/session.jsx';
 import Discussion from './Discussion.jsx';
 import { RulesetChoiceRow } from './ActiveRuleset.jsx';
-import Clarifications from './Clarifications.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
 import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
@@ -16,7 +15,7 @@ import { notify, ruleTarget } from '../lib/inbox.js';
  * suggestions and (for admins) editing. Shows the version picked by the current ruleset, or the one
  * the reader browsed to.
  */
-function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersion, onSetActive, onUseVersion, onMove, canMoveUp, canMoveDown, tree, rules, mentionedBy }) {
+function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersion, onSetActive, onUseVersion, onMove, canMoveUp, canMoveDown, tree, rules }) {
   const { isEditor, requireUser, user, kinds } = useSession();
   const { rule, vs, active, activeVersion, shown } = item;
   const [discussOpen, setDiscussOpen] = useState(focused);
@@ -40,8 +39,7 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
     attempt(() => updateRule(rule.id, { status: 'active' }), 'Rule approved').then((ok) => {
       if (!ok) return;
       const t = ruleTarget(rule);
-      const what = rule.kind === 'faq' ? 'question' : 'suggested rule';
-      notify(t.key, user, { type: 'approved', title: `${user.displayName || 'An admin'} approved the ${what} “${rule.title}”`, text: '', link: t.link });
+      notify(t.key, user, { type: 'approved', title: `${user.displayName || 'An admin'} approved the suggested rule “${rule.title}”`, text: '', link: t.link });
     });
 
   const kind = kindInfo(kinds, rule.kind);
@@ -213,11 +211,6 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
               </button>
             </div>
           )}
-
-          <Clarifications
-            rules={mentionedBy}
-            onAsk={() => requireUser(() => navigate('rules', [rule.sid], { ask: `rule:${rule.id}` }), isEditor ? null : 'suggest')}
-          />
 
           {discussOpen && <Discussion rule={rule} versions={vs} shownVersion={shown} />}
         </div>
