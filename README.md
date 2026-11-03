@@ -59,7 +59,7 @@ In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions
 ### 5. Make yourself the owner
 
 1. Open the site, sign in and choose a username.
-2. Copy your user ID from **Account → Technical: your user ID**. This is the only time anyone needs it.
+2. Copy your user ID from **Account → Technical: your user ID**. This is the only time anyone needs it: the panel disappears for everyone once the site has an owner.
 3. In the Firebase console, open **Firestore**, create a collection named `admins`, and add a document whose **ID is your user ID**. It can have any field, for example `name: "Your name"`.
 4. Reload the site and go to **Admin → People**. Choose **Make me the owner**. This works once: it records you in `config/owner`, and nobody can demote or restrict the owner from the site.
 

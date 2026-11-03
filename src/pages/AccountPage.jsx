@@ -11,7 +11,7 @@ import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../com
 import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
 
 export default function AccountPage() {
-  const { user, authLoading, realRole, block, blockReason, signIn, signOut, editProfile } = useSession();
+  const { user, authLoading, realRole, block, blockReason, signIn, signOut, editProfile, ownerUid, ownerLoaded } = useSession();
   const theme = useTheme();
   const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
 
@@ -138,23 +138,26 @@ export default function AccountPage() {
         </section>
       )}
 
-      <details className="panel uid-panel">
-        <summary>Technical: your user ID</summary>
-        <p className="small muted">You don't need this to get a role: admins find you by your username. It is only used when setting up the site's owner in the Firebase console.</p>
-        <div className="row gap">
-          <code className="uid">{user.uid}</code>
-          <button
-            className="icon-btn"
-            aria-label="Copy user ID"
-            onClick={async () => {
-              await copyText(user.uid);
-              toast('User ID copied', 'ok');
-            }}
-          >
-            <Icon name="copy" />
-          </button>
-        </div>
-      </details>
+      {/* The user ID only helps set up the site's owner; once there is one, nobody needs it. */}
+      {ownerLoaded && !ownerUid && (
+        <details className="panel uid-panel">
+          <summary>Technical: your user ID</summary>
+          <p className="small muted">You don't need this to get a role: admins find you by your username. It is only used when setting up the site's owner in the Firebase console.</p>
+          <div className="row gap">
+            <code className="uid">{user.uid}</code>
+            <button
+              className="icon-btn"
+              aria-label="Copy user ID"
+              onClick={async () => {
+                await copyText(user.uid);
+                toast('User ID copied', 'ok');
+              }}
+            >
+              <Icon name="copy" />
+            </button>
+          </div>
+        </details>
+      )}
     </div>
   );
 }
