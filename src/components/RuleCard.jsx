@@ -41,7 +41,8 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
     toast(`Link to ${ref || ruleName(rule)} copied`, 'ok');
   };
 
-  const approve = () =>
+  const approve = async () =>
+    (await confirmDialog({ title: 'Approve rule', message: `Make “${rule.title}” an active rule of the rulebook, for everyone?`, confirmLabel: 'Approve' })) &&
     attempt(() => updateRule(rule.id, { status: 'active' }), 'Rule approved').then((ok) => {
       if (!ok) return;
       const t = ruleTarget(rule);

@@ -252,6 +252,12 @@ function SuggestionsAdmin() {
   /** Accepting tells the author, everyone following the rule or card, and followers of the ruleset it joins. */
   const accept = async ({ col, v, rule, target }, label, setId) => {
     const set = publicSets.find((x) => x.id === setId);
+    const confirmed = await confirmDialog({
+      title: `Accept as ${label}`,
+      message: `Make this suggestion for ${target.label}, by ${v.createdByName || 'its author'}, a public ${label} version${rule?.status === 'suggested' ? ' (the new rule becomes active)' : ''}${set ? `, and use it in the public ruleset “${set.name}”` : ''}? Its author is told.`,
+      confirmLabel: `Accept as ${label}`,
+    });
+    if (!confirmed) return;
     const ok = await attempt(() => acceptSuggestion({ col, version: v, rule }, label, setId), set ? `Accepted as ${label}, and used in “${set.name}”` : `Accepted as ${label}`);
     if (!ok) return;
     const text = col === 'versions' ? v.text : `Changes: ${Object.keys(v.data || {}).join(', ')}`;
@@ -298,6 +304,12 @@ function SuggestionsAdmin() {
 
   /** Making a shared homebrew a public suggestion tells its author and everyone following the rule or card. */
   const publish = async (h) => {
+    const confirmed = await confirmDialog({
+      title: 'Make it a public suggestion',
+      message: `Everyone will see this homebrew by ${h.ownerName || 'its author'}, credited to them, and can react to it and discuss it. Check that it is fit to show. Its author is told.`,
+      confirmLabel: 'Make it public',
+    });
+    if (!confirmed) return;
     const id = await attempt(() => publishHomebrew(h), 'Now a public suggestion');
     if (!id) return;
     const t = brewTarget(h, id);
@@ -337,7 +349,7 @@ function SuggestionsAdmin() {
           <FollowButton target={SUGGESTIONS} what="homebrew shared with the admins" className="small" />
         </div>
         <p className="small muted">
-          Homebrew that members shared with you. Only they and the staff see it. <b>Make it a suggestion</b> to put it up for everyone to see and discuss, credited to its
+          Homebrew that members shared with you. Only they and the staff see it. <b>Make it a public suggestion</b> to put it up for everyone to see and discuss, credited to its
           author; <b>Turn down</b> keeps it private to them, with your reason. Authors hear either way.
         </p>
         {homebrew.loading || rules.loading ? (
@@ -384,7 +396,7 @@ function SuggestionsAdmin() {
                   <div className="review-actions">
                     <button className="small ok" onClick={() => publish(h)} title="Make it a public suggestion, for everyone to see, react to and discuss">
                       <Icon name="check" />
-                      Make it a suggestion
+                      Make it a public suggestion
                     </button>
                     <button className="small danger" onClick={() => turnDown(h)} title="Turn it down with a reason: it stays private to its author">
                       <Icon name="x" />

@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Everyone can read (except private homebrew). Signed-in users can react, comment, write homebrew,
-// share it for review and save their own rulesets.
+// share it with the admins and save their own rulesets.
 // Roles: editors change content; admins also manage people; the owner (config/owner) is an admin
 // nobody can demote. roles/{uid} holds a person's role and any restriction (block) on them.
 // A document at admins/{uid} (the original setup) still counts as admin.

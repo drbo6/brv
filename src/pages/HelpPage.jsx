@@ -403,7 +403,7 @@ const TOPICS = [
         <h4>Suggestions</h4>
         <p>
           Two steps, with the count of waiting items on the tab. <b>Shared with the admins</b> lists homebrew members sent you; nobody else sees it yet. Check it, then{' '}
-          <b>Make it a suggestion</b> (public, credited to its author, with its own discussion) or <b>Turn down</b> with a reason. <b>Public suggestions</b> lists those
+          <b>Make it a public suggestion</b> (public, credited to its author, with its own discussion) or <b>Turn down</b> with a reason. <b>Public suggestions</b> lists those
           everyone can discuss: <b>Accept</b> one as <i>Community</i> or <i>Official Ruling</i> (a new rule becomes active), optionally using it in a public ruleset right
           away, or <b>Turn down</b> with a reason. Turned down, it goes back to its author as private homebrew, which they can change and share again. The author is told at
           every step. Follow the feed to get a notice whenever something is shared. Making a ruleset public warns you if it relies on someone's private homebrew.
