@@ -34,16 +34,42 @@ export function expandShorthands(html, shorthands) {
   });
 }
 
-/** Sanitized HTML with shorthands, ready for dangerouslySetInnerHTML. */
+// ---------- references to rules and cards ----------
+// Written as [[rule:<docId>|label]] or [[card:<componentDocId>|label]]. The label is stored with the
+// reference (so it reads well anywhere), the id never changes (so the link never breaks).
+
+export const REF_RE = /\[\[(rule|card):([^|\]\s]+)\|([^\]]*)\]\]/g;
+
+export const refToken = (kind, id, label) => `[[${kind}:${id}|${String(label).replace(/[[\]|"]/g, '').trim()}]]`;
+
+/** Where a reference points: a rule by document id, a card by type and document id. */
+export const refHref = (kind, id) => (kind === 'rule' ? `#/rules/${encodeURIComponent(id)}` : `#/components/${encodeURIComponent(id.split('__')[0])}/${encodeURIComponent(id)}`);
+
+/** The references in a text, as "rule:<id>" / "card:<id>" keys (stored on versions for backlinks). */
+export function extractRefs(text) {
+  const out = new Set();
+  for (const m of String(text || '').matchAll(REF_RE)) out.add(`${m[1]}:${m[2]}`);
+  return [...out];
+}
+
+function expandRefs(html) {
+  return html.replace(REF_RE, (_, kind, id, label) => {
+    const what = kind === 'rule' ? 'Rule' : 'Card';
+    return `<a class="ref ref-${kind}" href="${escapeHtml(refHref(kind, id))}" title="${what}: ${label.replace(/"/g, '&quot;')} (click to open)">${label}</a>`;
+  });
+}
+
+/** Sanitized HTML with references and shorthands, ready for dangerouslySetInnerHTML. */
 export function richHtml(value, shorthands) {
   if (value == null || value === '') return '';
-  return sanitize(expandShorthands(sanitize(String(value)), shorthands));
+  return sanitize(expandShorthands(expandRefs(sanitize(String(value))), shorthands));
 }
 
 /** Plain text (for search, PDF export and previews). */
 export function toPlainText(html) {
   if (!html) return '';
   const s = String(html)
+    .replace(REF_RE, (_, kind, id, label) => label)
     .replace(/<\s*img\b[^>]*?\balt\s*=\s*"([^"]*)"[^>]*>/gi, (_, alt) => `[Image${alt ? `: ${alt}` : ''}]`)
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\s*li[^>]*>/gi, '\n• ')

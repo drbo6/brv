@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
 import { deleteComponents, displayTitle, FIELD_KINDS, imageUrl, isEmptyValue } from '../lib/components.js';
 import ComponentForm from './ComponentForm.jsx';
-import { LABEL_CLASS } from '../lib/rules.js';
+import Clarifications from './Clarifications.jsx';
+import { collection, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
+import { useLive } from '../lib/hooks.js';
+import { LABEL_CLASS, shortIds, sortRules, withArticle } from '../lib/rules.js';
 import { absoluteLink, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from './ComponentCard.jsx';
@@ -49,6 +53,16 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const ownsShown = !shown.printed && user && shown.createdBy === user.uid && shown.label === 'Suggestion';
   const rows = type.fields.filter((f) => f.kind !== 'state' && !isEmptyValue(data[f.key], type));
   const name = displayTitle(type, { ...current, data });
+
+  // Rules (FAQ entries and others) whose text links to this card.
+  const linking = useLive(() => query(collection(db, 'versions'), where('refs', 'array-contains', `card:${current.id}`)), [current.id]);
+  const allRules = useLive(() => collection(db, 'rules'), []);
+  const mentionedBy = useMemo(() => {
+    const ids = new Set((linking.data || []).map((v) => v.ruleId));
+    const rules = allRules.data || [];
+    const sids = shortIds(rules);
+    return sortRules(rules.filter((r) => ids.has(r.id) && r.status !== 'rejected')).map((r) => ({ ...r, sid: sids.get(r.id) }));
+  }, [linking.data, allRules.data]);
   const follow = cardTarget(current, displayTitle(type, current));
 
   const step = (d) => setShownId(vs[(idx + d + vs.length) % vs.length].id);
@@ -216,6 +230,11 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
             </div>
           )}
 
+          <Clarifications
+            rules={mentionedBy}
+            onAsk={() => requireUser(() => navigate('rules', [], { ask: `card:${current.id}`, label: follow.label }), isEditor ? null : 'suggest')}
+          />
+
           {discuss && <Discussion target={{ field: 'componentId', id: current.id, name }} follow={follow} versions={vs} shownVersion={shown} />}
         </div>
       </div>
@@ -272,7 +291,7 @@ function CardVersionDialog({ type, comp, version, startData, onClose, onSaved })
       if (version) notify(t.key, user, { type: 'version', title: `${who} edited a version of ${t.label}`, text: `Changes: ${changes}`, link: t.link });
       else {
         autoFollow(t.key, user.uid, t);
-        const title = isEditor ? `${who} added a ${label} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
+        const title = isEditor ? `${who} added ${withArticle(label)} version of ${t.label}` : `${who} suggested a change to ${t.label}`;
         notify(t.key, user, { type: 'version', title, text: `Changes: ${changes}`, link: t.link });
         if (!isEditor) notify(SUGGESTIONS.key, user, { type: 'suggestion', title, text: `Changes: ${changes}`, link: t.link });
       }

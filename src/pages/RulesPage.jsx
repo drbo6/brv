@@ -8,6 +8,8 @@ import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import RuleCard from '../components/RuleCard.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
+import { extractRefs, refToken } from '../lib/html.js';
+import { subKey } from '../lib/inbox.js';
 import { RuleDialog } from '../components/RuleDialogs.jsx';
 import { attempt, Empty, Icon, Spinner } from '../components/ui.jsx';
 
@@ -30,6 +32,21 @@ export default function RulesPage({ route }) {
     return sortRules(rules.data || []).map((r) => ({ ...r, sid: sids.get(r.id) }));
   }, [rules.data]);
   const rulebook = useMemo(() => rulebookEntries(allRules, vByRule), [allRules, vByRule]);
+  // Backlinks: "rule:<id>" / "card:<id>" → the rules whose text links to it (rejected ones left out).
+  const mentions = useMemo(() => {
+    const byId = new Map(allRules.map((r) => [r.id, r]));
+    const m = new Map();
+    for (const v of versions.data || []) {
+      const from = byId.get(v.ruleId);
+      if (!from || from.status === 'rejected') continue;
+      for (const key of v.refs || extractRefs(v.text)) {
+        if (key === `rule:${from.id}`) continue;
+        if (!m.has(key)) m.set(key, new Map());
+        m.get(key).set(from.id, from);
+      }
+    }
+    return new Map([...m].map(([k, rs]) => [k, sortRules([...rs.values()])]));
+  }, [versions.data, allRules]);
   const index = useMemo(
     () =>
       allRules.map((rule) => {
@@ -160,6 +177,26 @@ export default function RulesPage({ route }) {
     return out;
   }, [items, tree]);
 
+  const loading = sections.loading || rules.loading || versions.loading;
+  // ----- "Ask about this": ?ask=rule:<id> or ?ask=card:<id>&label=<name> opens a question -----
+  const askParam = route.params.get('ask');
+  const ask = useMemo(() => {
+    if (!askParam || loading) return null;
+    const [kind, ...rest] = askParam.split(':');
+    const id = rest.join(':');
+    if (kind === 'rule') {
+      const r = allRules.find((x) => x.id === id);
+      if (!r) return null;
+      const label = `${r.sid} ${r.title}`;
+      return { key: subKey('rule', r.id), label, token: refToken('rule', r.id, label), sectionId: r.sectionId };
+    }
+    if (kind === 'card') {
+      const label = route.params.get('label') || id.split('__').pop();
+      return { key: subKey('component', id), label, token: refToken('card', id, label) };
+    }
+    return null;
+  }, [askParam, loading, allRules, route.params]);
+
   // ----- focus a linked rule -----
   const focusedOnce = useRef(null);
   useEffect(() => {
@@ -189,7 +226,6 @@ export default function RulesPage({ route }) {
   const jumpTo = (sectionId) => document.getElementById(`sec-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
 
-  const loading = sections.loading || rules.loading || versions.loading;
   const anyError = sections.error || rules.error || versions.error;
 
   return (
@@ -344,6 +380,7 @@ export default function RulesPage({ route }) {
                         canMoveDown={pos < siblings.length - 1}
                         tree={tree}
                         rules={allRules}
+                        mentionedBy={mentions.get(`rule:${it.rule.id}`)}
                       />
                     );
                   })}
@@ -354,6 +391,18 @@ export default function RulesPage({ route }) {
         )}
       </div>
 
+      {ask && (
+        <RuleDialog
+          tree={tree}
+          rules={allRules}
+          ask={ask}
+          onClose={() => navigate('rules', route.parts, {}, { replace: true })}
+          onCreated={(id) => {
+            if (!isEditor) setShowInactive(true);
+            setTimeout(() => navigate('rules', [shortIds([{ id }]).get(id)]), 300);
+          }}
+        />
+      )}
       {dialog === 'newRule' && (
         <RuleDialog
           tree={tree}

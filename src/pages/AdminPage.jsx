@@ -248,7 +248,12 @@ function SuggestionsAdmin() {
                     ) : (
                       <span className="muted">Deleted rule</span>
                     )}
-                    {r?.status === 'suggested' && <span className="tag t-suggestion">New rule</span>}
+                    {r?.status === 'suggested' && <span className="tag t-suggestion">{r.kind === 'faq' ? 'Question' : 'New rule'}</span>}
+                    {r?.status === 'suggested' && r.kind === 'faq' && (
+                      <a className="btn small" href={href('rules', [r.sid])} title="Open the question to answer it: add an Official Ruling or Community version, then approve it">
+                        Open to answer
+                      </a>
+                    )}
                   </div>
                   <p className="small muted">
                     by <UserName uid={v.createdBy} fallback={v.createdByName} /> · {timeAgo(v.createdAt)} · 👍 {c.up} 👎 {c.down} ❓ {c.q}

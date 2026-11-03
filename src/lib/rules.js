@@ -1,5 +1,6 @@
 import { collection, deleteField, doc, getDocs, increment, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { extractRefs } from './html.js';
 import { commitInChunks, deleteDoc, setDoc, updateDoc, writeBatch } from './store.js';
 
 export { commitInChunks };
@@ -16,13 +17,20 @@ export const DEFAULT_KINDS = [
   { id: 'example', label: 'Example', color: '#6fae5a' },
   { id: 'flavor', label: 'Flavor', color: '#8a7d72' },
   { id: 'summary', label: 'Quick reference', color: '#d1a54b' },
+  { id: 'faq', label: 'FAQ', color: '#c06c84' },
 ];
+
+/** Where clarifications go: a section named like "FAQ" or "Clarifications", if there is one. */
+export const faqSection = (tree) => tree.ordered.find((s) => /\b(faq|clarification|interaction)/i.test(s.title));
 
 /** The plain "rule" kind gets no badge; every other kind is shown on the rule. */
 export const kindInfo = (kinds, id) => kinds.find((k) => k.id === (id || 'rule')) || { id, label: id, color: '' };
 
 /** The built-in ruleset: every active rule, using its Rulebook version. Never stored. */
-export const RULEBOOK_SET = { id: 'rulebook', name: 'Rulebook (as printed)', description: 'Every rule exactly as printed in the official rulebook.', builtIn: true };
+export const RULEBOOK_SET = { id: 'rulebook', name: 'Rulebook (as printed)', description: 'Every rule exactly as printed in the official rulebook, plus official rulings on questions the book doesn’t answer.', builtIn: true };
+
+/** "a Community version", "an Official Ruling version". */
+export const withArticle = (word) => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word}`;
 
 export const millis = (ts) => (ts?.toMillis ? ts.toMillis() : typeof ts === 'number' ? ts : 0);
 
@@ -129,11 +137,17 @@ export const ruleName = (rule) => (rule.sid ? `${rule.sid} “${rule.title}”` 
 /** A version's citable reference, e.g. "k7q2m.2". */
 export const versionRef = (rule, version) => (rule.sid && version?.num ? `${rule.sid}.${version.num}` : '');
 
+/**
+ * The built-in ruleset: every rule as printed. Rules the book doesn't contain (such as FAQ entries)
+ * use their latest Official Ruling, so official clarifications are part of it too.
+ */
 export function rulebookEntries(rules, versionsByRule) {
   const entries = {};
   for (const r of rules) {
     if (r.status && r.status !== 'active') continue;
-    const v = (versionsByRule.get(r.id) || []).find((x) => x.label === 'Rulebook');
+    const vs = versionsByRule.get(r.id) || [];
+    const official = vs.filter((x) => x.label === 'Official Ruling').sort((a, b) => millis(b.createdAt) - millis(a.createdAt))[0];
+    const v = vs.find((x) => x.label === 'Rulebook') || official;
     if (v) entries[r.id] = v.id;
   }
   return entries;
@@ -160,11 +174,11 @@ export async function createVersion({ ruleId, label, text, note }, user) {
   const nums = numberVersions(existing.docs.map((d) => ({ id: d.id, ...d.data() })));
   const n = Math.max(0, ...nums.values()) + 1;
   const ref = doc(collection(db, 'versions'));
-  await setDoc(ref, { ruleId, label, text, n, note: note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
+  await setDoc(ref, { ruleId, label, text, refs: extractRefs(text), n, note: note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
   return ref.id;
 }
 
-export const updateVersion = (id, patch) => updateDoc(doc(db, 'versions', id), { ...patch, updatedAt: serverTimestamp() });
+export const updateVersion = (id, patch) => updateDoc(doc(db, 'versions', id), { ...patch, ...('text' in patch ? { refs: extractRefs(patch.text) } : {}), updatedAt: serverTimestamp() });
 export const deleteVersion = (id) => deleteDoc(doc(db, 'versions', id));
 
 export async function createRule(rule, version, user) {
@@ -172,7 +186,7 @@ export async function createRule(rule, version, user) {
   const versionRef = doc(collection(db, 'versions'));
   const batch = writeBatch();
   batch.set(ruleRef, { commentCount: 0, page: null, ...rule, createdAt: serverTimestamp(), ...author(user) });
-  batch.set(versionRef, { ruleId: ruleRef.id, label: version.label, text: version.text, n: 1, note: version.note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
+  batch.set(versionRef, { ruleId: ruleRef.id, label: version.label, text: version.text, refs: extractRefs(version.text), n: 1, note: version.note || '', reactions: {}, createdAt: serverTimestamp(), ...author(user) });
   await batch.commit();
   return ruleRef.id;
 }

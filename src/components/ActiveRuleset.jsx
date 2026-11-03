@@ -278,7 +278,7 @@ export function RulesetBar({ page }) {
             <span className="muted">
               {selectedSet.description ||
                 (selectedSet.builtIn ? (
-                  'The rules and cards exactly as printed.'
+                  'The rules and cards as printed, plus official rulings on questions the book doesn’t answer.'
                 ) : (
                   <>
                     A ruleset by <UserName uid={selectedSet.ownerUid} fallback={selectedSet.ownerName || 'a community member'} />.

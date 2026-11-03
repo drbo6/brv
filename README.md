@@ -117,6 +117,15 @@ Links use the id (`#/rules/k7q2m`, or `#/rules/k7q2m.2` for a version). Older li
 - If you browse to a version that isn't the one your ruleset uses, it is marked **Not in *ruleset***.
 - The *Rulebook* ruleset is computed on the fly, so it always includes newly added rulebook text.
 
+### Clarifications (FAQ) and references
+
+Clarifications are rules of the *FAQ* kind, usually in a "FAQ and clarifications" section, so they get versions, reactions, discussion, rulesets and the PDF like any rule.
+
+- Rule text can reference rules and cards with `[[rule:<docId>|label]]` and `[[card:<componentDocId>|label]]` (the editor's **Rule or card** button inserts them). They render as chips that link to the rule or card.
+- Each version stores the references its text makes (`refs`), so every rule and card shows **Clarifications about this**: the rules that link to it.
+- **Ask about this** on a rule or card creates a suggested FAQ entry that links to it. Staff answer it with an *Official Ruling* (or *Community*) version and approve it.
+- The built-in *Rulebook* ruleset uses each rule's printed text, and the latest Official Ruling for rules the book doesn't contain, so answered FAQ entries show by default.
+
 ### Rule kinds
 
 Kinds (Rule, Note, Tip, Changed from Blood Rage…) are a category badge and a filter. Admins manage the list, with a name and a color each, under **Admin → Rules → Rule kinds**, and set a rule's kind in its **Rule details** dialog. Rules store the kind's id, so renaming a kind updates every rule that uses it.
@@ -173,7 +182,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | --- | --- |
 | `sections` | `title`, `parent`, `order` |
 | `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount` |
-| `versions` | `ruleId`, `label`, `text` (HTML), `note`, `reactions` {uid: `up` / `down` / `q`} |
+| `versions` | `ruleId`, `label`, `text` (HTML), `refs` (rules and cards it references), `n` (version number), `note`, `reactions` {uid: `up` / `down` / `q`} |
 | `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions` |
 | `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId}, `ownerUid`, `visibility` |
 | `componentTypes` | Field definitions, layout and colors |
