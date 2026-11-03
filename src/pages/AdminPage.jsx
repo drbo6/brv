@@ -167,24 +167,27 @@ function RulesAdmin({ route }) {
   const sections = useLive(() => collection(db, 'sections'), []);
   const rules = useLive(() => collection(db, 'rules'), []);
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
-  const sub = route.params.get('tab') === 'table' ? 'table' : 'structure';
+  const subs = [
+    { id: 'sections', label: 'Sections', tip: 'The sections rules are grouped in, and their order' },
+    { id: 'kinds', label: 'Kinds', tip: 'The kinds of rule (Note, Tip, FAQ…) with their colors' },
+    { id: 'table', label: 'Table', tip: 'All rules as a table, for bulk work on their details' },
+  ];
+  const sub = subs.find((s) => s.id === route.params.get('tab'))?.id || 'sections';
   return (
     <>
       <nav className="tabs small" aria-label="Rules sections">
-        <a href={href('admin', ['rules'])} className={sub === 'structure' ? 'on' : ''} title="The sections rules are grouped in, and the kinds of rule">
-          Sections &amp; kinds
-        </a>
-        <a href={href('admin', ['rules'], { tab: 'table' })} className={sub === 'table' ? 'on' : ''} title="All rules as a table, for bulk work on their details">
-          Table
-        </a>
+        {subs.map((s) => (
+          <a key={s.id} href={href('admin', ['rules'], s.id === 'sections' ? {} : { tab: s.id })} className={sub === s.id ? 'on' : ''} title={s.tip}>
+            {s.label}
+          </a>
+        ))}
       </nav>
       {sub === 'table' ? (
         <RulesTable tree={tree} />
+      ) : sub === 'kinds' ? (
+        <KindsEditor rules={rules.data || []} />
       ) : (
-        <div className="admin-grid">
-          <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
-          <KindsEditor rules={rules.data || []} />
-        </div>
+        <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
       )}
     </>
   );

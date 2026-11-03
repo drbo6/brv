@@ -131,7 +131,7 @@ const TOPICS = [
         </p>
         <ul>
           <li>
-            Admins manage the list of kinds (name and color) in <b>Admin → Rules → Rule kinds</b>.
+            Admins manage the list of kinds (name and color) in <b>Admin → Rules → Kinds</b>.
           </li>
           <li>
             The kind of a rule is set in its <b>Rule details</b> dialog: open the rule and choose <i>Rule details</i> in the Admin row.
@@ -409,12 +409,13 @@ const TOPICS = [
             <b>Sections:</b> add sections, rename them, nest them and reorder them. Section numbers follow the new order; rule ids never change.
           </li>
           <li>
-            <b>Rule kinds:</b> the list of kinds with their name and color.
+            <b>Kinds</b> (tab): the list of kinds with their name and color.
           </li>
           <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (section, kind, page, status), move it, approve it or delete it.</li>
           <li>
             <b>Table</b> (a tab in Admin → Rules): every rule in a sortable, filterable table. Change a rule's section, kind, status, page or title in place, or tick several
-            rules and change them together. <i>Columns</i> chooses what is shown.
+            rules and change them together. <i>Columns</i> chooses what is shown. The <b>Edit</b> button on a row opens the whole rule: its details and every version,
+            each editable, plus adding or deleting versions and deleting the rule.
           </li>
         </ul>
         <h4>Rulesets</h4>
@@ -502,7 +503,7 @@ const TOPICS = [
         </ul>
         <h4>Shorthands</h4>
         <p>
-          Shorthands turn <code>[keyword]</code> in any card or rule text into an emoji or a small image. Define them in the Shorthands panel of Admin → Components.
+          Shorthands turn <code>[keyword]</code> in any card or rule text into an emoji or a small image. Define them in Admin → Components → Shorthands.
         </p>
       </>
     ),

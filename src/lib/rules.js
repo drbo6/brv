@@ -121,7 +121,8 @@ export function shortIds(rules) {
 /** Version numbers by order of creation. New versions store theirs (`n`), so deleting one renumbers nothing. */
 function numberVersions(list) {
   let next = 1;
-  const byAge = [...list].sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity) || millis(a.createdAt) - millis(b.createdAt));
+  // Oldest first: versions from before numbers were stored get theirs from their age.
+  const byAge = [...list].sort((a, b) => millis(a.createdAt) - millis(b.createdAt) || (a.n ?? 0) - (b.n ?? 0));
   const nums = new Map();
   for (const v of byAge) {
     const num = v.n ?? next;

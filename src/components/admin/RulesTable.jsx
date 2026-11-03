@@ -7,6 +7,7 @@ import { groupVersions, kindInfo, millis, shortIds, sortRules, updateRule } from
 import { commitInChunks } from '../../lib/store.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner, timeAgo } from '../ui.jsx';
+import RuleEditor from './RuleEditor.jsx';
 
 const STATUSES = { active: 'Active', suggested: 'Suggested', rejected: 'Rejected' };
 
@@ -35,6 +36,7 @@ export default function RulesTable({ tree }) {
   const [filter, setFilter] = useState({ section: '', kind: '', status: '' });
   const [sort, setSort] = useState({ key: null, dir: 1 });
   const [picked, setPicked] = useState(() => new Set());
+  const [editId, setEditId] = useState(null);
   const [savedCols, setSavedCols] = useLocalStorage('brv-rule-cols', null);
   const cols = COLUMNS.filter((c) => (savedCols || DEFAULT_COLS).includes(c.id));
   const toggleCol = (id) => {
@@ -154,6 +156,8 @@ export default function RulesTable({ tree }) {
   );
 
   if (rules.loading || versions.loading) return <Spinner />;
+  // Live: the editor follows the rule as it is saved, and closes if it is deleted.
+  const editRow = editId && rows.find((x) => x.rule.id === editId);
   const nPicked = list.filter((r) => picked.has(r.rule.id)).length;
 
   return (
@@ -236,6 +240,7 @@ export default function RulesTable({ tree }) {
                   </button>
                 </th>
               ))}
+              <th aria-label="Edit" />
             </tr>
           </thead>
           <tbody>
@@ -277,6 +282,11 @@ export default function RulesTable({ tree }) {
                       )}
                     </td>
                   ))}
+                  <td className="actions-cell">
+                    <button className="icon-btn" onClick={() => setEditId(r.id)} title="Edit everything about this rule: details and all its versions" aria-label={`Edit ${row.sid}`}>
+                      <Icon name="edit" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -284,6 +294,15 @@ export default function RulesTable({ tree }) {
         </table>
       </div>
       {list.length === 0 && <p className="muted">No rules match.</p>}
+      {editRow && (
+        <RuleEditor
+          rule={{ ...editRow.rule, sid: editRow.sid }}
+          versions={vByRule.get(editRow.rule.id) || []}
+          tree={tree}
+          rules={rows.map((x) => ({ ...x.rule, sid: x.sid }))}
+          onClose={() => setEditId(null)}
+        />
+      )}
     </section>
   );
 }

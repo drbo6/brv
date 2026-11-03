@@ -51,7 +51,31 @@ export default function ComponentsAdmin({ route }) {
     }
   };
 
+  // Shorthands apply to all component types (and rule text), so they get a tab of their own.
+  const view = route.params.get('view') === 'shorthands' && !typeId ? 'shorthands' : 'types';
+  const viewTabs = (
+    <nav className="tabs small" aria-label="Components sections">
+      <a href={href('admin', ['components'])} className={view === 'types' ? 'on' : ''} title="Component types: their fields, card layout and a table of their components">
+        Component types
+      </a>
+      <a href={href('admin', ['components'], { view: 'shorthands' })} className={view === 'shorthands' ? 'on' : ''} title="[keyword] codes that show as an emoji or image in cards and rules">
+        Shorthands
+      </a>
+    </nav>
+  );
+  if (view === 'shorthands')
+    return (
+      <>
+        {viewTabs}
+        <section className="panel shorthands-panel">
+          <ShorthandsEditor />
+        </section>
+      </>
+    );
+
   return (
+    <>
+    {viewTabs}
     <div className="ca-layout">
       <aside className="panel ca-side">
         <h2>Component types</h2>
@@ -71,7 +95,6 @@ export default function ComponentsAdmin({ route }) {
             New type
           </button>
         </div>
-        <ShorthandsEditor />
       </aside>
 
       <div className="ca-main">
@@ -102,6 +125,7 @@ export default function ComponentsAdmin({ route }) {
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -122,9 +146,9 @@ function ShorthandsEditor() {
 
   return (
     <section className="shorthands">
-      <h3>Shorthands</h3>
+      <h2>Shorthands</h2>
       <p className="small muted">
-        Write <code>[keyword]</code> in any card or rule text to show an emoji or image.
+        Write <code>[keyword]</code> in any card or rule text to show an emoji or a small image instead, for example <code>[rage]</code> → 🩸.
       </p>
       {rows.map((r, i) => (
         <div key={i} className="sh-row">

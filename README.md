@@ -128,7 +128,7 @@ Clarifications are rules of the *FAQ* kind, usually in a "FAQ and clarifications
 
 ### Rule kinds
 
-Kinds (Rule, Note, Tip, Changed from Blood Rage…) are a category badge and a filter. Admins manage the list, with a name and a color each, under **Admin → Rules → Rule kinds**, and set a rule's kind in its **Rule details** dialog. Rules store the kind's id, so renaming a kind updates every rule that uses it.
+Kinds (Rule, Note, Tip, Changed from Blood Rage…) are a category badge and a filter. Admins manage the list, with a name and a color each, under **Admin → Rules → Kinds**, and set a rule's kind in its **Rule details** dialog. Rules store the kind's id, so renaming a kind updates every rule that uses it.
 
 ### Card versions
 
