@@ -5,7 +5,7 @@ A community-maintained FAQ, rules-clarification and balancing hub for *Blood Rag
 - **Rules.** Every rule from the rulebook is a separate entry with a short permanent id such as `k7q2m`; versions are cited as `k7q2m.1`, `k7q2m.2`… The rules read like a book; clicking one shows its tools. Each rule can have several versions, labeled *Rulebook*, *Official Ruling*, *Community* or *Suggestion*. People can react 👍 👎 ❓ and discuss. Anyone signed in can write **homebrew**: their own version of any rule or card, or a rule of their own. Homebrew is private to its author and goes straight into their own ruleset. Sharing sends it to the admins (still private); they make it a public *Suggestion* with its own discussion, then accept it (as *Community* or *Official Ruling*, optionally straight into a public ruleset). Turned down at either step, it stays the author's private homebrew, with the reason, to change and share again. Rule text can include externally hosted images. The rules are searchable, can be filtered, and can be exported to PDF.
 - **Rulesets.** A ruleset picks which rules are active and which version of each rule is used. The built-in *Rulebook* ruleset always uses the printed text. Signed-in users can save their own rulesets and share them by link. Admins choose which rulesets are public and which one is the default.
 - **Components.** A card browser with search, filters and sorting that stays fast with thousands of entries. Cards have versions (Printed, Official Ruling, Community, Suggestion), reactions and discussion just like rules, and a ruleset can pick which version of each card it uses. Editors add and edit components in place; admins define component types and their fields, arrange them on a simple card layout, and define `[shorthand]` icons.
-- **Admin.** Staff chat, a suggestions queue, a discussions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup.
+- **Admin.** Staff chat, a suggestions queue, a discussions queue, sections, rule kinds and a rules table for bulk changes, ruleset publishing, component types and a components table, people and roles, and (for the owner) a JSON backup and import.
 - **Undo.** Every change can be undone and redone: from the toast that confirms it, the ↶ button in the header, or Ctrl+Z / Ctrl+Shift+Z.
 - **Inbox and following.** Signed-in users follow rules, cards, rulesets (and admins the suggestion feed) and get inbox notices about new comments, versions and changes. Commenting or suggesting follows automatically. A bell in the header shows unread notices.
 - **View as.** Signed-in users and admins can preview the site as a signed-in user or a visitor, from the 👁 menu in the header.
@@ -78,7 +78,7 @@ Admins can also restrict a user or editor (not an admin) with **No sharing** (th
 
 ### 6. Load the content
 
-The site has no import, on purpose. The owner loads prepared content from their computer with the project's service-account key:
+Once you have claimed ownership (step 5), the simplest way is **Admin → Backup → Import**: choose [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) and import it. Alternatively, load it from your computer with the project's service-account key:
 
 1. Firebase console → **Project settings → Service accounts → Generate new private key**. Keep the downloaded file private and never commit it.
 2. Run:
@@ -154,7 +154,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 
 ### Backups
 
-**Admin → Backup** (owner only) downloads any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`). The site has no import; `imports/load-into-firestore.mjs` loads such a file with a service-account key (see setup step 6).
+**Admin → Backup** (owner only) downloads any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`) and imports one. *Merge* writes the file's documents; *Replace* makes the ticked collections match the file, emptying ticked collections the file lacks, for a clean start. People and private data (admins, profiles, usernames, roles, moderation log, follows, staff chat, homebrew) are unticked by default, and the owner's own owner, admin, role and profile entries are never touched. Imports are one undoable action in that tab. Personal notices (`inbox`) are not included. The security rules let only the owner (`config/owner`) do this. `imports/load-into-firestore.mjs` still loads a file with a service-account key (see setup step 6).
 
 ## Field kinds
 
@@ -176,7 +176,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `sections` | `title`, `parent`, `order` |
 | `rules` | `sectionId`, `order`, `title`, `kind`, `page`, `status` (`active` / `suggested` / `rejected`), `commentCount`, and `homebrewId` for a shared homebrew rule |
 | `versions` | `ruleId`, `label`, `text` (HTML), `n` (version number), `note`, `reactions` {uid: `up` / `down` / `q`}, and `homebrewId` for shared homebrew |
-| `homebrew` | Private to its `ownerUid`: `kind` (`version` {ruleId, text} / `rule` {sectionId, title, text} / `card` {componentId, typeId, data}), `note`, `submitted` (shared with the admins, who can then list it), `sharedId` (its public suggestion, once the admins made one), `declineReason` once turned down. Rulesets refer to it as `hb:<id>`. Not in the backup |
+| `homebrew` | Private to its `ownerUid`: `kind` (`version` {ruleId, text} / `rule` {sectionId, title, text} / `card` {componentId, typeId, data}), `note`, `submitted` (shared with the admins, who can then list it), `sharedId` (its public suggestion, once the admins made one), `declineReason` once turned down. Rulesets refer to it as `hb:<id>`. In the backup (the owner can read it all) |
 | `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions`, and `handled` once staff have dealt with it in the discussions queue |
 | `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId} (a homebrew is `hb:<id>`), `ownerUid`, `visibility` |
 | `componentTypes` | Field definitions, layout and colors |

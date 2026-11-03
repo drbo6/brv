@@ -535,9 +535,10 @@ const TOPICS = [
         </p>
         <h4>Backup</h4>
         <p>
-          Owner only. Downloads any set of collections as one JSON file; keep regular backups somewhere safe. The site has no import: loading a file into the database
-          (for example the prepared Blood Rage content in <code>imports/</code>) is done by the owner from a computer, with the project's service-account key, as the README
-          explains.
+          Owner only. Downloads any set of collections as one JSON file; keep regular backups somewhere safe. <b>Import</b> loads such a file, or the prepared Blood Rage
+          content in <code>imports/</code>. <i>Merge</i> adds and overwrites documents; <i>Replace</i> makes the ticked collections match the file and empties ticked
+          collections the file doesn't have, which gives a clean start. People's profiles, roles and private data are only touched when you tick them, and your own owner,
+          admin, role and profile entries are always kept. Replacing asks you to type REPLACE; download a backup first.
         </p>
       </>
     ),

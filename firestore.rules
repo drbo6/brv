@@ -323,6 +323,15 @@ service cloud.firestore {
         && shortText('text', 400);
     }
 
+    // The owner restores backups (Admin → Backup): any document of the site's collections. Rules
+    // above that also match still apply to everyone else. config/owner only changes in the console.
+    match /{col}/{id} {
+      allow read, write: if isOwner()
+        && col in ['sections', 'rules', 'versions', 'comments', 'rulesets', 'componentTypes', 'components', 'componentVersions',
+          'componentMeta', 'componentRules', 'config', 'admins', 'users', 'usernames', 'subscribers', 'roles', 'modlog', 'adminChat', 'homebrew']
+        && !(col == 'config' && id == 'owner');
+    }
+
     match /adminChat/{id} {
       allow read: if isEditor();
       allow create: if isEditor() && request.resource.data.uid == request.auth.uid && shortText('text', 4000);
