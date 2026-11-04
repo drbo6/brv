@@ -1,6 +1,6 @@
 # Turning a rulebook into an import file
 
-This file is a set of instructions for an AI model. Give it this file and a game's rulebook (PDF, scans or text). Optionally, also give it a card list or spreadsheet. It produces one JSON file that the site's owner loads with **Admin → Backup → Import**.
+This file is a set of instructions for an AI model. Give it this file and a game's rulebook (PDF, scans or text). It produces one JSON file that the site's owner loads with **Admin → Backup → Import**.
 
 ---
 
@@ -14,7 +14,7 @@ Produce **one JSON file** in the exact format below, containing:
 2. The **rules**: the book split into short, self-contained entries, each with a title.
 3. One **version** per rule, holding the rule's text **verbatim** from the book, labeled `Rulebook`.
 4. A **ruleset** that uses all those versions, marked as the site's default.
-5. Optionally, **shorthands** for icons used in the text, and **cards** (or other components) if a card list is provided.
+5. Optionally, **shorthands** for icons used in the text.
 
 Output only the JSON: no commentary before or after it, and no Markdown code fences around it. It must parse with a strict JSON parser: no comments and no trailing commas.
 
@@ -33,16 +33,13 @@ Output only the JSON: no commentary before or after it, and no Markdown code fen
     "rules": {},
     "versions": {},
     "rulesets": {},
-    "config": {},
-    "componentTypes": {},
-    "components": {}
+    "config": {}
   }
 }
 ```
 
 - `format` must be exactly `"brv-backup"`, and `version` must be `1`.
 - Each collection is an **object keyed by document id**, not an array: `{ "id-1": { … }, "id-2": { … } }`.
-- Leave out `componentTypes` and `components` when there are no cards.
 - **Timestamps** are written as `{ "__ts": <milliseconds since 1970> }`. Use one fixed time for everything, for example `{ "__ts": 1767225600000 }` (1 January 2026).
 - **Document ids** may use letters, digits, `-` and `_`. They must not contain `/` or `.`, and must not start and end with `__`. Keep them stable and readable. The ids below follow a pattern; use it.
 
@@ -201,86 +198,9 @@ One ruleset holds every rule in its printed version, and becomes the site's defa
 - `name` may name the edition, e.g. `"Rulebook, 2nd edition"`. Keep `description` under 80 characters.
 - To define rule kinds (see 2), add them to `config/site`: `"kinds": [{ "id": "rule", "label": "Rule", "color": "#9c9087" }, { "id": "note", "label": "Note", "color": "#6d9ccf" }, …]`. Include `rule`, and every kind your rules use.
 
-## 6. Cards (optional): `componentTypes`, `components`
+## 6. Cards and other components
 
-Include these only if you were given the game's cards or other components, for example as a spreadsheet or a list. **Don't** invent cards from rulebook illustrations.
-
-### A component type
-
-One type per kind of component, such as "Cards" or "Tiles". Id: lowercase, e.g. `cards`.
-
-| Field | Value |
-| --- | --- |
-| `name` | e.g. `"Game cards"` |
-| `order` | 1, 2… (the order types are listed in) |
-| `aspect` | Card width ÷ height, e.g. `0.714` for 63 × 88 mm, or `0.646` for 41 × 63.5 mm |
-| `emptyValues` | Values that mean "nothing here", e.g. `["n/a", "-"]` |
-| `accentField` | The key of a `type` field whose value colors the card (e.g. a faction), or `""` |
-| `accentColors` | `{ "<value>": "#hex" }` for that field's values |
-| `defaultAccent` | A `#hex` color for everything else |
-| `fields` | The data fields (below) |
-| `layout` | How the fields sit on the card (below) |
-
-**Fields:** `{ "key": "cost", "label": "Cost", "kind": "value", "filterable": false, "urlTemplate": "" }`
-
-| `kind` | For |
-| --- | --- |
-| `id` | The card's number or code. **Exactly one** field must have this kind |
-| `title` | The card's name |
-| `type` | A category: faction, card type, color… Set `filterable: true` to offer it as a filter |
-| `value` | A number: cost, strength, points |
-| `ability` | Game text (HTML and `[shorthands]` allowed) |
-| `lore` | Flavor text |
-| `image` | An image: a full `https://` URL, or a file name together with `urlTemplate` such as `"https://example.com/art/{value}.jpg"` |
-| `state` | Marks a card as the other side or state of another card (rare; see below) |
-
-Keys use only lowercase letters, digits and `_`.
-
-**Layout:** rows from top to bottom, with the fields of a row side by side.
-
-```json
-"layout": {
-  "rows": [
-    { "band": true, "fill": false, "divider": false, "cells": [
-      { "key": "title", "width": 4, "size": "l", "align": "left", "bold": true, "italic": false, "muted": false, "upper": false, "label": false, "prefix": "", "suffix": "" },
-      { "key": "cost", "width": 1, "size": "l", "align": "right", "bold": true, "italic": false, "muted": false, "upper": false, "label": false, "prefix": "", "suffix": "[coin]" }
-    ] },
-    { "band": false, "fill": false, "divider": false, "cells": [
-      { "key": "faction", "width": 1, "size": "s", "align": "left", "bold": false, "italic": false, "muted": true, "upper": true, "label": false, "prefix": "", "suffix": "" }
-    ] },
-    { "band": false, "fill": true, "divider": true, "cells": [
-      { "key": "ability", "width": 1, "size": "m", "align": "left", "bold": false, "italic": false, "muted": false, "upper": false, "label": false, "prefix": "", "suffix": "" }
-    ] }
-  ]
-}
-```
-
-- **Row options:**
-  - `band`: a colored strip (use it for the title row);
-  - `fill`: the row takes the remaining height (use it for the main text);
-  - `divider`: a line above the row.
-- **Cell options:**
-  - `width`: share of the row;
-  - `size`: `xs`, `s`, `m`, `l`, `xl` or `xxl`;
-  - `align`: `left`, `center` or `right`;
-  - `bold`, `italic`, `muted` (grey), `upper` (capitals);
-  - `label`: shows the field's name above the value;
-  - `prefix` and `suffix`: text around the value, e.g. `"+"` or `"[coin]"`.
-- Place the fields a player reads on the card. Leave out the `id` and `state` fields, and internal ones.
-
-### Components
-
-Id: `<type id>__<id value>`, e.g. `cards__17`. Use two underscores, and replace any `/ \ . # $ [ ]` in the id value with `-`.
-
-```json
-"components": {
-  "cards__17": { "typeId": "cards", "data": { "id": 17, "title": "Ambush", "faction": "Wolves", "cost": 2, "ability": "<p>Play before combat: +2 [attack].</p>" } }
-}
-```
-
-- `data` holds one value per field key. Numbers are JSON numbers; leave a missing value out, or use one of `emptyValues`.
-- Copy the card text **verbatim**, with icons as shorthands.
-- A card's other side, if it has one, is its own component whose `state` field is `{ "of": "<id value of the front>", "name": "Back" }`.
+Leave them out of this file. Cards, tiles, boards and other components have their own instructions, [IMPORT-COMPONENTS.md](IMPORT-COMPONENTS.md), and their own import file, which the owner adds afterwards with **Merge**. If you were given that file and the components as well, produce the components file as a second, separate answer. Use the same shorthand keywords in both.
 
 ---
 
@@ -295,7 +215,6 @@ Id: `<type id>__<id value>`, e.g. `cards__17`. Use two underscores, and replace 
 - [ ] Every `kind` is in the kind list (the defaults, or your `config/site.kinds`).
 - [ ] Every `[keyword]` in the text is defined in `config.shorthands.items`.
 - [ ] The text is verbatim: nothing is reworded, summarized or skipped.
-- [ ] Cards (if any): each component type has exactly one `id` field, every layout `key` is a field, and every component's `typeId` exists.
 
 ## If the rulebook is too long for one answer
 
