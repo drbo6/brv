@@ -4179,6 +4179,12 @@ summary.primary-summary {
   font-size: 1rem;
 }
 
+.attached-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .attached-head .chip {
   margin-left: auto;
 }

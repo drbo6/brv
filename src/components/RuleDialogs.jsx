@@ -297,7 +297,7 @@ export function VersionDialog({ rule, version, homebrew, startText = '', onClose
  * Create a rule or edit a rule's details (admins), or write a homebrew rule of your own (everyone
  * else, or `homebrew`: the homebrew rule to edit). Homebrew rules go in an existing section.
  */
-export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onClose, onCreated }) {
+export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, defaultTitle = '', publicOnly = false, onClose, onCreated }) {
   const { isEditor, user, kinds } = useSession();
   const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
@@ -307,7 +307,7 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   const editing = Boolean(rule) && !brew;
   const firstSection = defaultSectionId || tree.ordered[0]?.id || '';
   const [sectionId, setSectionId] = useState(hb?.sectionId || rule?.sectionId || firstSection);
-  const [title, setTitle] = useState(hb?.title || rule?.title || '');
+  const [title, setTitle] = useState(hb?.title || rule?.title || defaultTitle);
   const [kind, setKind] = useState(rule?.kind || 'rule');
   const [page, setPage] = useState(rule?.page ?? '');
   const [status, setStatus] = useState(rule?.status || 'active');
@@ -354,7 +354,8 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
   return (
     <Modal title={brew ? (hb ? 'Edit your homebrew rule' : 'Homebrew: a rule of your own') : editing ? `Edit rule ${ruleName(rule)}` : 'Add a rule'} onClose={onClose} wide>
       <form onSubmit={submit} className="form">
-        {isEditor && !rule && !homebrew && (
+        {/* `publicOnly`: the rule is for everyone (e.g. attached to a card), so homebrew isn't offered. */}
+        {isEditor && !rule && !homebrew && !publicOnly && (
           <div className="field">
             <label>Add it to</label>
             <div className="seg">

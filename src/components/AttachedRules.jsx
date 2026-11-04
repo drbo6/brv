@@ -9,6 +9,7 @@ import { setDoc } from '../lib/store.js';
 import { toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { useActiveRuleset } from './ActiveRuleset.jsx';
+import { RuleDialog } from './RuleDialogs.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
 
 // componentRules/{componentId} → { rules: [ruleId, …] }: the rules attached to a card, in order.
@@ -25,6 +26,8 @@ export default function AttachedRules({ compId, name }) {
   const versions = useLive(() => collection(db, 'versions'), []);
   const sections = useLive(() => collection(db, 'sections'), []);
   const [picking, setPicking] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
 
   const ids = attached.data?.rules || [];
   // The reader's homebrew versions count too, when their ruleset uses them.
@@ -58,13 +61,19 @@ export default function AttachedRules({ compId, name }) {
       <div className="attached-head">
         <h3>Rules for this card</h3>
         {isEditor && (
-          <button className="chip" onClick={() => setPicking(true)} title="Attach a rule that explains or clarifies this card">
-            <Icon name="plus" />
-            Attach rule
-          </button>
+          <span className="attached-actions">
+            <button className="chip" onClick={() => setPicking(true)} title="Attach an existing rule that explains or clarifies this card">
+              <Icon name="link" />
+              Attach rule
+            </button>
+            <button className="chip" onClick={() => setCreating(true)} title="Write a new rule for this card and attach it">
+              <Icon name="plus" />
+              New rule
+            </button>
+          </span>
         )}
       </div>
-      {!list.length && <p className="small muted">No rules attached yet. Attach the rules that explain or clarify this card.</p>}
+      {!list.length && <p className="small muted">No rules attached yet. Attach the rules that explain or clarify this card, or write a new one.</p>}
       {list.map((r, i) => {
         const vs = vByRule.get(r.id) || [];
         const v = findVersion(vs, entries[r.id]);
@@ -98,6 +107,17 @@ export default function AttachedRules({ compId, name }) {
           </article>
         );
       })}
+      {creating && (
+        <RuleDialog
+          tree={tree}
+          rules={all}
+          defaultTitle={name}
+          publicOnly
+          onClose={() => setCreating(false)}
+          // The new rule is attached right away, at the end of the card's list.
+          onCreated={(id) => save([...ids, id], `New rule attached to ${name}`)}
+        />
+      )}
       {picking && (
         <RulePicker
           rules={all}
