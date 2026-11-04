@@ -719,7 +719,8 @@ function RulesetsAdmin() {
       </p>
       {!hasPublic && !sets.loading && (
         <p className="callout small">
-          The site has no public ruleset yet: readers see every rule as printed, and the picker has nothing to offer. Rulesets are made on the Rules page (Customize, then
+          The site has no public ruleset yet: readers see every rule in its main version (Rulebook, else Official Ruling, else Community), and the picker has nothing to
+          offer. Rulesets are made on the Rules page (Customize, then
           save); make one public here and it becomes the first.
         </p>
       )}

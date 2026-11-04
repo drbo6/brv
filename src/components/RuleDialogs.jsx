@@ -379,7 +379,9 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, onCl
         <div className="grid-2">
           <div className="field">
             <label htmlFor="r-section">Section</label>
-            <select id="r-section" value={sectionId} onChange={(e) => setSectionId(e.target.value)} required>
+            <select id="r-section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+              {/* With no sections yet (or none that fits), a rule waits under "Unsorted" for staff to file it. */}
+              <option value="">No section (Unsorted)</option>
               {tree.ordered.map((s) => (
                 <option key={s.id} value={s.id}>
                   {'  '.repeat(s.depth)}

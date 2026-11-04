@@ -33,9 +33,9 @@ export const kindInfo = (kinds, id) => kinds.find((k) => k.id === (id || 'rule')
 
 /** The built-in ruleset: every active rule, using its Rulebook version. Never stored. */
 // No ruleset is "the" rulebook: the printed rules are a ruleset like any other (the content ships one).
-// Only on a site without any public ruleset does this placeholder stand in, showing every rule as
-// printed. It is not offered as a ruleset: the picker says there is none yet.
-export const RULEBOOK_SET = { id: 'rulebook', name: 'No public ruleset yet', description: 'No ruleset has been published yet: every rule is shown as printed.', builtIn: true };
+// Only on a site without any public ruleset does this placeholder stand in, showing every rule in its
+// main version (see rulebookEntries). It is not offered as a ruleset: the picker says there is none yet.
+export const RULEBOOK_SET = { id: 'rulebook', name: 'No public ruleset yet', description: 'No ruleset has been published yet: every rule is shown in its main version.', builtIn: true };
 
 /** What admins can call a ruleset, in the order the picker lists them, with each one's tag style. */
 export const SET_LABELS = { Official: 't-official', Community: 't-community', Experimental: 't-warn' };
@@ -148,11 +148,18 @@ export const ruleName = (rule) => (rule.sid ? `${rule.sid} “${rule.title}”` 
 /** A version's citable reference, e.g. "k7q2m.2". */
 export const versionRef = (rule, version) => (rule.sid && version?.num ? `${rule.sid}.${version.num}` : '');
 
+/**
+ * Every active rule in its main version: Rulebook, else Official Ruling, else Community (never a
+ * suggestion or homebrew). What readers see while the site has no public ruleset, and where a new
+ * ruleset starts from then. Rulebook rules are ordinary rules; this is only a starting point.
+ */
+const MAIN_LABELS = ['Rulebook', 'Official Ruling', 'Community'];
 export function rulebookEntries(rules, versionsByRule) {
   const entries = {};
   for (const r of rules) {
     if (r.status && r.status !== 'active') continue;
-    const v = (versionsByRule.get(r.id) || []).find((x) => x.label === 'Rulebook');
+    const vs = versionsByRule.get(r.id) || [];
+    const v = MAIN_LABELS.map((l) => vs.find((x) => x.label === l)).find(Boolean);
     if (v) entries[r.id] = v.id;
   }
   return entries;

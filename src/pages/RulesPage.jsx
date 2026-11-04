@@ -280,7 +280,6 @@ export default function RulesPage({ route }) {
             {user && (
               <button
                 onClick={() => (isEditor ? requireUser(() => setDialog('newRule')) : rs.startHomebrew(() => setDialog('newRule')))}
-                disabled={!tree.ordered.length}
                 title={isEditor ? 'Add a rule to the rulebook' : 'Write a rule of your own: only you see it until you share it'}
               >
                 <Icon name={isEditor ? 'plus' : 'flask'} />
@@ -327,7 +326,18 @@ export default function RulesPage({ route }) {
           <Spinner label="Loading rules…" />
         ) : allRules.length === 0 ? (
           <Empty title="No rules yet">
-            <p>{isEditor ? 'Add the first rule with “Add rule”, or have the owner load prepared content (see the README).' : 'The rulebook hasn’t been added yet.'}</p>
+            {isEditor ? (
+              <p>
+                Add the first rule with <b>Add rule</b>; sections can come later (Admin → Rules → Sections), and rules without one wait under “Unsorted”. Once there are
+                rules, save a ruleset with <b>Customize</b>, then make it public and the default in Admin → Rulesets.
+              </p>
+            ) : user ? (
+              <p>
+                Nothing here yet. You can start with <b>Add homebrew rule</b>: it is yours alone until you share it with the admins, who may make it part of the rulebook.
+              </p>
+            ) : (
+              <p>Nothing here yet. Log in to write rules of your own and share them with the admins.</p>
+            )}
           </Empty>
         ) : groups.length === 0 ? (
           <Empty title="No rules match">
