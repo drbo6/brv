@@ -459,7 +459,10 @@ export function RuleDialog({ rule, homebrew, tree, rules, defaultSectionId, defa
 
 const DESC_MAX = 80;
 
-export function SaveRulesetDialog({ initialName = '', initialDescription = '', title = 'Save as a new ruleset', onSave, onClose }) {
+const NEW_SET_HINT = 'New rulesets are private to you, but anyone with the link can view them. Admins can make a ruleset available to everyone.';
+
+/** Name and short description of a ruleset: for a new one, or (with `hint={null}`) to rename one. */
+export function SaveRulesetDialog({ initialName = '', initialDescription = '', title = 'Save as a new ruleset', hint = NEW_SET_HINT, saveLabel = 'Save ruleset', onSave, onClose }) {
   const [name, setName] = useState(initialName);
   // Kept short: it shows on one line in the ruleset bar.
   const [description, setDescription] = useState((initialDescription || '').slice(0, DESC_MAX));
@@ -487,13 +490,13 @@ export function SaveRulesetDialog({ initialName = '', initialDescription = '', t
             A few words, shown beside the ruleset’s name ({description.length}/{DESC_MAX}).
           </p>
         </div>
-        <p className="hint">New rulesets are private to you, but anyone with the link can view them. Admins can make a ruleset available to everyone.</p>
+        {hint && <p className="hint">{hint}</p>}
         <div className="modal-actions">
           <button type="button" onClick={onClose}>
             Cancel
           </button>
           <button className="primary" type="submit" disabled={busy || !name.trim()}>
-            Save ruleset
+            {saveLabel}
           </button>
         </div>
       </form>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { collection, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive } from '../lib/hooks.js';
@@ -8,12 +9,15 @@ import { homebrewState } from '../components/Homebrew.jsx';
 import { ROLES, useSession } from '../lib/session.jsx';
 import { useTheme } from '../lib/theme.js';
 import { attempt, Avatar, copyText, Icon, Spinner, timeAgo, toast } from '../components/ui.jsx';
-import { confirmDialog, promptDialog } from '../components/dialogs.jsx';
+import { confirmDialog } from '../components/dialogs.jsx';
+import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 
 export default function AccountPage() {
   const { user, authLoading, realRole, block, blockReason, signIn, signOut, editProfile, ownerUid, ownerLoaded } = useSession();
   const theme = useTheme();
   const mySets = useLive(() => (user ? query(collection(db, 'rulesets'), where('ownerUid', '==', user.uid)) : null), [user?.uid]);
+  // The ruleset whose name and description are being edited.
+  const [renaming, setRenaming] = useState(null);
 
   if (authLoading) return <Spinner />;
 
@@ -96,12 +100,9 @@ export default function AccountPage() {
                 <div className="row gap">
                   <button
                     className="icon-btn"
-                    title="Rename"
+                    title="Rename or change the description"
                     aria-label={`Rename ${s.name}`}
-                    onClick={async () => {
-                      const name = await promptDialog({ title: 'Rename ruleset', label: 'Name', initial: s.name, confirmLabel: 'Rename' });
-                      if (name?.trim() && name.trim() !== s.name) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Ruleset renamed');
-                    }}
+                    onClick={() => setRenaming(s)}
                   >
                     <Icon name="edit" />
                   </button>
@@ -123,6 +124,17 @@ export default function AccountPage() {
               </li>
             ))}
           </ul>
+        )}
+        {renaming && (
+          <SaveRulesetDialog
+            title="Rename ruleset"
+            initialName={renaming.name}
+            initialDescription={renaming.description || ''}
+            hint={null}
+            saveLabel="Save"
+            onSave={({ name, description }) => attempt(() => updateRuleset(renaming.id, { name, description }), 'Ruleset saved')}
+            onClose={() => setRenaming(null)}
+          />
         )}
       </section>
 

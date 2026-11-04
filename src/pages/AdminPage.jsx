@@ -7,6 +7,7 @@ import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
+import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
@@ -708,10 +709,8 @@ function RulesetsAdmin() {
   const hasPublic = all.some((s) => s.visibility === 'public');
   const setDefault = (id) => attempt(() => setDoc(doc(db, 'config', 'site'), { defaultRulesetId: id }, { merge: true }), 'Default ruleset updated');
 
-  const rename = async (s) => {
-    const name = await promptDialog({ title: 'Rename ruleset', label: 'Name', initial: s.name, confirmLabel: 'Rename', validate: (v) => (v.trim() ? '' : 'Give it a name.') });
-    if (name?.trim() && name.trim() !== s.name) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Ruleset renamed');
-  };
+  // The ruleset whose name and description are being edited.
+  const [renaming, setRenaming] = useState(null);
 
   const askName = (title, message, initial) =>
     promptDialog({ title, message, label: 'Name', initial, placeholder: 'e.g. Rulebook, 2nd edition', confirmLabel: 'Create', validate: (v) => (v.trim() ? '' : 'Give it a name.') });
@@ -749,7 +748,7 @@ function RulesetsAdmin() {
       <p className="small muted">
         No ruleset is <i>the</i> rulebook: rulebooks get editions too. Public rulesets appear for everyone in the ruleset picker, grouped by their label (<i>Official</i>,{' '}
         <i>Community</i> or <i>Experimental</i>). The default ruleset, whatever its label, is what visitors see until they pick another; only a public ruleset can be the
-        default. Rename a ruleset with the pencil, or start a new one: empty, or a copy of any ruleset below.
+        default. Rename a ruleset or change its description with the pencil, or start a new one: empty, or a copy of any ruleset below.
       </p>
       {!hasPublic && !sets.loading && (
         <p className="callout small">
@@ -788,7 +787,7 @@ function RulesetsAdmin() {
                 </td>
                 <td>
                   <a href={href('rules', [], { set: s.id })}>{s.name}</a>{' '}
-                  <button className="icon-btn" onClick={() => rename(s)} aria-label={`Rename ${s.name}`} title="Rename">
+                  <button className="icon-btn" onClick={() => setRenaming(s)} aria-label={`Rename ${s.name}`} title="Rename or change the description">
                     <Icon name="edit" size={14} />
                   </button>
                   {s.description && <p className="small muted clamp">{s.description}</p>}
@@ -858,6 +857,17 @@ function RulesetsAdmin() {
             ))}
           </tbody>
         </table>
+      )}
+      {renaming && (
+        <SaveRulesetDialog
+          title="Rename ruleset"
+          initialName={renaming.name}
+          initialDescription={renaming.description || ''}
+          hint={null}
+          saveLabel="Save"
+          onSave={({ name, description }) => attempt(() => updateRuleset(renaming.id, { name, description }), 'Ruleset saved')}
+          onClose={() => setRenaming(null)}
+        />
       )}
     </section>
   );
