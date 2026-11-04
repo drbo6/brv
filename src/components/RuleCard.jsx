@@ -263,7 +263,8 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
         </div>
       )}
 
-      {dialog === 'suggest' && <VersionDialog rule={rule} onClose={() => setDialog(null)} />}
+      {/* A new version starts from the text on screen, and is shown once saved. */}
+      {dialog === 'suggest' && <VersionDialog rule={rule} startText={shown?.text || ''} onSaved={(vid) => onShowVersion(rule.id, vid)} onClose={() => setDialog(null)} />}
       {dialog === 'version' && <VersionDialog rule={rule} version={shown} onClose={() => setDialog(null)} />}
       {dialog === 'rule' && <RuleDialog rule={rule} tree={tree} rules={rules} onClose={() => setDialog(null)} />}
       {dialog === 'brew' && <VersionDialog rule={rule} homebrew startText={shown?.text || ''} onSaved={(vid) => onShowVersion(rule.id, vid)} onClose={() => setDialog(null)} />}

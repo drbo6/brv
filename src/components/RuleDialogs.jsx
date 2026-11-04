@@ -261,6 +261,7 @@ export function VersionDialog({ rule, version, homebrew, startText = '', onClose
     setBusy(false);
     if (ok === undefined) return;
     onClose();
+    if (!editing && typeof ok === 'string') onSaved?.(ok);
     const t = ruleTarget(rule);
     const who = user.displayName || 'Someone';
     if (editing) {
