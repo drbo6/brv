@@ -298,7 +298,8 @@ async function drawCard(pdf, type, data, x, y, w, h, shText, versionLabel) {
   const accent = hexRgb((type.accentField && type.accentColors?.[data[type.accentField]]) || type.defaultAccent);
   const fields = fieldsOf(type);
   const rows = cardLayout(type)
-    .rows.map((r) => ({ ...r, cells: r.cells.filter((c) => fields.has(c.key) && !isEmptyValue(data[c.key], type)) }))
+    // An empty element is left out, unless it keeps its space (one blank line at its size).
+    .rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c, empty: isEmptyValue(data[c.key], type) })).filter((c) => fields.has(c.key) && (!c.empty || c.keepSpace)) }))
     .filter((r) => r.cells.length);
 
   pdf.setFillColor(255, 255, 255);
@@ -324,6 +325,8 @@ async function drawCard(pdf, type, data, x, y, w, h, shText, versionLabel) {
       const f = fields.get(c.key);
       const cw = (avail * (c.width || 1)) / total;
       let fs = (CELL_SIZE[c.size] || 0.95) * u;
+      // An empty element that keeps its space: a blank line at its size, nothing drawn.
+      if (c.empty) return { c, f, cw, fs, blank: true, height: fs * (CELL_LH[c.size] || 1.3) };
       if (f.kind === 'image') return { c, f, cw, fs, image: true, height: (cw * 9) / 16 };
       pdf.setFont(...fontFor(f, c));
       const text = textOf(f, c);
@@ -367,7 +370,9 @@ async function drawCard(pdf, type, data, x, y, w, h, shText, versionLabel) {
     for (const cell of l.cells) {
       const { c, f, cw } = cell;
       const ty = cy + l.padTop;
-      if (cell.image) {
+      if (cell.blank) {
+        // Keeps its place in the row; nothing to draw.
+      } else if (cell.image) {
         const ih = l.r.fill ? bottom - ty - l.padBottom : cell.height;
         const url = imageUrl(f, data[c.key]);
         const img = url ? await loadImage(url) : null;

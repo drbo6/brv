@@ -584,6 +584,7 @@ function CellSettings({ cell, at, layout, kind, setCell, place, remove }) {
               ['muted', 'Subdued'],
               ['upper', 'Capitals'],
               ['label', 'Show field name'],
+              ['keepSpace', 'Keep its space when empty'],
             ].map(([k, label]) => (
               <label key={k} className="check">
                 <input type="checkbox" checked={Boolean(cell[k])} onChange={(e) => setCell(cell.key, { [k]: e.target.checked })} />

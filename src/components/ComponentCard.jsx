@@ -32,7 +32,8 @@ function CellContent({ field, cell, value, shorthands }) {
 function ComponentCard({ type, comp, shorthands, onClick, className = '', hasStates = false, layout, selectedKey, children }) {
   const fields = new Map(type.fields.map((f) => [f.key, f]));
   const rows = (layout || cardLayout(type)).rows
-    .map((r) => ({ ...r, cells: r.cells.filter((c) => fields.has(c.key) && !isEmptyValue(comp.data?.[c.key], type)) }))
+    // An empty element is left out, unless it keeps its space.
+    .map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c, empty: isEmptyValue(comp.data?.[c.key], type) })).filter((c) => fields.has(c.key) && (!c.empty || c.keepSpace)) }))
     .filter((r) => r.cells.length);
   const Tag = onClick ? 'button' : 'div';
   return (
@@ -44,7 +45,13 @@ function ComponentCard({ type, comp, shorthands, onClick, className = '', hasSta
             const cls = ['cc', `cc-${f.kind}`, `size-${c.size}`, `align-${c.align}`, c.bold && 'bold', c.italic && 'italic', c.muted && 'muted', c.upper && 'upper', selectedKey === c.key && 'selected'];
             return (
               <div key={c.key} className={cls.filter(Boolean).join(' ')} style={{ flexGrow: c.width || 1 }}>
-                <CellContent field={f} cell={c} value={comp.data[c.key]} shorthands={shorthands} />
+                {c.empty ? (
+                  <span className="cc-value" aria-hidden="true">
+                    {' '}
+                  </span>
+                ) : (
+                  <CellContent field={f} cell={c} value={comp.data[c.key]} shorthands={shorthands} />
+                )}
               </div>
             );
           })}

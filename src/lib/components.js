@@ -39,7 +39,9 @@ export function newField(label, kind = 'ability', existingKeys = []) {
 
 export const SIZES = { xs: 'Tiny', s: 'Small', m: 'Normal', l: 'Large', xl: 'Huge', xxl: 'Giant' };
 export const ALIGNS = ['left', 'center', 'right'];
-export const DEFAULT_CELL = { width: 1, size: 'm', align: 'left', bold: false, italic: false, muted: false, upper: false, label: false, prefix: '', suffix: '' };
+// keepSpace: an element without a value still takes its place (width, and a line at its size), so
+// every component of a type keeps the same layout. Layouts saved before it existed get it too.
+export const DEFAULT_CELL = { width: 1, size: 'm', align: 'left', bold: false, italic: false, muted: false, upper: false, label: false, prefix: '', suffix: '', keepSpace: true };
 export const DEFAULT_ROW = { fill: false, band: false, divider: false };
 
 const cell = (key, style = {}) => ({ ...DEFAULT_CELL, key, ...style });
