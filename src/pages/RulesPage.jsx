@@ -349,7 +349,8 @@ export default function RulesPage({ route }) {
               Showing {items.length} of {allRules.length} rules
             </p>
             {groups.map(({ section, items: its }) => {
-              const H = section.depth === 0 ? 'h2' : section.depth === 1 ? 'h3' : 'h4';
+              // One heading level per depth (x, x.x, x.x.x, x.x.x.x…), so deeper sections never look like their parents.
+              const H = ['h2', 'h3', 'h4', 'h5'][section.depth] || 'h6';
               return (
                 <section key={section.id} className={`rule-section depth-${section.depth}`} aria-labelledby={`sec-${section.id}`}>
                   <H id={`sec-${section.id}`} className="section-heading">

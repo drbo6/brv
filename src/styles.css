@@ -1196,6 +1196,19 @@ select {
   font-size: 0.85rem;
 }
 
+.toc-item.depth-3,
+.toc-item.depth-4,
+.toc-item.depth-5 {
+  padding-left: 48px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.toc-item.depth-4,
+.toc-item.depth-5 {
+  padding-left: 60px;
+}
+
 .toc-num {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -1390,6 +1403,22 @@ h3.section-heading {
 h4.section-heading {
   font-size: 1rem;
   color: var(--text-2);
+}
+
+/* Deeper levels: small bold capitals, still clearly headings above the rule titles. */
+h5.section-heading,
+h6.section-heading {
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+h6.section-heading {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .section-num {
@@ -3256,6 +3285,12 @@ span.field-place {
 .actions-cell {
   white-space: nowrap;
   text-align: right;
+}
+
+.cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 /* ---------- component page: rulesets, versions ---------- */

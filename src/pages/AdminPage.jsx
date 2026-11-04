@@ -558,22 +558,24 @@ function KindsEditor({ rules }) {
                 </span>
               </td>
               <td className="muted">{used(k.id)}</td>
-              <td className="row">
-                <button className="icon-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${k.label} up`} title="Move up (order in menus)">
-                  <Icon name="chevronUp" />
-                </button>
-                <button className="icon-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label={`Move ${k.label} down`} title="Move down">
-                  <Icon name="chevronDown" />
-                </button>
-                <button
-                  className="icon-btn danger"
-                  disabled={i === 0 || used(k.id) > 0}
-                  title={i === 0 ? 'The first kind is the default for new rules' : used(k.id) ? 'Change the kind of its rules first' : 'Remove this kind'}
-                  aria-label={`Remove ${k.label}`}
-                  onClick={() => setRows(rows.filter((_, j) => j !== i))}
-                >
-                  <Icon name="trash" />
-                </button>
+              <td className="actions-cell">
+                <span className="cell-actions">
+                  <button className="icon-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${k.label} up`} title="Move up (order in menus)">
+                    <Icon name="chevronUp" />
+                  </button>
+                  <button className="icon-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label={`Move ${k.label} down`} title="Move down">
+                    <Icon name="chevronDown" />
+                  </button>
+                  <button
+                    className="icon-btn danger"
+                    disabled={i === 0 || used(k.id) > 0}
+                    title={i === 0 ? 'The first kind is the default for new rules' : used(k.id) ? 'Change the kind of its rules first' : 'Remove this kind'}
+                    aria-label={`Remove ${k.label}`}
+                    onClick={() => setRows(rows.filter((_, j) => j !== i))}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                </span>
               </td>
             </tr>
           ))}
@@ -652,22 +654,24 @@ function SectionsEditor({ tree, rules, loading }) {
                   </select>
                 </td>
                 <td className="muted">{ruleCount(s.id)}</td>
-                <td className="row">
-                  <button className="icon-btn" onClick={() => move(s, -1)} aria-label="Move up">
-                    <Icon name="arrowUp" />
-                  </button>
-                  <button className="icon-btn" onClick={() => move(s, 1)} aria-label="Move down">
-                    <Icon name="arrowDown" />
-                  </button>
-                  <button
-                    className="icon-btn danger"
-                    aria-label="Delete section"
-                    disabled={ruleCount(s.id) > 0 || (tree.children.get(s.id) || []).length > 0}
-                    title={ruleCount(s.id) > 0 ? 'Move or delete its rules first' : 'Delete section'}
-                    onClick={async () => (await confirmDialog({ title: 'Delete section', message: `Delete the section “${s.title}”? Its rules stay, but show under “Unsorted” until you move them.`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'sections', s.id)), 'Section deleted')}
-                  >
-                    <Icon name="trash" />
-                  </button>
+                <td className="actions-cell">
+                  <span className="cell-actions">
+                    <button className="icon-btn" onClick={() => move(s, -1)} aria-label="Move up">
+                      <Icon name="arrowUp" />
+                    </button>
+                    <button className="icon-btn" onClick={() => move(s, 1)} aria-label="Move down">
+                      <Icon name="arrowDown" />
+                    </button>
+                    <button
+                      className="icon-btn danger"
+                      aria-label="Delete section"
+                      disabled={ruleCount(s.id) > 0 || (tree.children.get(s.id) || []).length > 0}
+                      title={ruleCount(s.id) > 0 ? 'Move or delete its rules first' : 'Delete section'}
+                      onClick={async () => (await confirmDialog({ title: 'Delete section', message: `Delete the section “${s.title}”? Its rules stay, but show under “Unsorted” until you move them.`, confirmLabel: 'Delete', danger: true })) && attempt(() => deleteDoc(doc(db, 'sections', s.id)), 'Section deleted')}
+                    >
+                      <Icon name="trash" />
+                    </button>
+                  </span>
                 </td>
               </tr>
             ))}
