@@ -11,7 +11,7 @@ import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
-import { attempt, Avatar, Empty, Icon, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
+import { attempt, Avatar, Empty, Icon, Modal, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
 import RulesTable from '../components/admin/RulesTable.jsx';
 import DiscussionsAdmin, { discussionsQuery } from '../components/admin/DiscussionsAdmin.jsx';
@@ -785,35 +785,14 @@ function RulesetsAdmin() {
   // The ruleset whose name and description are being edited.
   const [renaming, setRenaming] = useState(null);
 
-  const askName = (title, message, initial) =>
-    promptDialog({ title, message, label: 'Name', initial, placeholder: 'e.g. Rulebook, 2nd edition', confirmLabel: 'Create', validate: (v) => (v.trim() ? '' : 'Give it a name.') });
-
-  /** An empty ruleset: no rules yet. It starts private; fill it on the Rules page with Customize. */
-  const createEmpty = async () => {
-    const name = await askName('New ruleset', 'It starts empty and private. Open it on the Rules page and use Customize to choose its rules, then publish it here.', '');
-    if (name?.trim()) attempt(() => createRuleset({ name: name.trim(), description: '', entries: {} }, user), `Ruleset “${name.trim()}” created`);
-  };
-
-  /** A copy of a ruleset, private to you. Someone else's private homebrew in it is left out: nobody else could see it. */
-  const copy = async (s) => {
-    const mine = s.ownerUid === user.uid;
-    const keep = (k, v) => mine || !(String(k).startsWith(HB) || String(v).startsWith(HB));
-    const entries = Object.fromEntries(Object.entries(s.entries || {}).filter(([k, v]) => keep(k, v)));
-    const cards = Object.fromEntries(Object.entries(s.cards || {}).filter(([k, v]) => keep(k, v)));
-    const dropped = Object.keys(s.entries || {}).length + Object.keys(s.cards || {}).length - Object.keys(entries).length - Object.keys(cards).length;
-    const name = await askName(
-      'Copy ruleset',
-      `A private copy of “${s.name}” with its ${Object.keys(entries).length} rules${Object.keys(cards).length ? ` and ${Object.keys(cards).length} card versions` : ''}.${dropped ? ` Left out: ${dropped} ${dropped === 1 ? 'entry that is' : 'entries that are'} its owner's private homebrew, which nobody else can see.` : ''}`,
-      `${s.name} (copy)`,
-    );
-    if (name?.trim()) attempt(() => createRuleset({ name: name.trim(), description: (s.description || '').slice(0, 80), entries, ...(Object.keys(cards).length ? { cards } : {}) }, user), `Copied to “${name.trim()}”`);
-  };
+  // The new-ruleset dialog: { from: '' } for an empty one, or the id of the ruleset to copy.
+  const [creating, setCreating] = useState(null);
 
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Rulesets</h2>
-        <button className="small" onClick={createEmpty} title="Make an empty ruleset (private until you publish it)">
+        <button className="small" onClick={() => setCreating({ from: '' })} title="Make a ruleset, empty or as a copy of another (private until you publish it)">
           <Icon name="plus" />
           New ruleset
         </button>
@@ -914,7 +893,7 @@ function RulesetsAdmin() {
                   </label>
                 </td>
                 <td className="actions-cell">
-                  <button className="icon-btn" aria-label={`Copy ${s.name}`} title="Copy: a new private ruleset with the same rules and versions" onClick={() => copy(s)}>
+                  <button className="icon-btn" aria-label={`Copy ${s.name}`} title="Copy: a new private ruleset with the same rules and versions" onClick={() => setCreating({ from: s.id })}>
                     <Icon name="copy" />
                   </button>
                   <button
@@ -931,6 +910,7 @@ function RulesetsAdmin() {
           </tbody>
         </table>
       )}
+      {creating && <NewRulesetDialog sets={list} from={creating.from} onClose={() => setCreating(null)} />}
       {renaming && (
         <SaveRulesetDialog
           title="Rename ruleset"
@@ -943,6 +923,93 @@ function RulesetsAdmin() {
         />
       )}
     </section>
+  );
+}
+
+const DESC_MAX = 80;
+
+/**
+ * A new ruleset made in Admin: a name, a short description (required) and what it starts from,
+ * empty or a copy of a ruleset. It starts private. Someone else's private homebrew is left out of a
+ * copy: nobody else could see it.
+ */
+function NewRulesetDialog({ sets, from: initialFrom, onClose }) {
+  const { user } = useSession();
+  const [from, setFrom] = useState(initialFrom || '');
+  const source = sets.find((s) => s.id === from);
+  const [name, setName] = useState(source ? `${source.name} (copy)` : '');
+  const [description, setDescription] = useState((source?.description || '').slice(0, DESC_MAX));
+  const [busy, setBusy] = useState(false);
+
+  // What a copy takes along.
+  const mine = !source || source.ownerUid === user.uid;
+  const keep = ([k, v]) => mine || !(String(k).startsWith(HB) || String(v).startsWith(HB));
+  const entries = Object.fromEntries(Object.entries(source?.entries || {}).filter(keep));
+  const cards = Object.fromEntries(Object.entries(source?.cards || {}).filter(keep));
+  const dropped = Object.keys(source?.entries || {}).length + Object.keys(source?.cards || {}).length - Object.keys(entries).length - Object.keys(cards).length;
+
+  const pick = (id) => {
+    const s = sets.find((x) => x.id === id);
+    // The name and description follow the choice until they're edited.
+    if (!name.trim() || name === `${source?.name} (copy)`) setName(s ? `${s.name} (copy)` : '');
+    if (!description.trim() || description === (source?.description || '').slice(0, DESC_MAX)) setDescription((s?.description || '').slice(0, DESC_MAX));
+    setFrom(id);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    const id = await attempt(
+      () => createRuleset({ name: name.trim(), description: description.trim(), entries, ...(Object.keys(cards).length ? { cards } : {}) }, user),
+      source ? `Copied to “${name.trim()}”` : `Ruleset “${name.trim()}” created`,
+    );
+    setBusy(false);
+    if (id) onClose();
+  };
+
+  return (
+    <Modal title="New ruleset" onClose={onClose}>
+      <form className="form" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="nrs-from">Start from</label>
+          <select id="nrs-from" value={from} onChange={(e) => pick(e.target.value)}>
+            <option value="">Empty: no rules yet</option>
+            {sets.map((s) => (
+              <option key={s.id} value={s.id}>
+                Copy of {s.name}
+              </option>
+            ))}
+          </select>
+          <p className="hint">
+            {source
+              ? `Its ${Object.keys(entries).length} rules${Object.keys(cards).length ? ` and ${Object.keys(cards).length} card versions` : ''}.${
+                  dropped ? ` Left out: ${dropped} ${dropped === 1 ? 'entry that is' : 'entries that are'} its owner's private homebrew, which nobody else can see.` : ''
+                }`
+              : 'Open it on the Rules page and use Customize to choose its rules.'}
+          </p>
+        </div>
+        <div className="field">
+          <label htmlFor="nrs-name">Name</label>
+          <input id="nrs-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} placeholder="e.g. Rulebook, 2nd edition" autoFocus />
+        </div>
+        <div className="field">
+          <label htmlFor="nrs-desc">Short description</label>
+          <input id="nrs-desc" value={description} onChange={(e) => setDescription(e.target.value)} required maxLength={DESC_MAX} placeholder="e.g. The rules as printed in the second edition" />
+          <p className="hint">
+            Required: a few words, shown beside the ruleset's name ({description.length}/{DESC_MAX}).
+          </p>
+        </div>
+        <p className="hint">It starts private. Make it public, label it and pick the default in the table.</p>
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary" type="submit" disabled={busy || !name.trim() || !description.trim()}>
+            {source ? 'Copy ruleset' : 'Create ruleset'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
