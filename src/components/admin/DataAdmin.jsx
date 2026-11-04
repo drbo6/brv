@@ -38,13 +38,13 @@ export default function DataAdmin() {
     }
   };
 
-  // Replacing can also empty collections the file doesn't have (a clean start), so it lists them all.
-  const listed = file ? COLLECTIONS.filter((c) => mode === 'replace' || file.counts[c.id] != null) : [];
+  // Collections in the file are ticked; people only when ticked by hand. Replacing can also empty a
+  // collection the file doesn't have (a clean start), but only when you tick it yourself.
+  const inFile = file ? COLLECTIONS.filter((c) => file.counts[c.id] != null) : [];
+  const notInFile = file && mode === 'replace' ? COLLECTIONS.filter((c) => file.counts[c.id] == null) : [];
   const setModeAndPick = (m) => {
     setMode(m);
-    // Replacing ticks all content, so content the file lacks (comments, rulesets…) is cleared too.
-    if (m === 'replace') setImportNames(COLLECTIONS.filter((c) => !SENSITIVE.has(c.id)).map((c) => c.id));
-    else setImportNames(Object.keys(file.counts).filter((n) => file.counts[n] > 0 && !SENSITIVE.has(n)));
+    if (m === 'merge') setImportNames((list) => list.filter((n) => file.counts[n] != null));
   };
 
   const doImport = async () => {
@@ -129,15 +129,30 @@ export default function DataAdmin() {
                   : 'Makes each ticked collection match the file exactly: documents not in the file are deleted, and a ticked collection the file doesn’t have is emptied.'}
               </p>
             </div>
+            <p className="small muted">In the file:</p>
             <div className="check-list">
-              {listed.map((c) => (
+              {inFile.map((c) => (
                 <label key={c.id} className="check">
                   <input type="checkbox" checked={importNames.includes(c.id)} onChange={() => toggle(setImportNames, c.id)} />
-                  {c.label}{' '}
-                  <span className="muted">({file.counts[c.id] != null ? file.counts[c.id] : mode === 'replace' ? 'empties it' : 0})</span>
+                  {c.label} <span className="muted">({file.counts[c.id]})</span>
                 </label>
               ))}
             </div>
+            {notInFile.length > 0 && (
+              <>
+                <p className="small muted">
+                  Not in the file. Tick one only to <b>empty</b> it (for a clean start):
+                </p>
+                <div className="check-list">
+                  {notInFile.map((c) => (
+                    <label key={c.id} className="check">
+                      <input type="checkbox" checked={importNames.includes(c.id)} onChange={() => toggle(setImportNames, c.id)} />
+                      {c.label} <span className="muted">(empties it)</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="row gap">
               <button onClick={() => setFile(null)} disabled={busy}>
                 Cancel

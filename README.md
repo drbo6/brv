@@ -105,7 +105,7 @@ Documents are written with merge and the file uses fixed ids, so running it agai
 node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
 ```
 
-**Test data.** `imports/test-data.json` is the same content plus activity to test with: Official Rulings and Community versions (rules and cards), reactions, discussions (one handled), three rulesets (one public), follows, staff chat, and homebrew at every step (private, shared with the admins, turned down, public suggestion, accepted). It is credited to three existing accounts and holds no profiles or roles. Load it with **Admin → Backup → Import → Replace**; rebuild it with `node imports/build-test-data.mjs`.
+**Test data.** `imports/test-data.json` is the same content plus activity to test with: Official Rulings and Community versions (rules and cards), reactions, discussions (one handled), three rulesets (one public), follows, staff chat, and homebrew at every step (private, shared with the admins, turned down, public suggestion, accepted). It is credited to three existing accounts and holds no profiles or roles. Load it with **Admin → Backup → Import → Replace** (tick comments, rulesets and the rest under *Not in the file* too, to clear old test data); rebuild it with `node imports/build-test-data.mjs`.
 
 ## How it works
 
@@ -158,7 +158,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 
 ### Backups
 
-**Admin → Backup** (owner only) downloads any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`) and imports one. *Merge* writes the file's documents; *Replace* makes the ticked collections match the file, emptying ticked collections the file lacks, for a clean start. People (admins, profiles, usernames, roles, moderation log) are unticked by default, and the owner's own owner, admin, role and profile entries are never touched. Imports are one undoable action in that tab. Personal notices (`inbox`) are not included. The security rules let only the owner (`config/owner`) do this. `imports/load-into-firestore.mjs` still loads a file with a service-account key (see setup step 6).
+**Admin → Backup** (owner only) downloads any set of collections as one JSON file (`"format": "brv-backup"`, timestamps as `{"__ts": millis}`) and imports one. *Merge* writes the file's documents; *Replace* makes the ticked collections match the file. Only collections in the file are ticked by default; a collection the file lacks is emptied only if you tick it under *Not in the file* (for a clean start). People (admins, profiles, usernames, roles, moderation log) are unticked by default, and the owner's own owner, admin, role and profile entries are never touched. Imports are one undoable action in that tab. Personal notices (`inbox`) are not included. The security rules let only the owner (`config/owner`) do this. `imports/load-into-firestore.mjs` still loads a file with a service-account key (see setup step 6).
 
 ## Field kinds
 
