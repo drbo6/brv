@@ -47,6 +47,33 @@
   min-width: 0;
 }
 
+/* Help is grouped by who it is for: visitors, members, editors, admins. */
+.help-part-title {
+  margin: 36px 0 0;
+  padding-bottom: 6px;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+}
+
+.help-part:first-of-type .help-part-title {
+  margin-top: 20px;
+}
+
+.help-toc-part + .help-toc-part {
+  margin-top: 10px;
+}
+
+.help-toc-title {
+  margin: 0 8px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .help-intro h1 {
   margin: 0 0 4px;
 }
@@ -59,7 +86,7 @@
   line-height: 1.6;
 }
 
-.help-section h2 {
+.help-section > h3 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -67,7 +94,7 @@
   font-size: 1.3rem;
 }
 
-.help-section h2 .icon {
+.help-section > h3 .icon {
   color: var(--blood-2);
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../components/ui.jsx';
+import { useSession } from '../lib/session.jsx';
 import '../help.css';
 
 const Tip = ({ children }) => (
@@ -20,9 +21,19 @@ const Keys = ({ k }) => (
   </span>
 );
 
+// Who each topic is for. Readers see the parts for their role and below (View as included).
+const PARTS = [
+  { id: 'visitor', title: 'Reading the site', who: 'visitors' },
+  { id: 'member', title: 'For members', who: 'members' },
+  { id: 'editor', title: 'For editors', who: 'editors' },
+  { id: 'admin', title: 'For admins', who: 'admins' },
+];
+const LEVEL = { visitor: 0, user: 1, editor: 2, admin: 3, owner: 3 };
+
 const TOPICS = [
   {
     id: 'about',
+    for: 'visitor',
     title: 'What this site is',
     icon: 'info',
     body: (
@@ -48,6 +59,7 @@ const TOPICS = [
   },
   {
     id: 'reading',
+    for: 'visitor',
     title: 'Reading the rules',
     icon: 'book',
     body: (
@@ -90,6 +102,7 @@ const TOPICS = [
   },
   {
     id: 'versions',
+    for: 'visitor',
     title: 'Versions and labels',
     icon: 'layers',
     body: (
@@ -126,6 +139,7 @@ const TOPICS = [
   },
   {
     id: 'kinds',
+    for: 'visitor',
     title: 'Rule kinds',
     icon: 'grid',
     body: (
@@ -147,6 +161,7 @@ const TOPICS = [
   },
   {
     id: 'reactions',
+    for: 'member',
     title: 'Reactions and discussion',
     icon: 'message',
     body: (
@@ -169,6 +184,7 @@ const TOPICS = [
   },
   {
     id: 'homebrew',
+    for: 'member',
     title: 'Homebrew and sharing',
     icon: 'flask',
     body: (
@@ -215,6 +231,7 @@ const TOPICS = [
   },
   {
     id: 'rulesets',
+    for: 'visitor',
     title: 'Rulesets',
     icon: 'layers',
     body: (
@@ -255,6 +272,7 @@ const TOPICS = [
   },
   {
     id: 'components',
+    for: 'visitor',
     title: 'Components and cards',
     icon: 'grid',
     body: (
@@ -290,6 +308,7 @@ const TOPICS = [
   },
   {
     id: 'undo',
+    for: 'member',
     title: 'Undo and redo',
     icon: 'undo',
     body: (
@@ -317,6 +336,7 @@ const TOPICS = [
   },
   {
     id: 'together',
+    for: 'member',
     title: 'Working together',
     icon: 'user',
     body: (
@@ -334,6 +354,7 @@ const TOPICS = [
   },
   {
     id: 'inbox',
+    for: 'member',
     title: 'Inbox and following',
     icon: 'bell',
     body: (
@@ -347,13 +368,13 @@ const TOPICS = [
           The bell in the header shows how many notices are unread. In the Inbox you can open a notice, mark notices read or unread, and clear old ones. The <b>Following</b> tab
           lists everything you follow, with an Unfollow button.
         </li>
-        <li>Staff can follow the suggestion feed (Admin → Suggestions) to hear whenever someone shares a homebrew.</li>
         <li>On the Rules page, the ruleset and search bars stay pinned at the top while you scroll. The pin button at the end of the search bar turns that off.</li>
       </ul>
     ),
   },
   {
     id: 'view-as',
+    for: 'member',
     title: 'View as',
     icon: 'eye',
     body: (
@@ -368,12 +389,14 @@ const TOPICS = [
   },
   {
     id: 'theme',
+    for: 'visitor',
     title: 'Light and dark mode',
     icon: 'info',
     body: <p>The site follows your device's light or dark setting. Use the theme toggle in the header to switch manually; your choice is remembered on this device.</p>,
   },
   {
     id: 'account',
+    for: 'visitor',
     title: 'Your account',
     icon: 'user',
     body: (
@@ -395,7 +418,8 @@ const TOPICS = [
   },
   {
     id: 'admin',
-    title: 'Admin guide',
+    for: 'editor',
+    title: 'Staff guide',
     icon: 'shield',
     body: (
       <>
@@ -441,6 +465,7 @@ const TOPICS = [
   },
   {
     id: 'admin-components',
+    for: 'editor',
     title: 'Managing components',
     icon: 'grid',
     body: (
@@ -526,6 +551,7 @@ const TOPICS = [
   },
   {
     id: 'admin-data',
+    for: 'admin',
     title: 'People and backups',
     icon: 'database',
     body: (
@@ -550,6 +576,7 @@ const TOPICS = [
   },
   {
     id: 'shortcuts',
+    for: 'visitor',
     title: 'Keyboard shortcuts',
     icon: 'edit',
     body: (
@@ -591,6 +618,7 @@ const TOPICS = [
   },
   {
     id: 'faq',
+    for: 'visitor',
     title: 'Questions',
     icon: 'search',
     body: (
@@ -617,6 +645,9 @@ const TOPICS = [
 ];
 
 export default function HelpPage({ route }) {
+  const { role } = useSession();
+  const level = LEVEL[role] ?? 0;
+  const parts = PARTS.slice(0, level + 1).map((p) => ({ ...p, topics: TOPICS.filter((t) => t.for === p.id) }));
   const [tocOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
   const jumped = useRef(null);
   const topic = route?.parts?.[0];
@@ -635,18 +666,23 @@ export default function HelpPage({ route }) {
         <details open={tocOpen}>
           <summary>Topics</summary>
           <nav>
-            {TOPICS.map((t) => (
-              <a
-                key={t.id}
-                href={`#/help/${t.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  go(t.id);
-                }}
-              >
-                <Icon name={t.icon} size={14} />
-                <span>{t.title}</span>
-              </a>
+            {parts.map((p) => (
+              <div key={p.id} className="help-toc-part">
+                {parts.length > 1 && <p className="help-toc-title">{p.title}</p>}
+                {p.topics.map((t) => (
+                  <a
+                    key={t.id}
+                    href={`#/help/${t.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      go(t.id);
+                    }}
+                  >
+                    <Icon name={t.icon} size={14} />
+                    <span>{t.title}</span>
+                  </a>
+                ))}
+              </div>
             ))}
           </nav>
         </details>
@@ -654,16 +690,24 @@ export default function HelpPage({ route }) {
       <div className="help-main">
         <header className="help-intro">
           <h1>Help</h1>
-          <p className="muted">Everything this site can do, for readers, members and admins.</p>
+          <p className="muted">
+            Help for {parts[parts.length - 1].who}: what you can do here.
+            {level === 0 && ' Log in to see what members can do, such as homebrew and discussions.'}
+          </p>
         </header>
-        {TOPICS.map((t) => (
-          <section key={t.id} id={`help-${t.id}`} className="help-section" aria-labelledby={`help-h-${t.id}`}>
-            <h2 id={`help-h-${t.id}`}>
-              <Icon name={t.icon} size={18} />
-              {t.title}
-            </h2>
-            {t.body}
-          </section>
+        {parts.map((p) => (
+          <div key={p.id} className="help-part">
+            {parts.length > 1 && <h2 className="help-part-title">{p.title}</h2>}
+            {p.topics.map((t) => (
+              <section key={t.id} id={`help-${t.id}`} className="help-section" aria-labelledby={`help-h-${t.id}`}>
+                <h3 id={`help-h-${t.id}`}>
+                  <Icon name={t.icon} size={18} />
+                  {t.title}
+                </h3>
+                {t.body}
+              </section>
+            ))}
+          </div>
         ))}
       </div>
     </div>
