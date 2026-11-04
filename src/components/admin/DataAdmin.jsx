@@ -102,7 +102,7 @@ export default function DataAdmin() {
       <section className="panel">
         <h2>Import</h2>
         <p className="small muted">
-          Owner only. Restore a backup, or load prepared content such as <code>imports/blood-rage-valhalla.json</code> from the repository. <b>Replace</b> can also clear
+          Owner only. Restore a backup, or load prepared content such as <code>blood-rage-valhalla.json</code> from your <code>imports/</code> folder. <b>Replace</b> can also clear
           collections for a clean start, keeping people and your own entries.
         </p>
         <label className="file-drop">

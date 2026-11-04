@@ -1,4 +1,6 @@
 Materials/
+# Game content and the scripts that make it: kept private, not on GitHub.
+imports/
 node_modules/
 dist/
 dist-demo/

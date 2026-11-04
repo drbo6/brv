@@ -22,7 +22,7 @@ npm install
 npm run demo
 ```
 
-Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. A fresh demo starts with the Blood Rage content from [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json). To try the admin tools, sign in with the name **Admin** and claim ownership in **Admin → People**.
+Demo mode swaps Firebase for an in-browser fake (`src/demo/`). Data is stored in your browser's localStorage, and security rules are not enforced. A fresh demo starts with the Blood Rage content when `imports/blood-rage-valhalla.json` is on your machine (see *Load the content*), and empty otherwise. To try the admin tools, sign in with the name **Admin** and claim ownership in **Admin → People**.
 
 ## Set up for real
 
@@ -78,7 +78,9 @@ Admins can also restrict a user or editor (not an admin) with **No sharing** (th
 
 ### 6. Load the content
 
-Once you have claimed ownership (step 5), the simplest way is **Admin → Backup → Import**: choose [imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) and import it. Alternatively, load it from your computer with the project's service-account key:
+The game content (the transcribed rulebook and cards) and the scripts that make it live in a local `imports/` folder that is **not in this repository**: it is in `.gitignore`, like `Materials/`, so the rulebook text is never published as a download. Keep that folder somewhere safe yourself. A site can also start empty: editors add rules on the Rules page and members can start with homebrew.
+
+Once you have claimed ownership (step 5), the simplest way is **Admin → Backup → Import**: choose `imports/blood-rage-valhalla.json` and import it. Alternatively, load it from your computer with the project's service-account key:
 
 1. Firebase console → **Project settings → Service accounts → Generate new private key**. Keep the downloaded file private and never commit it.
 2. Run:
@@ -87,7 +89,7 @@ Once you have claimed ownership (step 5), the simplest way is **Admin → Backup
    node imports/load-into-firestore.mjs path/to/service-account.json imports/blood-rage-valhalla.json
    ```
 
-[imports/blood-rage-valhalla.json](imports/blood-rage-valhalla.json) contains:
+`imports/blood-rage-valhalla.json` contains:
 
 - the rulebook, transcribed verbatim: 138 rules in 30 sections;
 - a *Blood Rage: Valhalla cards* component type with a card layout, and the 132 cards from the card spreadsheet;
@@ -97,13 +99,13 @@ Documents are written with merge and the file uses fixed ids, so running it agai
 
 **Card art.** The spreadsheet's `Illustration` column holds file names, not URLs. If you host the art somewhere, open the *Illustration* field in **Admin → Components → Fields & layout**, set its **URL template** (for example `https://example.com/art/{value}.jpg`) and place it on the card.
 
-**Regenerating the file.** It is built from [imports/blood-rage/rulebook.json](imports/blood-rage/rulebook.json) and the card spreadsheet:
+**Regenerating the file.** It is built from `imports/blood-rage/rulebook.json` (the transcription) and the card spreadsheet:
 
 ```bash
 node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
 ```
 
-**Test data.** [imports/test-data.json](imports/test-data.json) is the same content plus activity to test with: Official Rulings and Community versions (rules and cards), reactions, discussions (one handled), three rulesets (one public), follows, staff chat, and homebrew at every step (private, shared with the admins, turned down, public suggestion, accepted). It is credited to three existing accounts and holds no profiles or roles. Load it with **Admin → Backup → Import → Replace**; rebuild it with `node imports/build-test-data.mjs`.
+**Test data.** `imports/test-data.json` is the same content plus activity to test with: Official Rulings and Community versions (rules and cards), reactions, discussions (one handled), three rulesets (one public), follows, staff chat, and homebrew at every step (private, shared with the admins, turned down, public suggestion, accepted). It is credited to three existing accounts and holds no profiles or roles. Load it with **Admin → Backup → Import → Replace**; rebuild it with `node imports/build-test-data.mjs`.
 
 ## How it works
 
@@ -207,4 +209,4 @@ npm run demo       # against the in-browser fake
 npm run build      # production build into dist/
 ```
 
-Game content lives in [imports/](imports/), not in the app: the site itself is game-agnostic apart from its name and welcome text.
+Game content lives in the local, unpublished `imports/` folder, not in the app: the site itself is game-agnostic apart from its name and welcome text.
