@@ -149,6 +149,17 @@ Id: `v-` plus the rule id without its `r-`, plus `-rulebook`, e.g. `v-set-brd-1-
 }
 ```
 
+**Sidebars and boxed notes inside a rule.** When the book prints a tip, note or example *inside* a rule (a sidebar or a boxed aside next to the rule it explains), keep it in that rule's text as a note box instead of making a separate rule:
+
+```html
+<p>Choose a figure in your Reserve and place it in a Region.</p>{box 1}<p>Summon early: an empty board gives away the best Regions.</p>{/box}
+```
+
+- `{box 1}`…`{/box}` puts the text in box style 1. The site has eight styles, set by its admins; by default they are 1 Tip, 2 Note, 3 Warning, 4 Changed, 5 Example and 6 Lore (7 and 8 have no heading).
+- `{box 2 Heading}`…`{/box}` gives one box a heading of its own, e.g. `{box 1 Tip: first game}`.
+- Boxes go around whole paragraphs and don't nest. These curly braces are not shorthands (those use square brackets).
+- A sidebar that stands on its own, not tied to one rule, stays a rule of its own with the matching `kind`.
+
 **Official errata or FAQ.** If you are also given official rulings, add them to the rule they change as a second version: label `"Official Ruling"`, `n: 2`, the ruling's text, and its source in `note` (e.g. `"FAQ v1.2"`). Its id ends in `-official`. The `Rulebook` version stays as printed.
 
 ## 4. Shorthands: `config/shorthands`

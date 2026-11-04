@@ -28,6 +28,19 @@ export const DEFAULT_KINDS = [
   { id: 'summary', label: 'Quick reference', color: '#d1a54b' },
 ];
 
+/** The eight note box styles ({box 1}…{/box} to {box 8}): a name (the box's default heading) and a colour. */
+export const DEFAULT_NOTE_STYLES = [
+  { label: 'Tip', color: '#6fae5a' },
+  { label: 'Note', color: '#6d9ccf' },
+  { label: 'Warning', color: '#c8553d' },
+  { label: 'Changed', color: '#d79a3b' },
+  { label: 'Example', color: '#8b7bd1' },
+  { label: 'Lore', color: '#8a7d72' },
+  { label: '', color: '#4fa3a5' },
+  { label: '', color: '#c06c9b' },
+];
+export const noteStylesOf = (site) => DEFAULT_NOTE_STYLES.map((d, i) => ({ ...d, ...(site?.noteStyles?.[i] || {}) }));
+
 /** The plain "rule" kind gets no badge; every other kind is shown on the rule. */
 export const kindInfo = (kinds, id) => kinds.find((k) => k.id === (id || 'rule')) || { id, label: id, color: '' };
 

@@ -34,16 +34,66 @@ export function expandShorthands(html, shorthands) {
   });
 }
 
-/** Sanitized HTML with shorthands, ready for dangerouslySetInnerHTML. */
+// Note boxes: {box n}…{/box}, in one of the eight preset styles (Admin → Rules → Notes), and
+// {box n Heading}…{/box} with a heading of its own. Curly braces, so they never clash with
+// [shorthands]. The preset's colour and name come from CSS variables (see BoxStyles), so changing a
+// preset restyles every box without touching the text.
+const BOX_ANY = /\{box\s+([1-8])(?:\s+([^{}]*?))?\s*\}|\{\/box\}/gi;
+
+export function expandBoxes(html) {
+  if (!/\{\/?box\b/i.test(html)) return html;
+  // A marker at the edge of a paragraph moves outside it, so the box wraps whole paragraphs.
+  let s = html
+    .replace(/<p>\s*(\{box\s+[1-8][^{}]*\})\s*/gi, '$1<p>')
+    .replace(/\s*(\{\/box\})\s*<\/p>/gi, '</p>$1')
+    .replace(/<p>\s*<\/p>/gi, '');
+  let open = 0;
+  s = s.replace(BOX_ANY, (m, n, title) => {
+    // A stray {/box} is dropped; an unclosed box ends with the text.
+    if (!n) {
+      if (!open) return '';
+      open--;
+      return '</div>';
+    }
+    open++;
+    const t = (title || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
+    return `<div class="box box-${n}${t ? ' has-title' : ''}">${t ? `<span class="box-title">${t}</span>` : ''}`;
+  });
+  return s + '</div>'.repeat(open);
+}
+
+/**
+ * Text split into plain parts and boxes (for the PDF): [{ html }, { box: n, title, html }, …].
+ * Boxes don't nest; the markers are gone from the parts.
+ */
+export function boxSegments(html) {
+  const text = String(html || '');
+  const out = [];
+  let cur = { html: '' };
+  let last = 0;
+  for (const m of text.matchAll(BOX_ANY)) {
+    cur.html += text.slice(last, m.index);
+    last = m.index + m[0].length;
+    out.push(cur);
+    cur = m[1] ? { box: Number(m[1]), title: (m[2] || '').replace(/<[^>]*>/g, '').trim(), html: '' } : { html: '' };
+  }
+  cur.html += text.slice(last);
+  out.push(cur);
+  return out.filter((p) => p.box || p.html.replace(/<[^>]*>/g, '').trim());
+}
+
+/** Sanitized HTML with shorthands and note boxes, ready for dangerouslySetInnerHTML. */
 export function richHtml(value, shorthands) {
   if (value == null || value === '') return '';
-  return sanitize(expandShorthands(sanitize(String(value)), shorthands));
+  return sanitize(expandShorthands(expandBoxes(sanitize(String(value))), shorthands));
 }
 
 /** Plain text (for search, PDF export and previews). */
 export function toPlainText(html) {
   if (!html) return '';
   const s = String(html)
+    // A box's own heading stays readable ("Careful: …"); the markers go.
+    .replace(BOX_ANY, (m, n, title) => (n && title ? `\n${title.replace(/<[^>]*>/g, '').trim()}: ` : '\n'))
     .replace(/<\s*img\b[^>]*?\balt\s*=\s*"([^"]*)"[^>]*>/gi, (_, alt) => `[Image${alt ? `: ${alt}` : ''}]`)
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\s*li[^>]*>/gi, '\n• ')

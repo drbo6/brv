@@ -150,6 +150,7 @@ Game text (`ability` and `lore` fields) is simple HTML. Allowed tags: `p` `br` `
 
 - Wrap paragraphs in `<p>…</p>`. Keep the component's emphasis: bold keywords as `<b>`, italics as `<i>`.
 - Plain fields (`title`, `type`, `value`) hold plain text or numbers, not HTML.
+- **Boxed text** printed on a component (a reminder or a highlighted clause) can be a note box: `{box 2}<p>…</p>{/box}` uses box style 2, and `{box 2 Reminder}` gives it a heading of its own. The eight styles are set by the site's admins (by default 1 Tip, 2 Note, 3 Warning, 4 Changed, 5 Example, 6 Lore). Use them sparingly; most card text needs none.
 - **Icons:** write each icon as a lowercase keyword in square brackets (`[coin]`, `[attack]`, `[shield]`), the same keyword for the same icon everywhere. List them in `config`:
 
 ```json

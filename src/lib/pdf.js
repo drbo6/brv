@@ -1,4 +1,4 @@
-import { toPlainText } from './html.js';
+import { boxSegments, toPlainText } from './html.js';
 import { cardLayout, imageUrl, isEmptyValue } from './components.js';
 
 // jsPDF's built-in fonts only cover Latin-1, so swap typographic characters for safe ones.
@@ -69,6 +69,9 @@ const DARK = [30, 26, 24];
 const GREY = [120, 110, 105];
 const LIGHT = [140, 135, 130];
 
+// A colour mixed 88% with white: the faint background of a note box.
+const tint = (rgb) => rgb.map((c) => Math.round(c + (255 - c) * 0.88));
+
 const hexRgb = (hex) => {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return [124, 26, 23];
@@ -122,7 +125,7 @@ const CELL_LH = { l: 1.15, xl: 1.1, xxl: 1.05 };
  * options: { format: 'letter' | 'a4' | 'custom', paperW, paperH, unit: 'mm' | 'in', perSheet: 1 | 2,
  *   cards: 'none' | 'table' | 'cards', cardSize: 's' | 'm' | 'custom', cardW }
  */
-export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = [], shorthands, filename, options }) {
+export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = [], shorthands, noteStyles = [], filename, options }) {
   const { jsPDF } = await import('jspdf');
   const { perSheet, cards: cardMode } = options;
   const paper = paperOf(options);
@@ -159,21 +162,45 @@ export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = []
   const ensure = (h) => {
     if (y + h > SH - M) newPage();
   };
-  const write = (text, { size = 10, style = 'normal', color = DARK, gap = 4 } = {}) => {
+  // `box`: { color } draws each line with a coloured bar on the left and a light tint, indented.
+  const write = (text, { size = 10, style = 'normal', color = DARK, gap = 4, box = null } = {}) => {
     const s = size * scale;
+    const indent = box ? 10 * scale : 0;
     pdf.setPage(page.sheet);
     pdf.setFont('helvetica', style);
     pdf.setFontSize(s);
-    pdf.setTextColor(...color);
-    const lines = pdf.splitTextToSize(pdfSafe(text), page.w - M * 2);
+    const lines = pdf.splitTextToSize(pdfSafe(text), page.w - M * 2 - indent);
     const lh = s * 1.32;
     for (const line of lines) {
       ensure(lh);
       pdf.setPage(page.sheet);
-      pdf.text(line, page.x + M, y + s);
+      if (box) {
+        pdf.setFillColor(...tint(box.color));
+        pdf.rect(page.x + M, y, page.w - M * 2, lh, 'F');
+        pdf.setFillColor(...box.color);
+        pdf.rect(page.x + M, y, 2.5 * scale, lh, 'F');
+      }
+      pdf.setFont('helvetica', style);
+      pdf.setFontSize(s);
+      pdf.setTextColor(...color);
+      pdf.text(line, page.x + M + indent, y + s);
       y += lh;
     }
     y += gap * scale;
+  };
+  // A rule's text, with its note boxes ({box n}…{/box}) as boxes: heading, then the text.
+  const writeText = (html, opts) => {
+    for (const seg of boxSegments(html)) {
+      if (!seg.box) {
+        write(shText(seg.html), opts);
+        continue;
+      }
+      const preset = noteStyles[seg.box - 1] || {};
+      const box = { color: hexRgb(preset.color || '#9c9087') };
+      const heading = seg.title || preset.label;
+      if (heading) write(heading.toUpperCase(), { size: 7.5, style: 'bold', color: box.color, gap: 0, box });
+      write(shText(seg.html), { ...opts, gap: 6, box });
+    }
   };
 
   write(title, { size: 20, style: 'bold', gap: 2 });
@@ -190,7 +217,7 @@ export async function exportRulesetPdf({ title, subtitle, groups, cardTypes = []
       const tags = [r.label, r.kindLabel, r.inactive ? 'not in ruleset' : null].filter(Boolean).join(' | ');
       write(r.title || '', { size: 10.5, style: 'bold', gap: 1, color: r.inactive ? LIGHT : DARK });
       if (tags) write(tags, { size: 8, color: GREY, gap: 2 });
-      write(shText(r.html), { size: 10, gap: 10, color: r.inactive ? LIGHT : DARK });
+      writeText(r.html, { size: 10, gap: 10, color: r.inactive ? LIGHT : DARK });
     }
   }
 

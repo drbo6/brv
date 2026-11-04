@@ -3,6 +3,7 @@ import { configured, isDemo } from './lib/firebase.js';
 import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
 import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
+import { noteStylesOf } from './lib/rules.js';
 import { useHistory, useUndoKeys } from './lib/history.js';
 import { Avatar, Disclaimer, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
@@ -172,6 +173,7 @@ function Shell() {
       {profileOpen && user && <ProfileDialog />}
       <DialogHost />
       <Tooltips />
+      <BoxStyles />
     </>
   );
 }
@@ -229,6 +231,21 @@ function ViewAsMenu({ roles, role, realRole, previewing, setViewAs }) {
       </div>
     </details>
   );
+}
+
+// A CSS string literal: backslashes and quotes escaped, line breaks flattened.
+const cssString = (s) => `"${String(s || '').replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ')}"`;
+
+/** The note box presets (Admin → Rules → Notes) as CSS: each box-n gets its colour and default heading. */
+function BoxStyles() {
+  const { site } = useSession();
+  const css = noteStylesOf(site)
+    .map((s, i) => {
+      const color = /^#[0-9a-f]{3,8}$/i.test(s.color || '') ? s.color : '#9c9087';
+      return `.box-${i + 1}{--box:${color};--box-label:${cssString(s.label)}}${s.label ? '' : `.box-${i + 1}::before{display:none}`}`;
+    })
+    .join('');
+  return <style>{css}</style>;
 }
 
 /** Header bell with the number of unread notices. */

@@ -5,7 +5,7 @@ import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
+import { commitInChunks, createRuleset, DEFAULT_KINDS, noteStylesOf, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
 import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
@@ -180,6 +180,7 @@ function RulesAdmin({ route }) {
   const subs = [
     { id: 'sections', label: 'Sections', tip: 'The sections rules are grouped in, and their order' },
     { id: 'kinds', label: 'Kinds', tip: 'The kinds of rule (Note, Tip, FAQ…) with their colors' },
+    { id: 'notes', label: 'Notes', tip: 'The eight note box styles for {box 1}…{/box} in rule text' },
     canUseTables && { id: 'table', label: 'Table', tip: 'All rules as a table, for bulk work on their details' },
   ].filter(Boolean);
   const sub = subs.find((s) => s.id === route.params.get('tab'))?.id || 'sections';
@@ -196,6 +197,8 @@ function RulesAdmin({ route }) {
         <RulesTable tree={tree} />
       ) : sub === 'kinds' ? (
         <KindsEditor rules={rules.data || []} />
+      ) : sub === 'notes' ? (
+        <NotesEditor />
       ) : (
         <SectionsEditor tree={tree} rules={rules.data || []} loading={sections.loading} />
       )}
@@ -482,6 +485,76 @@ function SuggestionsAdmin() {
         )}
       </section>
     </div>
+  );
+}
+
+/** The eight note box presets: a name (the default heading) and a colour each. Text refers to them by number. */
+function NotesEditor() {
+  const { site } = useSession();
+  const savedKey = JSON.stringify(site.noteStyles || null);
+  const saved = useMemo(() => noteStylesOf(site), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [rows, setRows] = useState(saved);
+  useEffect(() => {
+    setRows(saved);
+  }, [saved]);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
+  const update = (i, patch) => setRows((list) => list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Note boxes</h2>
+        <div className="row gap">
+          <button className="small" disabled={!dirty} onClick={() => setRows(saved)}>
+            Discard
+          </button>
+          <button
+            className="small primary"
+            disabled={!dirty}
+            onClick={() => attempt(() => setDoc(doc(db, 'config', 'site'), { noteStyles: rows.map((s) => ({ label: s.label.trim(), color: s.color })) }, { merge: true }), 'Note boxes saved')}
+          >
+            <Icon name="save" />
+            Save
+          </button>
+        </div>
+      </div>
+      <p className="small muted">
+        Put part of a rule's text in a colored box with <code>{'{box 1}'}…{'{/box}'}</code>, using one of these eight styles by number, or with the <b>Box</b> button in
+        the text editor. The name is the box's heading; <code>{'{box 3 Careful}'}…{'{/box}'}</code> gives one box a heading of its own, and a style without a name has
+        none. Changing a style here restyles every box that uses it.
+      </p>
+      <table className="table notes-table">
+        <thead>
+          <tr>
+            <th>Box</th>
+            <th>Name (heading)</th>
+            <th>Color</th>
+            <th>Preview</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s, i) => (
+            <tr key={i}>
+              <td>
+                <code>{`{box ${i + 1}}`}</code>
+              </td>
+              <td>
+                <input value={s.label} onChange={(e) => update(i, { label: e.target.value })} maxLength={30} placeholder="No heading" aria-label={`Name of box ${i + 1}`} />
+              </td>
+              <td>
+                <input type="color" value={s.color} onChange={(e) => update(i, { color: e.target.value })} aria-label={`Color of box ${i + 1}`} />
+              </td>
+              <td className="notes-preview">
+                {/* Previews the unsaved style: colour and heading set right here. */}
+                <div className="box" style={{ '--box': s.color }}>
+                  {s.label.trim() && <span className="box-title">{s.label.trim()}</span>}
+                  <p>Some text in this box.</p>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

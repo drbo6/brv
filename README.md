@@ -188,7 +188,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions`, and `homebrewId` for shared homebrew |
 | `componentMeta` | `reactions` on a card's printed version |
 | `componentRules` | `rules` [ruleId, …]: the rules attached to a card, shown beside it in its details |
-| `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}] |
+| `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}], `noteStyles` [8 × {label, color}]: the note box styles used by `{box 1}…{/box}` in rule and card text |
 | `config/shorthands` | `items` {keyword: {type, value}} |
 | `config/componentsMeta` | `version` (cache counter) |
 | `config/owner` | `uid` of the owner. Created once from the site, changed only in the Firebase console |

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { escapeHtml } from '../lib/html.js';
-import { createRule, createVersion, HB, LABELS, ruleName, updateRule, updateVersion } from '../lib/rules.js';
+import { createRule, createVersion, HB, LABELS, noteStylesOf, ruleName, updateRule, updateVersion } from '../lib/rules.js';
 import { createHomebrew, updateHomebrew } from '../lib/homebrew.js';
 import { useSession } from '../lib/session.jsx';
 import { attempt, Icon, Modal, RichText } from './ui.jsx';
@@ -81,8 +81,10 @@ function ImageForm({ onInsert, onCancel }) {
 }
 
 function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
+  const { site } = useSession();
   const [preview, setPreview] = useState(false);
   const [imageForm, setImageForm] = useState(false);
+  const [boxMenu, setBoxMenu] = useState(false);
   const ref = useRef(null);
   const wrap = (before, after, placeholder) => ref.current && insertAtCursor(ref.current, before, after, placeholder);
   const addLink = async () => {
@@ -134,6 +136,37 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
               <Icon name="image" />
               <span>Image</span>
             </button>
+            <span className="box-menu">
+              <button
+                type="button"
+                className={`icon-btn ${boxMenu ? 'on' : ''}`}
+                title="Put the selected text in a note box"
+                aria-label="Note box"
+                aria-expanded={boxMenu}
+                onClick={() => setBoxMenu((o) => !o)}
+              >
+                <Icon name="layers" />
+                <span>Box</span>
+              </button>
+              {boxMenu && (
+                <span className="box-menu-pop" role="menu">
+                  {noteStylesOf(site).map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setBoxMenu(false);
+                        wrap(`{box ${i + 1}}`, '{/box}', 'text in the box');
+                      }}
+                    >
+                      <span className="box-swatch" style={{ background: s.color }} aria-hidden="true" />
+                      {i + 1} · {s.label || <span className="muted">no heading</span>}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </span>
           </div>
           {imageForm && (
             <ImageForm
@@ -150,7 +183,8 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
       )}
       <p className="hint">
         Basic HTML works: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;ul&gt;&lt;li&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;img&gt;</code>. Shorthands like{' '}
-        <code>[rage]</code> are replaced with icons. Plain line breaks become paragraphs.
+        <code>[rage]</code> are replaced with icons, and <code>{'{box 1}'}…{'{/box}'}</code> puts text in a note box (styles 1–8, set in Admin → Rules → Notes;{' '}
+        <code>{'{box 1 Heading}'}</code> gives it a heading of its own). Plain line breaks become paragraphs.
       </p>
     </div>
   );

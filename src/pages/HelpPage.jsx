@@ -451,6 +451,11 @@ const TOPICS = [
           <li>
             <b>Kinds</b> (tab): the list of kinds with their name and color.
           </li>
+          <li>
+            <b>Notes</b> (tab): the eight note box styles, each a name (the box's heading) and a color. In any rule or card text,{' '}
+            <code>{'{box 1}'}…{'{/box}'}</code> puts text in a box of style 1 (or use the <b>Box</b> button in the editor), and{' '}
+            <code>{'{box 1 Heading}'}</code> gives one box a heading of its own. Changing a style restyles every box that uses it, also in the PDF.
+          </li>
           <li>On the Rules page, an open rule has an Admin row: edit or delete the version, edit rule details (section, kind, page, status), move it, approve it or delete it.</li>
           <li>
             <b>Table</b> (a tab in Admin → Rules): every rule in a sortable, filterable table. Change a rule's section, kind, status, page or title in place, or tick several
