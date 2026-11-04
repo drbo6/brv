@@ -1,5 +1,5 @@
 import { boxSegments, toPlainText } from './html.js';
-import { cardLayout, imageUrl, isEmptyValue } from './components.js';
+import { cardLayout, imageUrl, isEmptyValue, TYPE_FIELD, withTypeName } from './components.js';
 
 // jsPDF's built-in fonts only cover Latin-1, so swap typographic characters for safe ones.
 const pdfSafe = (s) =>
@@ -270,7 +270,7 @@ function pageFooter(pdf, text, x, y) {
   pdf.text(pdfSafe(text), x, y);
 }
 
-const fieldsOf = (type) => new Map(type.fields.map((f) => [f.key, f]));
+const fieldsOf = (type) => new Map([...type.fields, TYPE_FIELD].map((f) => [f.key, f]));
 const changedNote = (cards) => (cards.some((c) => c.label) ? 'Cards in another version than printed are marked with that version.' : 'All cards as printed.');
 
 /** Cards drawn as cards, edge to edge in a grid, marked with their version when it isn't printed. */
@@ -293,7 +293,9 @@ async function cardSheets(pdf, { type, cards }, { paper: page, format, size, tit
 }
 
 /** One card, following the type's layout: rows top to bottom, fields side by side. */
-async function drawCard(pdf, type, data, x, y, w, h, shText, versionLabel) {
+async function drawCard(pdf, type, rawData, x, y, w, h, shText, versionLabel) {
+  // The built-in Component type element shows the type's name.
+  const data = withTypeName(type, rawData);
   const u = w * 0.05;
   const accent = hexRgb((type.accentField && type.accentColors?.[data[type.accentField]]) || type.defaultAccent);
   const fields = fieldsOf(type);
@@ -441,7 +443,8 @@ function cardTable(pdf, { type, cards }, { paper: page, format, title, shText })
   const id = type.fields.find((f) => f.kind === 'id');
   const onCard = cardLayout(type)
     .rows.flatMap((r) => r.cells.map((c) => fields.get(c.key)))
-    .filter((f) => f && f.kind !== 'image');
+    // The table's heading already names the type.
+    .filter((f) => f && f.kind !== 'image' && !f.builtIn);
   const cols = [...(id ? [{ key: id.key, label: '#', weight: 0.5 }] : []), ...onCard.map((f) => ({ key: f.key, label: f.label, weight: f.kind === 'ability' ? 5 : f.kind === 'lore' ? 3 : f.kind === 'title' ? 2 : f.kind === 'value' ? 0.8 : 1.2 }))];
   const hasVersions = cards.some((c) => c.label);
   if (hasVersions) cols.push({ key: '__version', label: 'Version', weight: 1.2 });

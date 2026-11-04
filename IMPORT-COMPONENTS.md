@@ -126,6 +126,7 @@ The site draws every component as a card from this layout: rows from top to bott
   - `prefix` and `suffix`: text around the value, e.g. `"+"` or `"[coin]"`.
 - **Every cell needs all of these keys.**
 - **What to place:** the fields a player reads on the component. Leave out `id` and `state` fields, `quantity`, and internal or old fields.
+- **The type's name:** the special key `__type` (not a field; don't list it in `fields`) shows the component type's `name` on every component, e.g. a small `"size": "xs", "muted": true, "upper": true` cell in the last row.
 - **Empty cells:** a cell whose value is empty is left out for that component, so one layout works for components that use different fields.
 - **For tiles, boards and tokens:** keep it simple, with the name in a band and the text in a `fill` row.
 

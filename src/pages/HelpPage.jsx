@@ -542,7 +542,8 @@ const TOPICS = [
           </li>
           <li>
             <b>Adding a field to the card:</b> use <i>Add to card</i> in the layout panel or the field list, or drag the field onto the card. New fields are placed on the card
-            automatically. <i>Hide from card</i> takes a field off again; it still appears in the details.
+            automatically. <i>Hide from card</i> takes a field off again; it still appears in the details. <i>Component type</i> in the same list puts the type's own
+            name (e.g. “God Tokens”) on every component of the type.
           </li>
           <li>The card shape (width ÷ height) is shared by all cards of the type, and text scales with the card size.</li>
           <li>The accent color can come from a Type field, for example red Battle cards and green Quest cards.</li>

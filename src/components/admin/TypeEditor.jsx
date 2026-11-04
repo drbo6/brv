@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ALIGNS, cardLayout, currentTypeRev, DEFAULT_CELL, DEFAULT_ROW, deleteType, FIELD_KINDS, isEmptyValue, newField, saveType, SIZES } from '../../lib/components.js';
+import { ALIGNS, cardLayout, currentTypeRev, DEFAULT_CELL, DEFAULT_ROW, deleteType, FIELD_KINDS, isEmptyValue, newField, saveType, SIZES, TYPE_FIELD } from '../../lib/components.js';
 import { useDraftHistory, useUndoScope } from '../../lib/history.js';
 import { navigate } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
@@ -74,9 +74,10 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
   }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sample = comps.find((c) => c.id === sampleId) || comps[0] || { id: 'sample', data: Object.fromEntries(draft.fields.map((f) => [f.key, f.kind === 'image' ? '' : f.kind === 'value' ? 3 : f.label])) };
-  const fieldOf = useMemo(() => new Map(draft.fields.map((f) => [f.key, f])), [draft.fields]);
+  // The built-in Component type element can be placed like a field, but isn't one of the type's fields.
+  const fieldOf = useMemo(() => new Map([...draft.fields, TYPE_FIELD].map((f) => [f.key, f])), [draft.fields]);
   const placed = new Set(draft.layout.rows.flatMap((r) => r.cells.map((c) => c.key)));
-  const placeable = draft.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state');
+  const placeable = [...draft.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state'), TYPE_FIELD];
   const unplaced = placeable.filter((f) => !placed.has(f.key));
 
   const setType = (patch) => setDraft((d) => ({ ...d, ...patch }));
@@ -392,7 +393,11 @@ export default function TypeEditor({ type, comps, allComponents, onSaved }) {
                 </h2>
               </div>
               {selAt && <CellSettings cell={draft.layout.rows[selAt[0]].cells[selAt[1]]} at={selAt} layout={draft.layout} kind={sel.kind} setCell={setCell} place={place} remove={() => setLayout((l) => dropEmptyRows(withoutCell(l, sel.key)))} />}
-              <FieldSettings field={sel} draft={draft} setField={setField} onRemove={() => removeField(sel.key)} />
+              {sel.builtIn ? (
+                <p className="small muted">Shows the name of the component type (“{draft.name}”) on every component of this type. Rename the type in its settings above.</p>
+              ) : (
+                <FieldSettings field={sel} draft={draft} setField={setField} onRemove={() => removeField(sel.key)} />
+              )}
             </section>
           )}
 

@@ -76,8 +76,15 @@ export function autoLayout(fields) {
 }
 
 /** The type's layout, with unknown fields dropped. Types without one get an automatic layout. */
+/**
+ * A built-in element every type has: the type's own name ("God Tokens"), placed on the card like a
+ * field. It isn't stored on components; withTypeName adds it to their data for drawing.
+ */
+export const TYPE_FIELD = { key: '__type', label: 'Component type', kind: 'type', builtIn: true, filterable: false, urlTemplate: '' };
+export const withTypeName = (type, data) => ({ ...data, [TYPE_FIELD.key]: type?.name || '' });
+
 export function cardLayout(type) {
-  const keys = new Set((type.fields || []).filter((f) => f.kind !== 'id' && f.kind !== 'state').map((f) => f.key));
+  const keys = new Set([...(type.fields || []).filter((f) => f.kind !== 'id' && f.kind !== 'state').map((f) => f.key), TYPE_FIELD.key]);
   const source = type.layout?.rows ? type.layout : autoLayout(type.fields || []);
   return {
     rows: source.rows

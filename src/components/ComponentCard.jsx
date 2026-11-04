@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { richHtml } from '../lib/html.js';
-import { cardLayout, imageUrl, isEmptyValue } from '../lib/components.js';
+import { cardLayout, imageUrl, isEmptyValue, TYPE_FIELD, withTypeName } from '../lib/components.js';
 
 export function accentFor(type, comp) {
   const key = type.accentField;
@@ -30,10 +30,12 @@ function CellContent({ field, cell, value, shorthands }) {
  * Pass `layout` to preview an unsaved layout.
  */
 function ComponentCard({ type, comp, shorthands, onClick, className = '', hasStates = false, layout, selectedKey, children }) {
-  const fields = new Map(type.fields.map((f) => [f.key, f]));
+  const fields = new Map([...type.fields, TYPE_FIELD].map((f) => [f.key, f]));
+  // The built-in Component type element shows the type's name.
+  const data = withTypeName(type, comp.data);
   const rows = (layout || cardLayout(type)).rows
     // An empty element is left out, unless it keeps its space.
-    .map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c, empty: isEmptyValue(comp.data?.[c.key], type) })).filter((c) => fields.has(c.key) && (!c.empty || c.keepSpace)) }))
+    .map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c, empty: isEmptyValue(data[c.key], type) })).filter((c) => fields.has(c.key) && (!c.empty || c.keepSpace)) }))
     .filter((r) => r.cells.length);
   const Tag = onClick ? 'button' : 'div';
   return (
@@ -50,7 +52,7 @@ function ComponentCard({ type, comp, shorthands, onClick, className = '', hasSta
                     {' '}
                   </span>
                 ) : (
-                  <CellContent field={f} cell={c} value={comp.data[c.key]} shorthands={shorthands} />
+                  <CellContent field={f} cell={c} value={data[c.key]} shorthands={shorthands} />
                 )}
               </div>
             );
