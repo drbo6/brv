@@ -5,7 +5,7 @@ import { addDoc as rawAddDoc, setDoc as rawSetDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
-import { commitInChunks, DEFAULT_KINDS, deleteRuleset, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
+import { commitInChunks, createRuleset, DEFAULT_KINDS, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
 import { plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
@@ -713,19 +713,48 @@ function RulesetsAdmin() {
     if (name?.trim() && name.trim() !== s.name) attempt(() => updateRuleset(s.id, { name: name.trim() }), 'Ruleset renamed');
   };
 
+  const askName = (title, message, initial) =>
+    promptDialog({ title, message, label: 'Name', initial, placeholder: 'e.g. Rulebook, 2nd edition', confirmLabel: 'Create', validate: (v) => (v.trim() ? '' : 'Give it a name.') });
+
+  /** An empty ruleset: no rules yet. It starts private; fill it on the Rules page with Customize. */
+  const createEmpty = async () => {
+    const name = await askName('New ruleset', 'It starts empty and private. Open it on the Rules page and use Customize to choose its rules, then publish it here.', '');
+    if (name?.trim()) attempt(() => createRuleset({ name: name.trim(), description: '', entries: {} }, user), `Ruleset “${name.trim()}” created`);
+  };
+
+  /** A copy of a ruleset, private to you. Someone else's private homebrew in it is left out: nobody else could see it. */
+  const copy = async (s) => {
+    const mine = s.ownerUid === user.uid;
+    const keep = (k, v) => mine || !(String(k).startsWith(HB) || String(v).startsWith(HB));
+    const entries = Object.fromEntries(Object.entries(s.entries || {}).filter(([k, v]) => keep(k, v)));
+    const cards = Object.fromEntries(Object.entries(s.cards || {}).filter(([k, v]) => keep(k, v)));
+    const dropped = Object.keys(s.entries || {}).length + Object.keys(s.cards || {}).length - Object.keys(entries).length - Object.keys(cards).length;
+    const name = await askName(
+      'Copy ruleset',
+      `A private copy of “${s.name}” with its ${Object.keys(entries).length} rules${Object.keys(cards).length ? ` and ${Object.keys(cards).length} card versions` : ''}.${dropped ? ` Left out: ${dropped} ${dropped === 1 ? 'entry that is' : 'entries that are'} its owner's private homebrew, which nobody else can see.` : ''}`,
+      `${s.name} (copy)`,
+    );
+    if (name?.trim()) attempt(() => createRuleset({ name: name.trim(), description: (s.description || '').slice(0, 80), entries, ...(Object.keys(cards).length ? { cards } : {}) }, user), `Copied to “${name.trim()}”`);
+  };
+
   return (
     <section className="panel">
-      <h2>Rulesets</h2>
+      <div className="panel-head">
+        <h2>Rulesets</h2>
+        <button className="small" onClick={createEmpty} title="Make an empty ruleset (private until you publish it)">
+          <Icon name="plus" />
+          New ruleset
+        </button>
+      </div>
       <p className="small muted">
         No ruleset is <i>the</i> rulebook: rulebooks get editions too. Public rulesets appear for everyone in the ruleset picker, grouped by their label (<i>Official</i>,{' '}
         <i>Community</i> or <i>Experimental</i>). The default ruleset, whatever its label, is what visitors see until they pick another; only a public ruleset can be the
-        default. Rename a ruleset with the pencil.
+        default. Rename a ruleset with the pencil, or start a new one: empty, or a copy of any ruleset below.
       </p>
       {!hasPublic && !sets.loading && (
         <p className="callout small">
           The site has no public ruleset yet: readers see every rule in its main version (Rulebook, else Official Ruling, else Community), and the picker has nothing to
-          offer. Rulesets are made on the Rules page (Customize, then
-          save); make one public here and it becomes the first.
+          offer. Make one here (or on the Rules page with Customize, then save), then make it public.
         </p>
       )}
       {sets.loading ? (
@@ -812,7 +841,10 @@ function RulesetsAdmin() {
                     <span className="sr-only">Public</span>
                   </label>
                 </td>
-                <td>
+                <td className="actions-cell">
+                  <button className="icon-btn" aria-label={`Copy ${s.name}`} title="Copy: a new private ruleset with the same rules and versions" onClick={() => copy(s)}>
+                    <Icon name="copy" />
+                  </button>
                   <button
                     className="icon-btn danger"
                     aria-label={`Delete ${s.name}`}

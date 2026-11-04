@@ -263,8 +263,8 @@ const TOPICS = [
             Share a ruleset with the link button <Icon name="link" size={14} />. New rulesets are private but anyone with the link can view them.
           </li>
           <li>
-            Admins can make a ruleset public, rename it, label it Official, Community or Experimental, and choose the site's default ruleset (whatever its label). Rulesets
-            themselves are always made here, on the Rules page: a new edition is a ruleset like any other.
+            Admins can make a ruleset public, rename it, label it Official, Community or Experimental, and choose the site's default ruleset (whatever its label). In Admin →
+            Rulesets they can also make a new one, empty or a copy of another (for example for a new edition); it starts private.
           </li>
         </ul>
       </>
