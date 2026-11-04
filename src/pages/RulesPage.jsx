@@ -190,6 +190,11 @@ export default function RulesPage({ route }) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [focusId, focusParam, rules.loading, versions.loading, groups]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The linked rule's outline lasts until it is closed (a new link outlines its rule again).
+  const [outlineDone, setOutlineDone] = useState(null);
+  useEffect(() => {
+    if (focusId && focusedOnce.current === focusParam && openId !== focusId) setOutlineDone(focusParam);
+  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- actions -----
   const onMove = useCallback(
@@ -366,7 +371,7 @@ export default function RulesPage({ route }) {
                         item={it}
                         setName={unsaved ? `${selectedSet.name} (unsaved)` : selectedSet.name}
                         editing={customizing}
-                        focused={it.rule.id === focusId}
+                        focused={it.rule.id === focusId && outlineDone !== focusParam}
                         open={openId === it.rule.id}
                         onToggle={onToggle}
                         onShowVersion={onShowVersion}
