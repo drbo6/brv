@@ -78,7 +78,7 @@ Admins can also restrict a user or editor (not an admin) with **No sharing** (th
 
 ### 6. Load the content
 
-The game content (the transcribed rulebook and cards) and the scripts that make it live in a local `imports/` folder that is **not in this repository**: it is in `.gitignore`, like `Materials/`, so the rulebook text is never published as a download. Keep that folder somewhere safe yourself. A site can also start empty: editors add rules on the Rules page and members can start with homebrew.
+The game content (the transcribed rulebook and cards) and the scripts that make it live in a local `imports/` folder that is **not in this repository**: it is in `.gitignore`, like `Materials/`, so the rulebook text is never published as a download. Keep that folder somewhere safe yourself. A site can also start empty: editors add rules on the Rules page and members can start with homebrew. To make an import file for any other rulebook, give an AI model [IMPORT.md](IMPORT.md) and the rulebook.
 
 Once you have claimed ownership (step 5), the simplest way is **Admin → Backup → Import**: choose `imports/blood-rage-valhalla.json` and import it. Alternatively, load it from your computer with the project's service-account key:
 
