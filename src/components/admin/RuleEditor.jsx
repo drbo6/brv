@@ -4,7 +4,7 @@ import { href } from '../../lib/router.js';
 import { useSession } from '../../lib/session.jsx';
 import { confirmDialog } from '../dialogs.jsx';
 import { RuleDialog, VersionDialog } from '../RuleDialogs.jsx';
-import { attempt, Icon, Modal, RichText, timeAgo, UserName } from '../ui.jsx';
+import { attempt, Icon, Linkify, Modal, RichText, timeAgo, UserName } from '../ui.jsx';
 
 /**
  * Everything about one rule in one place, from the rules table: its details and all its versions,
@@ -89,7 +89,11 @@ export default function RuleEditor({ rule, versions, tree, rules, onClose }) {
               </span>
             </header>
             <RichText html={v.text} className="rule-text" />
-            {v.note && <p className="version-meta version-note">{v.note}</p>}
+            {v.note && (
+              <p className="version-meta version-note">
+                <Linkify text={v.note} />
+              </p>
+            )}
           </article>
         ))}
       </section>

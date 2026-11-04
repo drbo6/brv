@@ -3,10 +3,11 @@ import { collection, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { useLive, useLocalStorage } from '../../lib/hooks.js';
 import { href } from '../../lib/router.js';
-import { groupVersions, kindInfo, millis, shortIds, sortRules, updateRule } from '../../lib/rules.js';
+import { deleteRule, groupVersions, kindInfo, millis, shortIds, sortRules, updateRule } from '../../lib/rules.js';
 import { commitInChunks } from '../../lib/store.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner, timeAgo } from '../ui.jsx';
+import { confirmDialog } from '../dialogs.jsx';
 import RuleEditor from './RuleEditor.jsx';
 
 const STATUSES = { active: 'Active', suggested: 'Suggested', rejected: 'Rejected' };
@@ -123,6 +124,27 @@ export default function RulesTable({ tree }) {
     ).then((ok) => ok && setPicked(new Set()));
   };
 
+  /** Delete the ticked rules with their versions and discussion, as one action that can be undone. */
+  const deleteSelected = async () => {
+    const rows = list.filter((r) => picked.has(r.rule.id));
+    if (!rows.length) return;
+    const comments = rows.reduce((n, r) => n + (r.rule.commentCount || 0), 0);
+    const ok = await confirmDialog({
+      title: `Delete ${rows.length} rule${rows.length === 1 ? '' : 's'}`,
+      message: `Delete ${rows.length === 1 ? `“${rows[0].rule.title}”` : `these ${rows.length} rules`} with all ${rows.length === 1 ? 'its' : 'their'} versions${
+        comments ? ` and ${comments} comment${comments === 1 ? '' : 's'}` : ''
+      }? You can undo this.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    const done = await attempt(async () => {
+      for (const r of rows) await deleteRule(r.rule.id);
+      return true;
+    }, `Deleted ${rows.length} rule${rows.length === 1 ? '' : 's'}`);
+    if (done) setPicked(new Set());
+  };
+
   const sectionSelect = (value, onChange, props = {}) => (
     <select value={value} onChange={(e) => onChange(e.target.value)} {...props}>
       {props.placeholder && <option value="">{props.placeholder}</option>}
@@ -213,6 +235,10 @@ export default function RulesTable({ tree }) {
               : statusSelect(bulk.value, (v) => setBulk({ ...bulk, value: v }), { placeholder: 'Choose…', 'aria-label': 'Status' })}
           <button className="small primary" onClick={applyBulk} disabled={!bulk.value}>
             Apply
+          </button>
+          <button className="small danger" onClick={deleteSelected} title="Delete the selected rules with their versions and discussion (can be undone)">
+            <Icon name="trash" />
+            Delete
           </button>
           <button className="small" onClick={() => setPicked(new Set())}>
             Clear selection

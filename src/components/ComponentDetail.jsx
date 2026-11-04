@@ -12,7 +12,7 @@ import ComponentCard from './ComponentCard.jsx';
 import { RulesetChoiceRow, useActiveRuleset } from './ActiveRuleset.jsx';
 import Discussion from './Discussion.jsx';
 import { alertDialog, confirmDialog } from './dialogs.jsx';
-import { attempt, copyText, Icon, Modal, Reactions, timeAgo, toast, UserName } from './ui.jsx';
+import { attempt, copyText, Icon, Linkify, Modal, Reactions, timeAgo, toast, UserName } from './ui.jsx';
 import FollowButton from './FollowButton.jsx';
 import { autoFollow, cardTarget, notify } from '../lib/inbox.js';
 
@@ -118,12 +118,18 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 <span>
                   Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
                 </span>
-                {shown.note && <span className="version-note">{shown.note}</span>}
+                {shown.note && (
+                  <span className="version-note">
+                    <Linkify text={shown.note} />
+                  </span>
+                )}
               </p>
             )}
             {shown.homebrew && shown.note && (
               <p className="version-meta">
-                <span className="version-note">{shown.note}</span>
+                <span className="version-note">
+                  <Linkify text={shown.note} />
+                </span>
               </p>
             )}
             <div className="rule-actions card-actions">

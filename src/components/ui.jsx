@@ -331,3 +331,20 @@ export function Disclaimer() {
     </>
   );
 }
+
+// Web addresses in plain text, e.g. a version's source; a trailing full stop or bracket isn't part of one.
+const URL_RE = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]'])/g;
+
+/** Plain text with any https:// address shown as a link (opening in a new tab). */
+export function Linkify({ text }) {
+  const parts = String(text || '').split(URL_RE);
+  return parts.map((p, i) =>
+    i % 2 ? (
+      <a key={i} href={p} target="_blank" rel="noopener noreferrer">
+        {p}
+      </a>
+    ) : (
+      p
+    ),
+  );
+}

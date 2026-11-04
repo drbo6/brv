@@ -6,7 +6,7 @@ import Discussion from './Discussion.jsx';
 import { RulesetChoiceRow, useActiveRuleset } from './ActiveRuleset.jsx';
 import { HomebrewBar } from './Homebrew.jsx';
 import { RuleDialog, VersionDialog } from './RuleDialogs.jsx';
-import { attempt, copyText, Icon, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
+import { attempt, copyText, Icon, Linkify, Reactions, RichText, timeAgo, toast, UserName } from './ui.jsx';
 import { confirmDialog } from './dialogs.jsx';
 import FollowButton from './FollowButton.jsx';
 import { notify, ruleTarget } from '../lib/inbox.js';
@@ -111,7 +111,11 @@ function RuleCard({ item, setName, editing, focused, open, onToggle, onShowVersi
                   Added by <UserName uid={shown.createdBy} fallback={shown.createdByName} /> · {timeAgo(shown.createdAt)}
                 </span>
               )}
-              {shown.note && <span className="version-note">{shown.note}</span>}
+              {shown.note && (
+                <span className="version-note">
+                  <Linkify text={shown.note} />
+                </span>
+              )}
             </p>
           )}
 
