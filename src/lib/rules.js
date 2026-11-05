@@ -21,7 +21,7 @@ export const entryFor = (entries, rule) => entries[rule.id] ?? (rule.homebrewId 
 export const DEFAULT_KINDS = [
   { id: 'rule', label: 'Rule', color: '#9c9087' },
   { id: 'note', label: 'Note', color: '#6d9ccf' },
-  { id: 'change', label: 'Changed from Blood Rage', color: '#d79a3b' },
+  { id: 'change', label: 'Changed from the original', color: '#d79a3b' },
   { id: 'tip', label: 'Tip', color: '#6fae5a' },
   { id: 'example', label: 'Example', color: '#6fae5a' },
   { id: 'flavor', label: 'Flavor', color: '#8a7d72' },

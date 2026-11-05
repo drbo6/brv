@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Icon, RichText } from './ui.jsx';
 import { useSession } from '../lib/session.jsx';
-import { DEFAULT_BRAND } from '../lib/brand.js';
 
 /**
  * The opening (and "About this site") window. Its heading, kicker, text and button come from the
@@ -25,7 +24,7 @@ export default function WelcomeModal({ onClose, brand: preview }) {
       <div className="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
         <div className="welcome-hero">
           <span className="welcome-rune" aria-hidden="true">
-            {brand.mark === DEFAULT_BRAND.mark ? 'ᚱ ᚨ ᚷ ᛖ' : brand.mark}
+            {brand.mark}
           </span>
           {brand.welcomeKicker && <p className="welcome-kicker">{brand.welcomeKicker}</p>}
           <h1 id="welcome-title">

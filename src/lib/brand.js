@@ -1,17 +1,17 @@
 // The site's identity, set by the owner in Admin → Site: name, tagline, the mark in the header,
 // the welcome window, the disclaimer, two colors and three fonts. Stored in config/brand (owner
-// only); anything left empty falls back to the defaults below, so the site looks as it always did.
+// only); anything left empty falls back to the neutral defaults below.
 
 export const DEFAULT_COLORS = { primary: '#c4302b', accent: '#d1a54b' };
 export const DEFAULT_FONTS = { display: 'Cinzel', text: 'Alegreya', ui: 'Alegreya Sans' };
 
 export const DEFAULT_BRAND = {
-  name: 'Blood Rage Valhalla',
-  tagline: 'Unofficial Living Rulebook',
-  mark: 'ᚱ',
-  welcomeKicker: 'Welcome, warrior, to the',
+  name: 'Living Rulebook',
+  tagline: 'Community rules hub',
+  mark: '§',
+  welcomeKicker: 'Welcome to the',
   welcomeText: '', // HTML; empty shows the built-in introduction
-  welcomeButton: 'Enter the hall',
+  welcomeButton: 'Get started',
   disclaimer: '', // empty shows the built-in disclaimer
   colors: DEFAULT_COLORS,
   fonts: DEFAULT_FONTS,

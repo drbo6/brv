@@ -329,7 +329,7 @@ export function Disclaimer() {
   if (brand.disclaimer) return <Linkify text={brand.disclaimer} />;
   return (
     <>
-      A fan-made, community-maintained resource. Not affiliated with or endorsed by the publishers of Blood Rage or Blood Rage: Valhalla.{' '}
+      A fan-made, community-maintained resource. Not affiliated with or endorsed by the game’s publishers.{' '}
       <span className="nowrap">Rules text © its respective owners.</span>
     </>
   );

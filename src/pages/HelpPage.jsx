@@ -39,8 +39,8 @@ const TOPICS = [
     body: (
       <>
         <p>
-          <b>Blood Rage: Valhalla</b> is a great game, but its rulebook leaves some questions open. This site is an unofficial, community-maintained living rulebook: every rule from
-          the book, plus official rulings, community clarifications and suggested balance changes, all in one searchable place.
+          This site is a community-maintained living rulebook: every rule from the game's rulebook, plus official rulings, community clarifications and suggested
+          balance changes, all in one searchable place.
         </p>
         <ul>
           <li>
@@ -145,7 +145,7 @@ const TOPICS = [
     body: (
       <>
         <p>
-          Every rule has a <b>kind</b>: a small colored badge such as <i>Rule</i>, <i>Note</i>, <i>Changed from Blood Rage</i>, <i>Tip</i>, <i>Example</i>, <i>Flavor</i> or{' '}
+          Every rule has a <b>kind</b>: a small colored badge such as <i>Rule</i>, <i>Note</i>, <i>Changed from the original</i>, <i>Tip</i>, <i>Example</i>, <i>Flavor</i> or{' '}
           <i>Quick reference</i>. Kinds are only a category: they help readers skim and can be used as a filter. They don't change how a rule works.
         </p>
         <ul>
@@ -591,7 +591,7 @@ const TOPICS = [
         </p>
         <h4>Backup</h4>
         <p>
-          Owner only. Downloads any set of collections as one JSON file; keep regular backups somewhere safe. <b>Import</b> loads such a file, or the prepared Blood Rage
+          Owner only. Downloads any set of collections as one JSON file; keep regular backups somewhere safe. <b>Import</b> loads such a file, or prepared game
           content in <code>imports/</code>. <i>Merge</i> adds and overwrites documents; <i>Replace</i> makes the ticked collections match the file. Only the collections in
           the file are ticked; to empty one the file doesn't have (a clean start), tick it yourself under <i>Not in the file</i>. People (admins, profiles, usernames, roles and the moderation log) are only touched when you tick them, and your own owner,
           admin, role and profile entries are always kept. Replacing asks you to type REPLACE; download a backup first.
