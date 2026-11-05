@@ -4728,8 +4728,12 @@ summary.primary-summary {
   flex: none;
 }
 
-/* An attached rule the active ruleset doesn't use: only staff see it, dimmed. */
-.attached-rule.is-out > :not(header) {
+/* An attached rule the active ruleset doesn't use: only staff see it, dimmed (its title line too,
+   but not the buttons). */
+.attached-rule.is-out > :not(header),
+.attached-rule.is-out header .rule-code,
+.attached-rule.is-out header .attached-title,
+.attached-rule.is-out header .label {
   opacity: 0.5;
 }
 
