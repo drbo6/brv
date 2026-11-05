@@ -37,7 +37,7 @@ export default function WelcomeModal({ onClose, brand: preview }) {
           {brand.welcomeText ? (
             <RichText html={brand.welcomeText} className="welcome-custom" />
           ) : (
-            <BuiltInWelcome />
+            <BuiltInWelcome name={brand.name} />
           )}
           <button className="primary big" onClick={onClose} autoFocus>
             {brand.welcomeButton}
@@ -49,13 +49,13 @@ export default function WelcomeModal({ onClose, brand: preview }) {
 }
 
 /** The introduction the site ships with, shown until the owner writes their own. */
-function BuiltInWelcome() {
+function BuiltInWelcome({ name }) {
   return (
     <>
           <p className="welcome-lead">
-            <b>Blood Rage: Valhalla</b> is a fantastic game. Its rulebook, however, leaves a lot of questions unanswered.
+            <b>{name}</b> is a living rulebook: the game’s rules, kept up to date by its players.
           </p>
-          <p>This site is a FAQ that the Blood Rage community maintains together:</p>
+          <p>Every unclear rule can be clarified, discussed and improved together:</p>
           <ul className="welcome-points">
             <li>
               <Icon name="book" size={18} />
@@ -85,7 +85,7 @@ function BuiltInWelcome() {
             <li>
               <Icon name="grid" size={18} />
               <span>
-                <b>Look up every card</b> with search, filters and sorting.
+                <b>Look up every card and component</b> with search, filters and sorting.
               </span>
             </li>
           </ul>
