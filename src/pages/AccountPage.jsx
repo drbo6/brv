@@ -187,13 +187,21 @@ function MyHomebrew({ uid }) {
   const rules = useLive(() => collection(db, 'rules'), []);
   const shared = useLive(() => query(collection(db, 'versions'), where('homebrewId', '!=', null)), []);
   const sharedCards = useLive(() => query(collection(db, 'componentVersions'), where('homebrewId', '!=', null)), []);
+  const newCards = useLive(() => query(collection(db, 'components'), where('homebrewId', '!=', null)), []);
   if (mine.loading) return null;
   const list = [...(mine.data || [])].sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt));
   const sids = shortIds(rules.data || []);
   const ruleById = new Map((rules.data || []).map((r) => [r.id, r]));
-  const pubOf = new Map([...(shared.data || []), ...(sharedCards.data || [])].map((v) => [v.homebrewId, v]));
+  // A shared new card is a component: suggested, then (once accepted) an ordinary card.
+  const cardPub = (c) => ({ ...c, label: c.status === 'suggested' ? 'Suggestion' : 'a card' });
+  const pubOf = new Map([...(shared.data || []), ...(sharedCards.data || []), ...(newCards.data || []).map(cardPub)].map((v) => [v.homebrewId, v]));
 
   const describe = (h) => {
+    if (h.kind === 'newCard') {
+      const pub = pubOf.get(h.id);
+      const name = Object.values(h.data || {}).find((v) => typeof v === 'string' && v.trim()) || 'Untitled card';
+      return { kind: 'New card', name: h.data?.title || name, link: href('components', [h.typeId, pub ? pub.id : `hb:${h.id}`]) };
+    }
     if (h.kind === 'card') return { kind: 'Card', name: h.data?.title || h.componentId.split('__').pop(), link: href('components', [h.typeId, h.componentId]) };
     if (h.kind === 'rule') {
       const pub = pubOf.get(h.id);

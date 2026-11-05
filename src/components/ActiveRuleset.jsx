@@ -5,10 +5,10 @@ import { useDraftHistory, useUndoScope } from '../lib/history.js';
 import { autoFollow, notify, rulesetTarget, SUGGESTIONS } from '../lib/inbox.js';
 import { absoluteLink, navigate } from '../lib/router.js';
 import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, noteStylesOf, rulebookEntries, sectionTree, sortRules, updateRuleset } from '../lib/rules.js';
-import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
+import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew, withNewCards } from '../lib/homebrew.js';
 import { useLive } from '../lib/hooks.js';
 import { compareValues, displayTitle, idField, loadComponents } from '../lib/components.js';
-import { cardChoiceOf, dataIn, PRINTED } from '../lib/cardVersions.js';
+import { cardChoiceFor, dataIn, PRINTED } from '../lib/cardVersions.js';
 import { exportRulesetPdf } from '../lib/pdf.js';
 import PdfDialog from './PdfDialog.jsx';
 import { useSession } from '../lib/session.jsx';
@@ -151,9 +151,9 @@ export function ActiveRulesetProvider({ route, children }) {
           const [rules, versions] = await Promise.all([getDocs(collection(db, 'rules')), getDocs(collection(db, 'versions'))]);
           base = rulebookEntries(rules.docs.map((d) => ({ id: d.id, ...d.data() })), groupVersions(versions.docs.map((d) => ({ id: d.id, ...d.data() }))));
         }
-        // Rulesets list every card they include; the stand-in includes them all, as printed.
+        // Rulesets list every card they include; the stand-in includes all the site's cards, as they are.
         let cardBase = selectedSet.cards || {};
-        if (selectedSet.builtIn) cardBase = Object.fromEntries((await loadComponents()).components.map((c) => [c.id, PRINTED]));
+        if (selectedSet.builtIn) cardBase = Object.fromEntries((await loadComponents()).components.filter((c) => !c.status).map((c) => [c.id, PRINTED]));
         const cards = { ...cardBase };
         for (const [id, v] of Object.entries(overrides.cards)) {
           if (v) cards[id] = v;
@@ -202,7 +202,7 @@ export function ActiveRulesetProvider({ route, children }) {
       }
       const groups = tree.ordered.filter((sec) => total.get(sec.id) > 0).map((sec) => ({ heading: `${sec.number}  ${sec.title}`, depth: sec.depth, rules: bySection.get(sec.id) || [] }));
 
-      // Every card, in the version the ruleset plays it in (printed unless it says otherwise).
+      // Every card, in the version the ruleset plays it in (as it is, unless it says otherwise).
       const cards = apply(selectedSet.cards, 'cards');
       const [{ types, components }, cvSnap] = await Promise.all([loadComponents(), getDocs(collection(db, 'componentVersions'))]);
       const cvs = new Map();
@@ -212,12 +212,12 @@ export function ActiveRulesetProvider({ route, children }) {
       }
       const cardTypes = types.map((type) => {
         const idf = idField(type);
-        const cardsOf = components.filter((c) => c.typeId === type.id).sort((a, b) => (idf ? compareValues(a.data[idf.key], b.data[idf.key], type) : 0) || a.id.localeCompare(b.id));
+        const cardsOf = withNewCards(myHomebrew, components).filter((c) => c.typeId === type.id).sort((a, b) => (idf ? compareValues(a.data[idf.key], b.data[idf.key], type) : 0) || a.id.localeCompare(b.id));
         return {
           type,
           // Only the cards the ruleset includes.
-          cards: cardsOf.filter((comp) => cardChoiceOf(selectedSet, cards, comp.id)).map((comp) => {
-            const choice = cardChoiceOf(selectedSet, cards, comp.id);
+          cards: cardsOf.filter((comp) => cardChoiceFor(selectedSet, cards, comp)).map((comp) => {
+            const choice = cardChoiceFor(selectedSet, cards, comp);
             const v = choice !== PRINTED ? cvs.get(choice) : null;
             return { comp, data: dataIn(comp, v), label: v ? v.label : null, changed: v?.data || {} };
           }),

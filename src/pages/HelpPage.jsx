@@ -189,11 +189,12 @@ const TOPICS = [
     icon: 'flask',
     body: (
       <>
-        <p>Play it your way: change any rule or card, or write a rule of your own. It starts out private, and you decide whether to share it.</p>
+        <p>Play it your way: change any rule or card, or write a rule or card of your own. It starts out private, and you decide whether to share it.</p>
         <ol>
           <li>
             <b>Homebrew</b> <Icon name="flask" size={14} /> on an open rule (or in a card's details) writes your own version, starting from the text on screen.{' '}
-            <b>Add homebrew rule</b> in the toolbar adds a new rule to one of the rulebook's sections. Your homebrew is labeled{' '}
+            <b>Add homebrew rule</b> in the toolbar adds a new rule to one of the rulebook's sections, and <b>Add homebrew</b> on the Components page makes a component of
+            your own (a card, token or any other type), with a preview as you fill it in. Your homebrew is labeled{' '}
             <span className="label l-homebrew">Homebrew</span> and <b>only you see it</b>. It goes straight into the ruleset you are using, which must be one of your own
             (you are asked to switch, or make your own copy, if it isn't); it prints in your PDF too.
           </li>
@@ -205,7 +206,8 @@ const TOPICS = [
             say what they think, for example that it should become the default.
           </li>
           <li>
-            Admins then <b>accept</b> the suggestion as a <i>Community</i> version or <i>Official Ruling</i>, sometimes straight into a public ruleset.
+            Admins then <b>accept</b> the suggestion as a <i>Community</i> version or <i>Official Ruling</i>, sometimes straight into a public ruleset. A new card, once
+            accepted, is one of the site's cards, which rulesets can add like any other.
           </li>
         </ol>
         <p>
@@ -237,7 +239,7 @@ const TOPICS = [
     body: (
       <>
         <p>
-          A ruleset decides which rules and which cards are in play, and which version of each it uses: a card can be played as printed or in another version, or
+          A ruleset decides which rules and which cards are in play, and which version of each it uses: a card can be played as it is or in another version, or
           left out, just like a rule. No ruleset is <i>the</i> rulebook, since rulebooks get
           editions too: public rulesets are labeled <span className="tag t-official">Official</span>, <span className="tag t-community">Community</span> or{' '}
           <span className="tag t-warn">Experimental</span>, and the site opens on the one admins chose as the default.
@@ -296,8 +298,8 @@ const TOPICS = [
         </ul>
         <h4>Versions, reactions and discussion</h4>
         <p>
-          Cards work just like rules. Each card can have versions: the <span className="label l-rulebook">Printed</span> card plus <i>Official Ruling</i>, <i>Community</i> and{' '}
-          <i>Suggestion</i> versions. React 👍 👎 ❓, discuss, and use <b>Homebrew</b> in the card details to play it with your own values (see Homebrew and sharing). The selected ruleset decides which version of
+          Cards work just like rules. Each card can have versions: the card itself (its <i>Original</i>) plus <i>Official Ruling</i>, <i>Community</i> and{' '}
+          <i>Suggestion</i> versions. Which cards make up the printed game is up to a ruleset, so cards carry no “printed” label. React 👍 👎 ❓, discuss, and use <b>Homebrew</b> in the card details to play it with your own values (see Homebrew and sharing). The selected ruleset decides which version of
           each card is shown.
         </p>
         <h4>For editors</h4>
@@ -469,8 +471,10 @@ const TOPICS = [
         <h4>Rulesets</h4>
         <p>
           Make rulesets public or private and choose the site default that new visitors see. Rulesets list every card they include, like rules; a ruleset from before
-          that change shows an <b>Upgrade rulesets</b> notice, which adds every current card to it as printed (keeping chosen versions). New cards are in no ruleset
-          until someone adds them. Deleting a card also removes its versions, reactions, attached rules, discussion and place in rulesets.
+          that change shows an <b>Upgrade rulesets</b> notice, which adds every current card to it as it is (keeping chosen versions). New cards are in no ruleset
+          until someone adds them. Members' new cards come in through Admin → Suggestions like other homebrew: <b>Make it a public suggestion</b> gives the card the
+          next free ID and shows it to everyone, tagged <i>Suggested card</i> (shown with Show inactive until a ruleset adds it); <b>Accept the card</b> makes it one of the
+          site's cards, optionally straight into a public ruleset. Deleting a card also removes its versions, reactions, attached rules, discussion and place in rulesets.
         </p>
       </>
     ),

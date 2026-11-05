@@ -11,7 +11,7 @@ import { loadComponents } from '../lib/components.js';
 import { PRINTED } from '../lib/cardVersions.js';
 import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { fold, plainToHtml, toPlainText } from '../lib/html.js';
-import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
+import { acceptNewCard, acceptSuggestion, declineNewCard, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Modal, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
 import { alertDialog, confirmDialog, promptDialog } from '../components/dialogs.jsx';
@@ -39,8 +39,9 @@ export default function AdminPage({ route }) {
   // Waiting suggestions are counted on their tab.
   const pendingRules = useLive(() => (isEditor ? query(collection(db, 'versions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
   const pendingCards = useLive(() => (isEditor ? query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')) : null), [isEditor]);
+  const pendingNewCards = useLive(() => (isEditor ? query(collection(db, 'components'), where('status', '==', 'suggested')) : null), [isEditor]);
   const pendingHomebrew = useLive(() => (isEditor ? submittedHomebrewQuery() : null), [isEditor]);
-  const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0) + (pendingHomebrew.data?.length || 0);
+  const pending = (pendingRules.data?.length || 0) + (pendingCards.data?.length || 0) + (pendingNewCards.data?.length || 0) + (pendingHomebrew.data?.length || 0);
   const recentComments = useLive(() => (isEditor ? discussionsQuery() : null), [isEditor]);
   const openComments = (recentComments.data || []).filter((c) => !c.handled).length;
   if (authLoading) return <Spinner />;
@@ -210,17 +211,26 @@ function RulesAdmin({ route }) {
 
 /** Community suggestions for rules and cards, newest first. */
 /** Accept a shared suggestion (optionally straight into a public ruleset), or turn it down. */
-function ReviewActions({ publicSets, onAccept, onDecline }) {
+function ReviewActions({ publicSets, onAccept, onDecline, card }) {
   const [setId, setSetId] = useState('');
   return (
     <div className="review-actions">
-      <button className="small ok" onClick={() => onAccept('Community', setId)} title="Make it a public Community version">
-        <Icon name="check" />
-        Accept as Community
-      </button>
-      <button className="small" onClick={() => onAccept('Official Ruling', setId)} title="Make it an Official Ruling">
-        Accept as Official Ruling
-      </button>
+      {card ? (
+        <button className="small ok" onClick={() => onAccept(null, setId)} title="Make it one of the site's cards">
+          <Icon name="check" />
+          Accept the card
+        </button>
+      ) : (
+        <>
+          <button className="small ok" onClick={() => onAccept('Community', setId)} title="Make it a public Community version">
+            <Icon name="check" />
+            Accept as Community
+          </button>
+          <button className="small" onClick={() => onAccept('Official Ruling', setId)} title="Make it an Official Ruling">
+            Accept as Official Ruling
+          </button>
+        </>
+      )}
       {publicSets.length > 0 && (
         <label className="review-set small">
           <span className="muted">and use it in</span>
@@ -247,6 +257,7 @@ function SuggestionsAdmin() {
   const rules = useLive(() => collection(db, 'rules'), []);
   const suggestions = useLive(() => query(collection(db, 'versions'), where('label', '==', 'Suggestion')), []);
   const cardSuggestions = useLive(() => query(collection(db, 'componentVersions'), where('label', '==', 'Suggestion')), []);
+  const newCards = useLive(() => query(collection(db, 'components'), where('status', '==', 'suggested')), []);
   const sets = useLive(() => query(collection(db, 'rulesets'), where('visibility', '==', 'public')), []);
   const publicSets = useMemo(() => [...(sets.data || [])].sort((x, y) => x.name.localeCompare(y.name)), [sets.data]);
   const ruleById = useMemo(() => {
@@ -300,8 +311,13 @@ function SuggestionsAdmin() {
   const homebrew = useLive(() => submittedHomebrewQuery(), []);
   const sections = useLive(() => collection(db, 'sections'), []);
   const sectionName = (id) => (sections.data || []).find((s) => s.id === id)?.title || 'a section';
+  const brewTitle = (h) => h.data?.title || Object.values(h.data || {}).find((v) => typeof v === 'string' && v.trim()) || 'a new card';
   const brewTarget = (h, id) =>
-    h.kind === 'card'
+    h.kind === 'newCard'
+      ? id
+        ? cardTarget({ id, typeId: h.typeId }, brewTitle(h))
+        : { key: `homebrew_${h.id}`, label: `the new card “${brewTitle(h)}”`, link: { page: 'components', parts: [] } }
+      : h.kind === 'card'
       ? cardTarget({ id: h.componentId, typeId: h.typeId }, h.data?.title || h.componentId.split('__').pop())
       : h.kind === 'rule'
         ? ruleTarget({ id, title: h.title, sid: shortIds([{ id }]).get(id) })
@@ -320,9 +336,9 @@ function SuggestionsAdmin() {
     const id = await attempt(() => publishHomebrew(h), 'Now a public suggestion');
     if (!id) return;
     const t = brewTarget(h, id);
-    const text = h.kind === 'card' ? `Changes: ${Object.keys(h.data || {}).join(', ')}` : h.text || '';
-    notifyUser(h.ownerUid, t.key, user, { type: 'suggestion', title: `${who} made your homebrew for ${t.label} a public suggestion`, text, link: t.link });
-    if (h.kind !== 'rule') notify(t.key, user, { type: 'suggestion', title: `New suggestion for ${t.label}, by ${h.ownerName || 'someone'}`, text, link: t.link }, { skip: [h.ownerUid] });
+    const text = h.kind === 'card' ? `Changes: ${Object.keys(h.data || {}).join(', ')}` : h.kind === 'newCard' ? h.note || '' : h.text || '';
+    notifyUser(h.ownerUid, t.key, user, { type: 'suggestion', title: `${who} made your homebrew ${h.kind === 'newCard' ? `card “${brewTitle(h)}”` : `for ${t.label}`} a public suggestion`, text, link: t.link });
+    if (h.kind !== 'rule' && h.kind !== 'newCard') notify(t.key, user, { type: 'suggestion', title: `New suggestion for ${t.label}, by ${h.ownerName || 'someone'}`, text, link: t.link }, { skip: [h.ownerUid] });
   };
 
   const turnDown = async (h) => {
@@ -337,12 +353,48 @@ function SuggestionsAdmin() {
     if (reason == null) return;
     if (!(await attempt(() => turnDownHomebrew(h, reason.trim(), user), 'Turned down: it is back in its author’s homebrew'))) return;
     const t = h.kind === 'rule' ? { key: `homebrew_${h.id}`, label: `the rule “${h.title}”`, link: { page: 'rules', parts: [] } } : brewTarget(h);
+    // (A new card: brewTarget without an id names it, linking to the Components page.)
     notifyUser(h.ownerUid, t.key, user, { type: 'declined', title: `${who} turned down your homebrew for ${t.label}`, text: reason.trim(), link: t.link });
   };
 
   const brewQueue = [...(homebrew.data || [])].filter((h) => !h.sharedId).sort((x, y) => millis(x.submittedAt) - millis(y.submittedAt));
   const ruleQueue = [...(suggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
   const cardQueue = [...(cardSuggestions.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
+  const newCardQueue = [...(newCards.data || [])].sort((x, y) => millis(y.createdAt) - millis(x.createdAt));
+
+  /** Accepting a new card makes it one of the site's cards (optionally in a public ruleset). */
+  const acceptCard = async (c, target, setId) => {
+    const set = publicSets.find((x) => x.id === setId);
+    const confirmed = await confirmDialog({
+      title: 'Accept the card',
+      message: `Make ${target.label}, by ${c.createdByName || 'its author'}, one of the site's cards${set ? `, and add it to the public ruleset “${set.name}”` : ''}? It is in no ruleset until someone adds it. Its author is told.`,
+      confirmLabel: 'Accept the card',
+    });
+    if (!confirmed) return;
+    if (!(await attempt(() => acceptNewCard(c, setId), set ? `Accepted, and added to “${set.name}”` : 'Accepted'))) return;
+    const inSet = set ? ` and added it to the public ruleset “${set.name}”` : '';
+    notifyUser(c.createdBy, target.key, user, { type: 'accepted', title: `${who} accepted your new card ${target.label}${inSet}`, text: '', link: target.link });
+    notify(target.key, user, { type: 'adopted', title: `${who} accepted the new card ${target.label}`, text: '', link: target.link }, { skip: [c.createdBy] });
+    if (set) {
+      const st = rulesetTarget(set);
+      notify(st.key, user, { type: 'ruleset', title: `${who} added ${target.label} to the ruleset “${set.name}”`, text: '', link: st.link }, { skip: [c.createdBy] });
+    }
+  };
+
+  /** Turning a new card down removes it (with its discussion); the author keeps it as private homebrew. */
+  const declineCard = async (c, target) => {
+    const reason = await promptDialog({
+      title: 'Turn down',
+      message: 'The suggested card and its discussion are removed, and it goes back to its author as private homebrew. They see your reason, and can change it and share it again.',
+      label: 'Reason',
+      placeholder: 'e.g. Too strong for a 2-cost card',
+      confirmLabel: 'Turn down',
+      danger: true,
+    });
+    if (reason == null) return;
+    if (!(await attempt(() => declineNewCard(c, reason.trim(), user), 'Turned down: it is back in its author’s homebrew'))) return;
+    notifyUser(c.createdBy, target.key, user, { type: 'declined', title: `${who} turned down your new card ${target.label}`, text: reason.trim(), link: { page: 'components', parts: [] } });
+  };
   const counts = (v) => {
     const c = reactionCounts(v.reactions);
     return `👍 ${c.up} 👎 ${c.down} ❓ ${c.q}`;
@@ -370,7 +422,11 @@ function SuggestionsAdmin() {
               return (
                 <li key={h.id}>
                   <div className="queue-head">
-                    {h.kind === 'card' ? (
+                    {h.kind === 'newCard' ? (
+                      <span>
+                        <b>{brewTitle(h)}</b>
+                      </span>
+                    ) : h.kind === 'card' ? (
                       <a href={href('components', [h.typeId, h.componentId])} title="Open the card">
                         <b>{h.componentId.split('__').pop()}</b> {h.data?.title || ''}
                       </a>
@@ -385,9 +441,9 @@ function SuggestionsAdmin() {
                     ) : (
                       <span className="muted">Deleted rule</span>
                     )}
-                    <span className="tag t-homebrew">{h.kind === 'card' ? 'Card change' : h.kind === 'rule' ? 'New rule' : 'New version'}</span>
+                    <span className="tag t-homebrew">{h.kind === 'newCard' ? 'New card' : h.kind === 'card' ? 'Card change' : h.kind === 'rule' ? 'New rule' : 'New version'}</span>
                   </div>
-                  {h.kind === 'card' ? (
+                  {h.kind === 'card' || h.kind === 'newCard' ? (
                     <p className="queue-text small">
                       {Object.entries(h.data || {})
                         .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
@@ -457,7 +513,41 @@ function SuggestionsAdmin() {
             })}
           </ul>
         )}
-        <h3 className="queue-title">Cards</h3>
+        <h3 className="queue-title">New cards</h3>
+        {newCards.loading ? (
+          <Spinner />
+        ) : !newCardQueue.length ? (
+          <p className="muted small">No new cards waiting.</p>
+        ) : (
+          <ul className="queue">
+            {newCardQueue.map((c) => {
+              const name = c.data?.title || c.id.split('__').pop();
+              const target = cardTarget(c, name);
+              return (
+                <li key={c.id}>
+                  <div className="queue-head">
+                    <a href={href('components', [c.typeId, c.id])} title="Open the card to see it and its discussion">
+                      <b>{c.id.split('__').pop()}</b> {name}
+                    </a>
+                    <span className="tag t-suggestion">New card</span>
+                  </div>
+                  <p className="queue-text small">
+                    {Object.entries(c.data || {})
+                      .filter(([, v]) => v !== '' && v != null)
+                      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+                      .join(' · ')}
+                  </p>
+                  <p className="small muted">
+                    by <UserName uid={c.createdBy} fallback={c.createdByName} /> · {timeAgo(c.createdAt)}
+                    {c.note && ` · “${c.note}”`}
+                  </p>
+                  <ReviewActions card publicSets={publicSets} onAccept={(_, setId) => acceptCard(c, target, setId)} onDecline={() => declineCard(c, target)} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <h3 className="queue-title">Card changes</h3>
         {cardSuggestions.loading ? (
           <Spinner />
         ) : !cardQueue.length ? (
@@ -789,13 +879,13 @@ function RulesetsAdmin() {
       title: 'Upgrade rulesets',
       message: `Rulesets now list every card they include, like rules; a card they don't list is left out. ${unlisted.length} ruleset${
         unlisted.length === 1 ? '' : 's'
-      } from before (everyone's, private ones too) will get every current card added as printed, keeping the versions they already chose. Nothing disappears; leave cards out afterwards. You can undo this.`,
+      } from before (everyone's, private ones too) will get every current card added as it is, keeping the versions they already chose. Nothing disappears; leave cards out afterwards. You can undo this.`,
       confirmLabel: 'Upgrade',
     });
     if (!ok) return;
     attempt(async () => {
       const { components } = await loadComponents({ force: true });
-      const printed = Object.fromEntries(components.map((c) => [c.id, PRINTED]));
+      const printed = Object.fromEntries(components.filter((c) => !c.status).map((c) => [c.id, PRINTED]));
       await commitInChunks(unlisted.map((s) => (b) => b.update(doc(db, 'rulesets', s.id), { cards: { ...printed, ...(s.cards || {}) }, cardsListed: true })));
       return true;
     }, `Upgraded ${unlisted.length} ruleset${unlisted.length === 1 ? '' : 's'}`);

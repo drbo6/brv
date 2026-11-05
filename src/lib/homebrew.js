@@ -1,6 +1,8 @@
 import { collection, deleteField, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { HB, nextVersionNumber } from './rules.js';
+import { PRINTED } from './cardVersions.js';
+import { bumpComponentsVersion, deleteComponents, docIdFor, idField } from './components.js';
 import { deleteDoc, knownState, writeBatch } from './store.js';
 
 // Homebrew: anyone signed in can change any rule or card, or write a new rule, for themselves.
@@ -8,11 +10,12 @@ import { deleteDoc, knownState, writeBatch } from './store.js';
 //   kind 'version': { ruleId, text }        a different wording of an existing rule
 //   kind 'rule':    { sectionId, title, text } a rule of their own, in an existing section
 //   kind 'card':    { componentId, typeId, data } changed fields of a card
+//   kind 'newCard': { typeId, data }           a card of their own, of an existing component type
 // Only the owner can read it, so it shows on their screen only and can be used in their rulesets
 // (as "hb:<id>"). Sharing it sends it to the admins (`submitted`), still out of public view. An
-// admin then makes it a public Suggestion: a copy in the public versions (or rules) with
-// `homebrewId`, credited to its author, where everyone can discuss it. Admins finally accept it as
-// Community or Official Ruling. Turning it down at either step hands it back, private again, with
+// admin then makes it a public Suggestion: a copy in the public versions (or rules, or a suggested
+// component for a new card) with `homebrewId`, credited to its author, where everyone can discuss
+// it. Admins finally accept it as Community or Official Ruling (a new card simply becomes a card). Turning it down at either step hands it back, private again, with
 // the admin's reason; its author can change it and share it again.
 
 export const HOMEBREW = 'Homebrew';
@@ -75,14 +78,26 @@ export function withCardHomebrew(mine, cardVersions) {
   ];
 }
 
-/** Homebrew references ("hb:<id>") in a ruleset, rules and cards. */
+/**
+ * The reader's own new cards that aren't public, shaped like components (id "hb:<id>") so the
+ * Components page shows them among the others. Once shared, the suggested card shows instead.
+ */
+export function withNewCards(mine, components) {
+  const shared = publicIds(components);
+  const own = mine.filter((h) => h.kind === 'newCard' && !shared.has(h.id));
+  if (!own.length) return components;
+  return [...components, ...own.map((h) => ({ id: HB + h.id, typeId: h.typeId, data: h.data || {}, status: 'homebrew', homebrewId: h.id, note: h.note || '', homebrew: h }))];
+}
+
+/** Homebrew references ("hb:<id>") in a ruleset: rules, versions, new cards and card versions. */
 export function homebrewRefs(set) {
   const out = new Set();
-  for (const [k, v] of Object.entries(set?.entries || {})) {
-    if (k.startsWith(HB)) out.add(k.slice(HB.length));
-    if (typeof v === 'string' && v.startsWith(HB)) out.add(v.slice(HB.length));
+  for (const map of [set?.entries, set?.cards]) {
+    for (const [k, v] of Object.entries(map || {})) {
+      if (k.startsWith(HB)) out.add(k.slice(HB.length));
+      if (typeof v === 'string' && v.startsWith(HB)) out.add(v.slice(HB.length));
+    }
   }
-  for (const v of Object.values(set?.cards || {})) if (typeof v === 'string' && v.startsWith(HB)) out.add(v.slice(HB.length));
   return out;
 }
 
@@ -90,7 +105,7 @@ export function homebrewRefs(set) {
 export async function privateHomebrewCount(set) {
   const refs = homebrewRefs(set);
   if (!refs.size) return 0;
-  const snaps = await Promise.all(['rules', 'versions', 'componentVersions'].map((c) => getDocs(query(collection(db, c), where('homebrewId', '!=', null)))));
+  const snaps = await Promise.all(['rules', 'versions', 'componentVersions', 'components'].map((c) => getDocs(query(collection(db, c), where('homebrewId', '!=', null)))));
   const shared = publicIds(...snaps.map((s) => s.docs.map((d) => d.data())));
   return [...refs].filter((id) => !shared.has(id)).length;
 }
@@ -99,8 +114,11 @@ export async function privateHomebrewCount(set) {
 
 const owner = (user) => ({ ownerUid: user.uid, ownerName: user.displayName || 'Anonymous' });
 
-/** Where a homebrew goes in a ruleset: the rule (or card) it stands in for. */
-const setField = (h, id) => (h.kind === 'card' ? `cards.${h.componentId}` : `entries.${h.kind === 'rule' ? HB + id : h.ruleId}`);
+/** Where a homebrew goes in a ruleset: the rule (or card) it stands in for, or a place of its own. */
+const setField = (h, id) =>
+  h.kind === 'card' ? `cards.${h.componentId}` : h.kind === 'newCard' ? `cards.${HB + id}` : `entries.${h.kind === 'rule' ? HB + id : h.ruleId}`;
+/** A new card is in the ruleset as it is; anything else stands in as the homebrew version. */
+const setValue = (h, id) => (h.kind === 'newCard' ? PRINTED : HB + id);
 
 /** Create a homebrew and use it in the reader's ruleset `rulesetId`, in one step; returns its id. */
 export async function createHomebrew(fields, user, rulesetId) {
@@ -109,14 +127,18 @@ export async function createHomebrew(fields, user, rulesetId) {
   knownState(ref, null);
   const batch = writeBatch();
   batch.set(ref, { ...fields, note: fields.note || '', ...owner(user), sharedId: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  if (rulesetId) batch.update(doc(db, 'rulesets', rulesetId), { [setField(fields, ref.id)]: HB + ref.id, updatedAt: serverTimestamp() });
+  if (rulesetId) batch.update(doc(db, 'rulesets', rulesetId), { [setField(fields, ref.id)]: setValue(fields, ref.id), updatedAt: serverTimestamp() });
   await batch.commit();
   return ref.id;
 }
 
 /** The public copy's documents: [collection, id] pairs, the main one first. */
 const publicDocs = (h) =>
-  !h.sharedId ? [] : h.kind === 'rule' ? [['rules', h.sharedId], ['versions', h.sharedVersionId]] : [[h.kind === 'card' ? 'componentVersions' : 'versions', h.sharedId]];
+  !h.sharedId
+    ? []
+    : h.kind === 'rule'
+      ? [['rules', h.sharedId], ['versions', h.sharedVersionId]]
+      : [[h.kind === 'card' ? 'componentVersions' : h.kind === 'newCard' ? 'components' : 'versions', h.sharedId]];
 
 /** The public copy of a shared homebrew, if it is still under review (label "Suggestion"). */
 async function reviewCopy(h) {
@@ -124,22 +146,36 @@ async function reviewCopy(h) {
   const [col, id] = h.kind === 'rule' ? ['versions', h.sharedVersionId] : publicDocs(h)[0];
   if (!id) return null;
   const snap = await getDoc(doc(db, col, id));
-  return snap.exists() && snap.data().label === 'Suggestion' ? snap.data() : null;
+  if (!snap.exists()) return null;
+  return (h.kind === 'newCard' ? snap.data().status === 'suggested' : snap.data().label === 'Suggestion') ? snap.data() : null;
+}
+
+/** The field that holds a component type's ID (a new card gets its ID when it is made public). */
+async function idKeyOf(typeId) {
+  const snap = await getDoc(doc(db, 'componentTypes', typeId));
+  return snap.exists() ? idField({ id: typeId, ...snap.data() })?.key : null;
 }
 
 /** Change a homebrew. While it is shared for review, its public copy changes with it. */
 export async function updateHomebrew(h, patch) {
   const batch = writeBatch();
   batch.update(doc(db, 'homebrew', h.id), { ...patch, updatedAt: serverTimestamp() });
-  if (await reviewCopy(h)) {
+  const copy = await reviewCopy(h);
+  if (copy) {
     const now = { updatedAt: serverTimestamp() };
-    if (h.kind === 'card') batch.update(doc(db, 'componentVersions', h.sharedId), { data: patch.data ?? h.data, note: patch.note ?? h.note ?? '', ...now });
+    if (h.kind === 'newCard') {
+      // The suggested card keeps the ID it was given.
+      const idKey = await idKeyOf(h.typeId);
+      const data = { ...(patch.data ?? h.data), ...(idKey ? { [idKey]: copy.data?.[idKey] } : {}) };
+      batch.update(doc(db, 'components', h.sharedId), { data, note: patch.note ?? h.note ?? '', ...now });
+    } else if (h.kind === 'card') batch.update(doc(db, 'componentVersions', h.sharedId), { data: patch.data ?? h.data, note: patch.note ?? h.note ?? '', ...now });
     else batch.update(doc(db, 'versions', h.kind === 'rule' ? h.sharedVersionId : h.sharedId), { text: patch.text ?? h.text, note: patch.note ?? h.note ?? '', ...now });
     if (h.kind === 'rule' && (patch.title !== undefined || patch.sectionId !== undefined)) {
       batch.update(doc(db, 'rules', h.sharedId), { title: patch.title ?? h.title, sectionId: patch.sectionId ?? h.sectionId });
     }
   }
   await batch.commit();
+  if (copy && h.kind === 'newCard') await bumpComponentsVersion();
 }
 
 const noDecline = { declineReason: deleteField(), declinedBy: deleteField(), declinedAt: deleteField() };
@@ -171,6 +207,27 @@ export async function publishHomebrew(h) {
     batch.set(version, { ...base, ruleId: rule.id, text: h.text, n: 1 });
     sharedId = rule.id;
     sharedVersionId = version.id;
+  } else if (h.kind === 'newCard') {
+    // A new card becomes a suggested component of its type, with the next free ID.
+    const idKey = await idKeyOf(h.typeId);
+    if (!idKey) throw new Error('That component type no longer exists, or has no ID field.');
+    const others = await getDocs(query(collection(db, 'components'), where('typeId', '==', h.typeId)));
+    const ids = others.docs.map((d) => d.data().data?.[idKey]);
+    const numeric = ids.every((v) => Number.isFinite(Number(v)));
+    const idValue = numeric ? Math.max(0, ...ids.map(Number)) + 1 : `new-${h.id.slice(0, 6)}`;
+    const ref = doc(db, 'components', docIdFor(h.typeId, idValue));
+    knownState(ref, null);
+    batch.set(ref, {
+      typeId: h.typeId,
+      data: { ...(h.data || {}), [idKey]: idValue },
+      status: 'suggested',
+      homebrewId: h.id,
+      note: h.note || '',
+      createdAt: serverTimestamp(),
+      createdBy: h.ownerUid,
+      createdByName: h.ownerName || 'Anonymous',
+    });
+    sharedId = ref.id;
   } else {
     const ref = doc(collection(db, 'componentVersions'));
     batch.set(ref, { ...base, componentId: h.componentId, typeId: h.typeId, data: h.data || {} });
@@ -178,6 +235,7 @@ export async function publishHomebrew(h) {
   }
   batch.update(doc(db, 'homebrew', h.id), { sharedId, sharedVersionId, submitted: false, ...noDecline });
   await batch.commit();
+  if (h.kind === 'newCard') await bumpComponentsVersion();
   return sharedId;
 }
 
@@ -194,6 +252,7 @@ export async function withdrawHomebrew(h) {
   for (const [col, id] of publicDocs(h)) if (id) batch.delete(doc(db, col, id));
   batch.update(doc(db, 'homebrew', h.id), { submitted: false, sharedId: null, sharedVersionId: null, updatedAt: serverTimestamp() });
   await batch.commit();
+  if (h.kind === 'newCard' && h.sharedId) await bumpComponentsVersion();
 }
 
 /** Delete a homebrew. One under review is withdrawn too; an accepted one stays public. */
@@ -203,6 +262,7 @@ export async function deleteHomebrew(h) {
   for (const [col, id] of publicDocs(h)) if (id) batch.delete(doc(db, col, id));
   batch.delete(doc(db, 'homebrew', h.id));
   await batch.commit();
+  if (h.kind === 'newCard') await bumpComponentsVersion();
 }
 
 // ---------- review (editors) ----------
@@ -239,5 +299,31 @@ export async function declineSuggestion({ col, version, rule }, reason, admin) {
       batch.update(hb.ref, { sharedId: null, sharedVersionId: null, declineReason: reason || '', declinedBy: admin.uid, declinedAt: serverTimestamp() });
     }
   }
+  await batch.commit();
+}
+
+/**
+ * Accept a suggested new card: it becomes one of the site's cards, and can go straight into a
+ * public ruleset.
+ */
+export async function acceptNewCard(comp, rulesetId) {
+  const batch = writeBatch();
+  batch.update(doc(db, 'components', comp.id), { status: deleteField(), updatedAt: serverTimestamp() });
+  if (rulesetId) batch.update(doc(db, 'rulesets', rulesetId), { [`cards.${comp.id}`]: PRINTED, updatedAt: serverTimestamp() });
+  await batch.commit();
+  await bumpComponentsVersion();
+}
+
+/**
+ * Turn a suggested new card down: the card goes, with its discussion, and the author's homebrew is
+ * private again, with the reason (it stays in their ruleset).
+ */
+export async function declineNewCard(comp, reason, admin) {
+  await deleteComponents([comp.id]);
+  if (!comp.homebrewId) return;
+  const hb = await getDoc(doc(db, 'homebrew', comp.homebrewId)).catch(() => null);
+  if (!hb?.exists()) return;
+  const batch = writeBatch();
+  batch.update(hb.ref, { sharedId: null, sharedVersionId: null, declineReason: reason || '', declinedBy: admin.uid, declinedAt: serverTimestamp() });
   await batch.commit();
 }

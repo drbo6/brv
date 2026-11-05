@@ -121,7 +121,7 @@ const CELL_LH = { l: 1.15, xl: 1.1, xxl: 1.05 };
  * Export the active ruleset as a PDF: its rules, then (optionally) all its cards.
  * groups: [{ heading, depth, rules: [{ title, label, kindLabel, inactive, html }] }] (no rule ids: the PDF is for reading)
  * cardTypes: [{ type, cards: [{ comp, data, label }] }]: every card in the version the ruleset uses
- * (label is the version's label, or null when printed).
+ * (label is the version's label, or null for the card as it is).
  * options: { format: 'letter' | 'a4' | 'custom', paperW, paperH, unit: 'mm' | 'in', perSheet: 1 | 2,
  *   cards: 'none' | 'table' | 'cards', cardSize: 's' | 'm' | 'custom', cardW }
  */
@@ -271,7 +271,7 @@ function pageFooter(pdf, text, x, y) {
 }
 
 const fieldsOf = (type) => new Map([...type.fields, TYPE_FIELD].map((f) => [f.key, f]));
-const changedNote = (cards) => (cards.some((c) => c.label) ? 'Cards in another version than printed are marked with that version.' : 'All cards as printed.');
+const changedNote = (cards) => (cards.some((c) => c.label) ? 'Cards in another version than the original are marked with that version.' : 'All cards in their original version.');
 
 /** Cards drawn as cards, edge to edge in a grid, marked with their version when it isn't printed. */
 async function cardSheets(pdf, { type, cards }, { paper: page, format, size, title, shText }) {

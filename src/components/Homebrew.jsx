@@ -18,20 +18,23 @@ export const homebrewState = (pub, hb) => (pub ? (pub.label === 'Suggestion' ? '
 export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
   const { requireUser } = useSession();
   const state = homebrewState(pub, hb);
-  const what = hb.kind === 'rule' ? 'rule' : hb.kind === 'card' ? 'card change' : 'version';
+  const what = hb.kind === 'rule' ? 'rule' : hb.kind === 'card' ? 'card change' : hb.kind === 'newCard' ? 'card' : 'version';
 
   const share = () =>
     requireUser(async (u) => {
       const ok = await confirmDialog({
         title: hb.declinedAt ? 'Share your homebrew again' : 'Share your homebrew with the admins',
-        message: `Your ${what} goes to the admins first; until then only you and they see it. If they make it a public Suggestion, everyone can react to it and discuss it, and the admins may later accept it as a Community version or Official Ruling. You can keep editing it, and withdraw it at any time while it is under review.`,
+        message: `Your ${what} goes to the admins first; until then only you and they see it. If they make it a public Suggestion, everyone can react to it and discuss it, and the admins may later accept it ${hb.kind === 'newCard' ? 'as one of the site\'s cards' : 'as a Community version or Official Ruling'}. You can keep editing it, and withdraw it at any time while it is under review.`,
         confirmLabel: 'Share with the admins',
       });
       if (!ok || !(await attempt(() => shareHomebrew(hb), 'Shared with the admins'))) return;
       // Sharing follows the rule or card, so the author hears what others say about it.
-      // (A homebrew rule has nothing public to follow yet.)
-      if (hb.kind !== 'rule') autoFollow(target.key, u.uid, target);
-      const title = hb.kind === 'rule' ? `${u.displayName || 'Someone'} shared a homebrew rule with the admins: ${hb.title}` : `${u.displayName || 'Someone'} shared a homebrew ${what} for ${target.label} with the admins`;
+      // (A homebrew rule or card has nothing public to follow yet.)
+      if (hb.kind !== 'rule' && hb.kind !== 'newCard') autoFollow(target.key, u.uid, target);
+      const title =
+        hb.kind === 'rule' || hb.kind === 'newCard'
+          ? `${u.displayName || 'Someone'} shared a homebrew ${what} with the admins: ${hb.kind === 'rule' ? hb.title : target.label}`
+          : `${u.displayName || 'Someone'} shared a homebrew ${what} for ${target.label} with the admins`;
       notify(SUGGESTIONS.key, u, { type: 'suggestion', title, text: hb.text || '', link: SUGGESTIONS.link });
     }, 'suggest');
 
@@ -48,7 +51,7 @@ export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
   const remove = async () => {
     const message =
       state === 'accepted'
-        ? `Remove this from your homebrew list? The accepted ${pub.label} version stays public.`
+        ? `Remove this from your homebrew list? The accepted ${hb.kind === 'newCard' ? 'card' : `${pub.label} version`} stays public.`
         : `Delete your homebrew ${what}?${state === 'shared' || state === 'submitted' ? ' It is withdrawn from review too.' : ''}`;
     if (!(await confirmDialog({ title: 'Delete homebrew', message, confirmLabel: 'Delete', danger: true }))) return;
     if (await attempt(() => deleteHomebrew(hb), 'Homebrew deleted')) onDeleted?.();
@@ -81,7 +84,7 @@ export function HomebrewBar({ hb, pub, target, onEdit, onDeleted }) {
         )}
         {state === 'accepted' && (
           <>
-            <b>Accepted</b> as {pub.label}. Thanks for your homebrew!
+            <b>Accepted</b>{hb.kind === 'newCard' ? ': it is one of the site\'s cards now' : ` as ${pub.label}`}. Thanks for your homebrew!
           </>
         )}
       </span>

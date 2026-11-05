@@ -155,8 +155,11 @@ export async function loadComponents({ force = false } = {}) {
     version,
     types: types.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name)),
     components: comps.docs.map((d) => {
-      const { typeId, data } = d.data();
-      return { id: d.id, typeId, data: data || {} };
+      const { typeId, data, status, homebrewId, createdBy, createdByName, note } = d.data();
+      // A member's new card: suggested until accepted, and always found by its homebrew id (the
+      // author's ruleset lists it that way).
+      const extra = homebrewId ? { homebrewId, createdBy: createdBy || null, createdByName: createdByName || '', note: note || '' } : {};
+      return { id: d.id, typeId, data: data || {}, ...(status ? { status } : {}), ...extra };
     }),
   };
   try {

@@ -1705,6 +1705,20 @@ img.sh {
   margin-left: 6px;
 }
 
+/* A card's original version: named, but without a label pill. */
+.version-plain {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+/* A member's new card, drawn as they fill it in. */
+.new-card-preview {
+  width: 210px;
+  margin: 0 auto 4px;
+}
+
 .rule-actions {
   display: flex;
   flex-wrap: wrap;

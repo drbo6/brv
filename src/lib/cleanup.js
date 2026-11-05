@@ -56,7 +56,8 @@ export async function findLeftovers() {
       else if (typeof v === 'string' && (v.startsWith(HB) ? !homebrewIds.has(v.slice(HB.length)) : !hbKey && versionById.get(v)?.ruleId !== key)) patch[`entries.${key}`] = deleteField();
     }
     for (const [key, v] of Object.entries(s.cards || {})) {
-      if (!compIds.has(key)) patch[`cards.${key}`] = deleteField();
+      // "hb:<id>" is a member's own new card, there as long as their homebrew is.
+      if (key.startsWith(HB) ? !homebrewIds.has(key.slice(HB.length)) : !compIds.has(key)) patch[`cards.${key}`] = deleteField();
       // A chosen version that's gone: the card stays in the ruleset, as printed.
       else if (v && v !== PRINTED && (v.startsWith(HB) ? !homebrewIds.has(v.slice(HB.length)) : cardVersionById.get(v)?.componentId !== key)) patch[`cards.${key}`] = PRINTED;
     }

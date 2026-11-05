@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CARD_LABELS, cardChoiceOf, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
+import { CARD_LABELS, cardChoiceFor, cardKeyIn, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
 import { deleteComponents, displayTitle } from '../lib/components.js';
 import ComponentForm from './ComponentForm.jsx';
 import AttachedRules from './AttachedRules.jsx';
@@ -36,10 +36,12 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   // The version the active ruleset uses, including unsaved changes.
   const rs = useActiveRuleset();
   const { selectedSet } = rs;
-  // The ruleset's choice for this card: a version, printed, or left out (null), saved and with changes.
-  const savedChoice = cardChoiceOf(selectedSet, selectedSet.cards, current.id);
-  const choice = cardChoiceOf(selectedSet, rs.apply(selectedSet.cards, 'cards'), current.id);
-  // A chosen version that no longer exists falls back to the printed card.
+  // The ruleset's choice for this card: a version, the card as it is, or left out (null), saved and
+  // with changes. A member's new card is listed under its homebrew id ("hb:<id>").
+  const savedChoice = cardChoiceFor(selectedSet, selectedSet.cards, current);
+  const choice = cardChoiceFor(selectedSet, rs.apply(selectedSet.cards, 'cards'), current);
+  const setKey = cardKeyIn(selectedSet.cards, current);
+  // A chosen version that no longer exists falls back to the original card.
   const active = choice ? findVersion(vs, choice) || vs[0] : null;
   const [shownId, setShownId] = useState(null);
   useEffect(() => {
@@ -51,8 +53,14 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   const [discuss, setDiscuss] = useState(false);
   const [dialog, setDialog] = useState(null);
 
+  // A member's new card: their private homebrew (only they see it), or suggested to everyone.
+  const ownCard = Boolean(current.homebrew);
+  const suggested = current.status === 'suggested';
+  const newCardHb = current.homebrew || (current.homebrewId && user && current.createdBy === user.uid ? rs.myHomebrew.find((h) => h.id === current.homebrewId) : null) || null;
   // The reader's homebrew behind the version on screen: private, or the public copy they shared.
-  const hb = shown.homebrew || (shown.homebrewId && user && shown.createdBy === user.uid ? rs.myHomebrew.find((h) => h.id === shown.homebrewId) : null) || null;
+  const hb =
+    shown.homebrew || (shown.homebrewId && user && shown.createdBy === user.uid ? rs.myHomebrew.find((h) => h.id === shown.homebrewId) : null) || (shown.printed ? newCardHb : null) || null;
+  const hbPub = hb && hb === newCardHb ? (ownCard ? null : { label: suggested ? 'Suggestion' : 'Accepted' }) : shown.homebrew ? null : shown;
   const name = displayTitle(type, { ...current, data });
   const follow = cardTarget(current, displayTitle(type, current));
 
@@ -76,7 +84,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
         </div>
 
         <div className="detail-data">
-          <AttachedRules compId={current.id} name={name} />
+          {!ownCard && <AttachedRules compId={current.id} name={name} />}
 
           <div className="card-interact">
             <div className="version-switch card-version-switch">
@@ -85,9 +93,27 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   <Icon name="left" />
                 </button>
               )}
-              <span className={`label l-${shown.printed ? 'rulebook' : LABEL_CLASS[shown.label] || 'other'}`} title={shown.printed ? 'The card as printed' : `${shown.label} version`}>
-                {shown.label}
-              </span>
+              {shown.printed ? (
+                vs.length > 1 && (
+                  <span className="version-plain" title="The card as it is, without another version's changes">
+                    {shown.label}
+                  </span>
+                )
+              ) : (
+                <span className={`label l-${LABEL_CLASS[shown.label] || 'other'}`} title={`${shown.label} version`}>
+                  {shown.label}
+                </span>
+              )}
+              {ownCard && (
+                <span className="tag t-homebrew" title="Made by you: only you see it">
+                  Your homebrew
+                </span>
+              )}
+              {suggested && (
+                <span className="tag t-suggestion" title="New, suggested by a member; the admins decide whether to add it to the site">
+                  New suggestion
+                </span>
+              )}
               {vs.length > 1 && (
                 <>
                   <span className="version-count" aria-live="polite" title={`${vs.length} versions of this card`}>
@@ -113,13 +139,25 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   In {selectedSet.name}
                 </span>
               )}
-              {!shown.homebrew && (
+              {!shown.homebrew && !ownCard && (
                 <Reactions
                   reactions={shown.reactions}
                   onReact={(t) => requireUser((u) => attempt(() => reactToCard(current.id, shown, Boolean(metaOf(current.id)), u.uid, t), null, 'reaction'), 'talk')}
                 />
               )}
             </div>
+            {shown.printed && suggested && (
+              <p className="version-meta">
+                <span>
+                  Suggested by <UserName uid={current.createdBy} fallback={current.createdByName} />
+                </span>
+                {current.note && (
+                  <span className="version-note">
+                    <Linkify text={current.note} />
+                  </span>
+                )}
+              </p>
+            )}
             {!shown.printed && !shown.homebrew && (
               <p className="version-meta">
                 <span>
@@ -139,13 +177,14 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 </span>
               </p>
             )}
+            {!ownCard && (
             <div className="rule-actions card-actions">
                 <button className={`chip ${discuss ? 'on' : ''}`} onClick={() => setDiscuss((o) => !o)} aria-expanded={discuss} title="Discuss this card">
                   <Icon name="message" />
                   <span>{commentCount(current.id)}</span>
                   <span className="hide-sm">Discuss</span>
                 </button>
-                {user && (
+                {user && !suggested && (
                   <button className="chip" onClick={() => rs.startHomebrew(() => setDialog('brew'))} title="Change this card your own way. Only you see your homebrew; share it when you want others to consider it.">
                     <Icon name="flask" />
                     <span className="hide-sm">Homebrew</span>
@@ -164,17 +203,26 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   <Icon name="link" />
                 </button>
               </div>
-            {hb && <HomebrewBar hb={hb} pub={shown.homebrew ? null : shown} target={follow} onEdit={() => setDialog('brewEdit')} onDeleted={() => setShownId(PRINTED)} />}
+            )}
+            {hb && (
+              <HomebrewBar
+                hb={hb}
+                pub={hbPub}
+                target={follow}
+                onEdit={() => setDialog(hb === newCardHb ? 'newCardEdit' : 'brewEdit')}
+                onDeleted={() => (ownCard ? onClose() : setShownId(PRINTED))}
+              />
+            )}
             <RulesetChoiceRow
               what="card"
               inSet={Boolean(active) && shown.id === active.id}
               active={Boolean(active)}
-              onUse={() => rs.setCard(current.id, shown.printed ? PRINTED : shown.id, savedChoice)}
-              onAdd={() => rs.setCard(current.id, shown.printed ? PRINTED : shown.id, savedChoice)}
-              onRemove={() => rs.setCard(current.id, null, savedChoice)}
+              onUse={() => rs.setCard(setKey, shown.printed ? PRINTED : shown.id, savedChoice)}
+              onAdd={() => rs.setCard(setKey, shown.printed ? PRINTED : shown.id, savedChoice)}
+              onRemove={() => rs.setCard(setKey, null, savedChoice)}
             />
 
-          {isEditor && (
+          {isEditor && !ownCard && (
             <div className="admin-tools" role="group" aria-label="Admin tools">
               <span className="admin-tools-label">Admin</span>
               <button className="chip" onClick={() => setDialog('new')} title="Add an official, community or other public version of this card">
@@ -199,7 +247,7 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   Delete version
                 </button>
               )}
-              <button className="chip" onClick={() => setDialog('printed')} title="Edit the card's own (printed) data">
+              <button className="chip" onClick={() => setDialog('printed')} title="Edit the card's own (original) data">
                 <Icon name="edit" />
                 Edit card
               </button>
@@ -238,7 +286,8 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
           }}
         />
       )}
-      {dialog && dialog !== 'printed' && (
+      {dialog === 'newCardEdit' && newCardHb && <NewCardDialog type={type} homebrew={newCardHb} onClose={() => setDialog(null)} onSaved={() => {}} />}
+      {dialog && dialog !== 'printed' && dialog !== 'newCardEdit' && (
         <CardVersionDialog
           type={type}
           comp={current}
@@ -253,16 +302,23 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   );
 }
 
+/** A member's own new card (homebrew), or edit it: every field, with a preview. `onSaved` gets the homebrew id. */
+export function NewCardDialog({ type, homebrew, onClose, onSaved }) {
+  return <CardVersionDialog type={type} comp={{ id: null, typeId: type.id, data: {} }} homebrew={homebrew || true} newCard startData={{}} onClose={onClose} onSaved={onSaved} />;
+}
+
 /**
  * A version of a card, or edit one; stores only the changed fields. Everyone writes homebrew
  * (`homebrew`: true for a new one, or the homebrew to edit); admins also add public versions.
+ * With `newCard`, it is a whole card of the member's own (compared with an empty card).
  */
-function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, onSaved }) {
-  const { user } = useSession();
+function CardVersionDialog({ type, comp, version, homebrew, newCard, startData, onClose, onSaved }) {
+  const { user, shorthands } = useSession();
   const rs = useActiveRuleset();
   const hb = homebrew && typeof homebrew === 'object' ? homebrew : null;
   const brew = Boolean(homebrew);
   const editable = type.fields.filter((f) => f.kind !== 'id' && f.kind !== 'state');
+  const titleKey = type.fields.find((f) => f.kind === 'title')?.key;
   // Editing a homebrew starts from its own values; a new one from the version on screen.
   const start = hb ? { ...comp.data, ...hb.data } : startData;
   const [values, setValues] = useState(() => Object.fromEntries(editable.map((f) => [f.key, start[f.key] ?? ''])));
@@ -272,9 +328,23 @@ function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, 
 
   const submit = async (e) => {
     e.preventDefault();
-    const data = changedFields(comp, Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) && typeof comp.data[k] === 'number' ? Number(v) : v])));
-    if (!Object.keys(data).length) return alertDialog({ title: 'Nothing changed', message: 'Change at least one value compared to the printed card.' });
+    const numeric = (k) => typeof comp.data[k] === 'number' || (newCard && type.fields.find((f) => f.key === k)?.kind === 'value');
+    const data = changedFields(comp, Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) && numeric(k) ? Number(v) : v])));
+    if (newCard && titleKey && !String(values[titleKey] ?? '').trim()) return alertDialog({ title: 'Name your card', message: 'Give your card a name first.' });
+    if (!Object.keys(data).length)
+      return alertDialog({ title: 'Nothing changed', message: newCard ? 'Fill in your card first.' : 'Change at least one value compared to the original card.' });
     setBusy(true);
+    if (newCard) {
+      const id = hb
+        ? await attempt(() => updateHomebrew(hb, { data, note: note.trim() }), 'Homebrew saved')
+        : await attempt(() => createHomebrew({ kind: 'newCard', typeId: type.id, data, note: note.trim() }, user, rs.selectedSet.id), `Homebrew saved and used in “${rs.selectedSet.name}”: only you see it`);
+      setBusy(false);
+      if (id === undefined) return;
+      if (!hb) rs.homebrewUsed('cards', HB + id);
+      onClose();
+      if (!hb) onSaved(id);
+      return;
+    }
     if (brew) {
       const id = hb
         ? await attempt(() => updateHomebrew(hb, { data, note: note.trim() }), 'Homebrew saved')
@@ -304,9 +374,24 @@ function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, 
   };
 
   return (
-    <Modal title={brew ? (hb ? 'Edit your card homebrew' : 'Homebrew: your version of this card') : version ? 'Edit card version' : 'New card version'} onClose={onClose} wide>
+    <Modal
+      title={newCard ? (hb ? `Edit your homebrew (${type.name})` : `New homebrew: ${type.name}`) : brew ? (hb ? 'Edit your card homebrew' : 'Homebrew: your version of this card') : version ? 'Edit card version' : 'New card version'}
+      onClose={onClose}
+      wide
+    >
       <form className="form" onSubmit={submit}>
-        {brew && !hb && (
+        {newCard && !hb && (
+          <p className="muted">
+            Make a component of your own. It is private: only you see it, and saving it puts it straight into the ruleset you are using. Share it when you would
+            like the admins to consider it; they can make it a public suggestion for everyone to discuss, and then add it to the site.
+          </p>
+        )}
+        {newCard && (
+          <div className="new-card-preview">
+            <ComponentCard type={type} comp={{ id: 'preview', typeId: type.id, data: values }} shorthands={shorthands} />
+          </div>
+        )}
+        {brew && !hb && !newCard && (
           <p className="muted">
             Change the values the way your table plays this card. Your homebrew is private: only you see it, and saving it puts it straight into the ruleset you are using. Share it when you would like
             the community and the admins to consider it.
@@ -327,14 +412,14 @@ function CardVersionDialog({ type, comp, version, homebrew, startData, onClose, 
         )}
         <div className="grid-2">
           {editable.map((f) => {
-            const changed = String(values[f.key] ?? '') !== String(comp.data[f.key] ?? '');
+            const changed = !newCard && String(values[f.key] ?? '') !== String(comp.data[f.key] ?? '');
             const long = f.kind === 'ability' || f.kind === 'lore';
             return (
               <div key={f.key} className={`field ${long ? 'span-all' : ''} ${changed ? 'is-changed' : ''}`}>
                 <label htmlFor={`cv-${f.key}`}>
                   {f.label}
                   {changed && (
-                    <button type="button" className="link-btn small" onClick={() => setValues((v) => ({ ...v, [f.key]: comp.data[f.key] ?? '' }))} title={`Printed: ${String(comp.data[f.key] ?? '—')}`}>
+                    <button type="button" className="link-btn small" onClick={() => setValues((v) => ({ ...v, [f.key]: comp.data[f.key] ?? '' }))} title={`Original: ${String(comp.data[f.key] ?? '—')}`}>
                       reset
                     </button>
                   )}

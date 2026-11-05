@@ -73,6 +73,11 @@ service cloud.firestore {
       allow read: if true;
       // config/owner is set once and never changed from the site (only in the Firebase console).
       allow write: if isEditor() && id != 'owner';
+      // The components counter tells visitors to reload components. A member's change to their
+      // suggested new card moves it on by one (nothing else).
+      allow update: if id == 'componentsMeta' && signedIn()
+        && onlyChanged(['version', 'updatedAt'])
+        && request.resource.data.version == resource.data.get('version', 0) + 1;
       // The first owner is claimed by an admin from the original setup.
       allow create: if id == 'owner' && signedIn()
         && exists(path('admins', request.auth.uid))
@@ -188,7 +193,7 @@ service cloud.firestore {
       allow delete: if isEditor() || (signedIn() && resource.data.createdBy == request.auth.uid && resource.data.label == 'Suggestion');
     }
 
-    // Private homebrew: a changed rule, a rule of one's own or a changed card. Only its owner reads
+    // Private homebrew: a changed rule, a rule of one's own, a changed card or a card of one's own. Only its owner reads
     // and changes it. Sharing it (`submitted`) lets editors see it: they make it a public suggestion
     // (a copy in versions/rules naming it in `homebrewId`) or turn it down with a reason.
     match /homebrew/{id} {
@@ -198,7 +203,7 @@ service cloud.firestore {
       allow get: if isEditor();
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.kind in ['version', 'rule', 'card']
+        && request.resource.data.kind in ['version', 'rule', 'card', 'newCard']
         && request.resource.data.get('text', '') is string
         && request.resource.data.get('text', '').size() <= 20000
         && request.resource.data.get('title', '').size() <= 200
@@ -258,6 +263,17 @@ service cloud.firestore {
     match /components/{id} {
       allow read: if true;
       allow write: if isEditor();
+      // A member's new card, made a public suggestion: while it is under review its author keeps it
+      // in step with their homebrew, or withdraws it.
+      allow update: if signedIn()
+        && resource.data.get('status', '') == 'suggested'
+        && resource.data.get('createdBy', '') == request.auth.uid
+        && onlyChanged(['data', 'note', 'updatedAt'])
+        && request.resource.data.data is map
+        && request.resource.data.data.size() <= 50;
+      allow delete: if signedIn()
+        && resource.data.get('status', '') == 'suggested'
+        && resource.data.get('createdBy', '') == request.auth.uid;
     }
 
     // Card versions work like rule versions: users suggest, admins label and edit.

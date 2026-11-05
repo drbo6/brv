@@ -3,15 +3,15 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { compareValues, displayTitle, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
-import { cardChoiceOf, dataIn, PRINTED } from '../lib/cardVersions.js';
-import { findVersion, LABEL_CLASS } from '../lib/rules.js';
-import { withCardHomebrew } from '../lib/homebrew.js';
+import { cardChoiceFor, cardKeyIn, dataIn, PRINTED } from '../lib/cardVersions.js';
+import { findVersion, HB, LABEL_CLASS } from '../lib/rules.js';
+import { withCardHomebrew, withNewCards } from '../lib/homebrew.js';
 import { fold, toPlainText } from '../lib/html.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { href, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
 import ComponentCard from '../components/ComponentCard.jsx';
-import ComponentDetail from '../components/ComponentDetail.jsx';
+import ComponentDetail, { NewCardDialog } from '../components/ComponentDetail.jsx';
 import ComponentForm from '../components/ComponentForm.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
 import { Empty, Icon, Spinner } from '../components/ui.jsx';
@@ -39,7 +39,7 @@ export function indexStates(type, comps) {
 }
 
 export default function ComponentsPage({ route }) {
-  const { shorthands, isEditor } = useSession();
+  const { shorthands, isEditor, user } = useSession();
   const [state, setState] = useState({ loading: true });
 
   const load = useCallback((force = false) => {
@@ -98,18 +98,20 @@ export default function ComponentsPage({ route }) {
     return m;
   }, [state.components, types]);
   const statesOf = useMemo(() => new Map(types.map((t) => [t.id, indexStates(t, printedOf.get(t.id) || [])])), [types, printedOf]);
+  // The reader's own new cards (private homebrew) join the others, for them only.
+  const allComponents = useMemo(() => withNewCards(rs.myHomebrew, state.components || []), [rs.myHomebrew, state.components]);
 
   // Each component as the selected ruleset shows it (a chosen card version replaces fields), and
   // whether the ruleset includes it at all.
   const comps = useMemo(() => {
-    return (state.components || [])
+    return allComponents
       .filter((c) => typeById.has(c.typeId) && (!filterType || c.typeId === filterType))
       .map((c) => {
-        const choice = cardChoiceOf(rs.selectedSet, cardChoices, c.id);
+        const choice = cardChoiceFor(rs.selectedSet, cardChoices, c);
         const v = choice ? findVersion(versionsByComp.get(c.id) || [], choice) : null;
         return { ...c, ...(v ? { data: dataIn(c, v), version: v } : {}), inSet: Boolean(choice) };
       });
-  }, [state.components, typeById, filterType, cardChoices, versionsByComp, rs.selectedSet]);
+  }, [allComponents, typeById, filterType, cardChoices, versionsByComp, rs.selectedSet]);
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
@@ -178,14 +180,17 @@ export default function ComponentsPage({ route }) {
   const outCount = comps.filter((c) => !c.inSet).length;
 
   // While changing the ruleset: include or leave out every card shown, in one step.
-  const savedChoiceOf = (id) => cardChoiceOf(rs.selectedSet, rs.selectedSet.cards, id);
-  const addAll = () => rs.setCards(visible.filter((c) => !c.inSet).map((c) => [c.id, PRINTED, savedChoiceOf(c.id)]));
-  const leaveAllOut = () => rs.setCards(visible.filter((c) => c.inSet).map((c) => [c.id, null, savedChoiceOf(c.id)]));
+  const saved = rs.selectedSet.cards;
+  const item = (c, value) => [cardKeyIn(saved, c), value, cardChoiceFor(rs.selectedSet, saved, c)];
+  const addAll = () => rs.setCards(visible.filter((c) => !c.inSet).map((c) => item(c, PRINTED)));
+  const leaveAllOut = () => rs.setCards(visible.filter((c) => c.inSet).map((c) => item(c, null)));
 
   const backParams = filterType ? { type: filterType } : {};
   const open = useCallback((c) => navigate('components', [c.typeId, c.id], backParams), [filterType]); // eslint-disable-line react-hooks/exhaustive-deps
   const detailId = route.parts.length === 2 ? route.parts[1] : null;
-  const detail = detailId ? (state.components || []).find((c) => c.id === detailId) : null;
+  const detail = detailId ? allComponents.find((c) => c.id === detailId) : null;
+  const [brewing, setBrewing] = useState(null); // type to write a homebrew card of
+  const brewTypes = types.filter((t) => statesOf.get(t.id)?.idf);
   const detailType = detail && typeById.get(detail.typeId);
   // Cards of different shapes share the grid: rows are as tall as the tallest shape.
   const aspect = activeType ? activeType.aspect || 0.7 : Math.min(...types.map((t) => t.aspect || 0.7));
@@ -277,7 +282,7 @@ export default function ComponentsPage({ route }) {
         )}
         {changing && (
           <span className="row gap">
-            <button className="small" onClick={addAll} disabled={!visible.some((c) => !c.inSet)} title="Add every card shown to the ruleset, as printed">
+            <button className="small" onClick={addAll} disabled={!visible.some((c) => !c.inSet)} title="Add every card shown to the ruleset, as it is">
               <Icon name="plus" />
               Add all shown
             </button>
@@ -329,6 +334,9 @@ export default function ComponentsPage({ route }) {
               </div>
             </details>
           ))}
+        {user && brewTypes.length > 0 && (
+          <NewCardButton types={activeType ? brewTypes.filter((t) => t.id === activeType.id) : brewTypes} onPick={(t) => rs.startHomebrew(() => setBrewing(t))} />
+        )}
       </section>
 
       {visible.length === 0 ? (
@@ -345,7 +353,7 @@ export default function ComponentsPage({ route }) {
             const st = statesOf.get(c.typeId);
             return (
               <ComponentCard key={c.id} type={t} comp={c} shorthands={shorthands} className={c.inSet ? '' : 'is-out'} hasStates={st.statesOf.has(String(c.data[st.idf?.key]))} onClick={() => open(c)}>
-                <CardBadges version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
+                <CardBadges status={c.status} version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
               </ComponentCard>
             );
           }}
@@ -363,6 +371,13 @@ export default function ComponentsPage({ route }) {
           allComps={printedOf.get(detailType.id) || []}
           onChanged={() => load(true)}
           onClose={() => navigate('components', [], backParams)}
+        />
+      )}
+      {brewing && (
+        <NewCardDialog
+          type={brewing}
+          onClose={() => setBrewing(null)}
+          onSaved={(id) => navigate('components', [brewing.id, HB + id], backParams)}
         />
       )}
       {adding && (
@@ -418,14 +433,57 @@ function VirtualGrid({ items, aspect, cardWidth, renderItem }) {
   );
 }
 
-/** Small corner marks: the version a ruleset uses, and whether there are versions or comments to see. */
-function CardBadges({ version, versions, comments }) {
-  if (!version && !versions && !comments) return null;
-  const tip = [version && `Shown as the ${version.label} version`, versions && `${versions} alternative version${versions === 1 ? '' : 's'}`, comments && `${comments} comment${comments === 1 ? '' : 's'}`]
+/** A member's button to make a component of their own (styled like Add homebrew rule), picking the type when there are several. */
+function NewCardButton({ types, onPick }) {
+  const label = 'Add homebrew';
+  const tip = 'Make a component of your own. Only you see it until you share it with the admins.';
+  if (types.length === 1)
+    return (
+      <button onClick={() => onPick(types[0])} title={tip}>
+        <Icon name="flask" />
+        {label}
+      </button>
+    );
+  return (
+    <details className="menu">
+      <summary className="btn" title={tip}>
+        <Icon name="flask" />
+        {label}
+      </summary>
+      <div className="menu-pop view-as-pop" role="menu">
+        <p className="menu-title">A homebrew…</p>
+        {types.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="menu-item"
+            role="menuitem"
+            onClick={(e) => {
+              e.currentTarget.closest('details').removeAttribute('open');
+              onPick(t);
+            }}
+          >
+            <Icon name="flask" />
+            <span>{t.name}</span>
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+const STATUS_BADGE = { homebrew: ['Homebrew', 'Your homebrew: only you see it'], suggested: ['Suggestion', 'New, suggested by a member, under review'] };
+
+/** Small corner marks: a new card's status, the version a ruleset uses, and whether there are versions or comments to see. */
+function CardBadges({ status, version, versions, comments }) {
+  const st = STATUS_BADGE[status];
+  if (!st && !version && !versions && !comments) return null;
+  const tip = [st?.[1], version && `Shown as the ${version.label} version`, versions && `${versions} alternative version${versions === 1 ? '' : 's'}`, comments && `${comments} comment${comments === 1 ? '' : 's'}`]
     .filter(Boolean)
     .join(' · ');
   return (
     <span className="card-badges" title={tip}>
+      {st && <span className={`label l-${LABEL_CLASS[st[0]]}`}>{st[0]}</span>}
       {version && <span className={`label l-${LABEL_CLASS[version.label] || 'other'}`}>{version.label}</span>}
       {versions > 0 && (
         <span className="card-badge">

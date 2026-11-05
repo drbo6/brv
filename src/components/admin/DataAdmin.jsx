@@ -206,7 +206,7 @@ function CleanUp() {
       <h2>Clean up</h2>
       <p className="small muted">
         Finds data that points at something that no longer exists: versions, reactions, attached rules and comments of deleted rules or cards, ruleset entries for
-        deleted rules, versions, cards or homebrew (a card whose chosen version is gone stays in the ruleset, as printed), members' homebrew of deleted rules or cards,
+        deleted rules, versions, cards or homebrew (a card whose chosen version is gone stays in the ruleset, as it is), members' homebrew of deleted rules or cards,
         and follows of deleted things. Nothing is removed until you confirm.
       </p>
       <button onClick={check} disabled={busy}>
