@@ -5,14 +5,27 @@
 export const DEFAULT_COLORS = { primary: '#c4302b', accent: '#d1a54b' };
 export const DEFAULT_FONTS = { display: 'Cinzel', text: 'Alegreya', ui: 'Alegreya Sans' };
 
+// The welcome text and disclaimer the site ships with; Admin → Site starts from them.
+export const DEFAULT_WELCOME = `<p class="welcome-lead">This site is a living rulebook: the game's rules, kept up to date by its players.</p>
+<p>Every unclear rule can be clarified, discussed and improved together:</p>
+<ul>
+<li><b>Every rule, one at a time.</b> The rulebook is split into individual rules, each with a short permanent id like <code>k7q2m</code>, so you can point at exactly what you mean.</li>
+<li><b>Versions side by side.</b> Each rule can carry the printed text, official rulings, community clarifications and suggestions.</li>
+<li><b>Discuss and react.</b> Agree, disagree or flag a rule as unclear, and talk it through.</li>
+<li><b>Build your own ruleset.</b> Pick the rules and versions your group plays with, save it and export it as a PDF.</li>
+<li><b>Look up every card and component</b> with search, filters and sorting.</li>
+</ul>
+<p class="welcome-fine">This is an unofficial fan project and is not affiliated with the game's publishers.</p>`;
+export const DEFAULT_DISCLAIMER = "A fan-made, community-maintained resource. Not affiliated with or endorsed by the game's publishers. Rules text © its respective owners.";
+
 export const DEFAULT_BRAND = {
   name: 'Living Rulebook',
   tagline: 'Community rules hub',
   mark: '§',
   welcomeKicker: 'Welcome to the',
-  welcomeText: '', // HTML; empty shows the built-in introduction
+  welcomeText: DEFAULT_WELCOME, // HTML
   welcomeButton: 'Get started',
-  disclaimer: '', // empty shows the built-in disclaimer
+  disclaimer: DEFAULT_DISCLAIMER, // plain text; web addresses become links
   colors: DEFAULT_COLORS,
   fonts: DEFAULT_FONTS,
 };
@@ -26,9 +39,9 @@ export function brandOf(saved) {
     tagline: typeof b.tagline === 'string' ? b.tagline : DEFAULT_BRAND.tagline,
     mark: pick('mark'),
     welcomeKicker: typeof b.welcomeKicker === 'string' ? b.welcomeKicker : DEFAULT_BRAND.welcomeKicker,
-    welcomeText: b.welcomeText || '',
+    welcomeText: pick('welcomeText'),
     welcomeButton: pick('welcomeButton'),
-    disclaimer: b.disclaimer || '',
+    disclaimer: pick('disclaimer'),
     colors: { ...DEFAULT_COLORS, ...validColors(b.colors) },
     fonts: { ...DEFAULT_FONTS, ...validFonts(b.fonts) },
   };

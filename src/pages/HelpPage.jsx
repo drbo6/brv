@@ -584,10 +584,9 @@ const TOPICS = [
         <h4>Site</h4>
         <p>
           Owner only. How the site presents itself: its <b>name</b> and <b>tagline</b> (header, browser tab, welcome window and PDFs), the <b>mark</b> on the colored square
-          in the header, the <b>welcome window</b> new visitors see (also <i>About this site</i>: the line above the name, its text and its button; empty text keeps the
-          built-in introduction), the footer <b>disclaimer</b>, a <b>main</b> and an <b>accent color</b> (shades and the light theme follow from them), and the{' '}
+          in the header, the <b>welcome window</b> new visitors see (also <i>About this site</i>: the line above the name, its text and its button), the footer <b>disclaimer</b>, a <b>main</b> and an <b>accent color</b> (shades and the light theme follow from them), and the{' '}
           <b>fonts</b> for headings, rule text and the interface (any Google font). Colors and fonts preview on the page while you edit; <b>Preview</b> shows the
-          welcome window. Nothing changes for others until you save, and <b>Defaults</b> puts everything back.
+          welcome window. Nothing changes for others until you save, and <b>Defaults</b> loads the default values into every setting, ready to edit.
         </p>
         <h4>Backup</h4>
         <p>

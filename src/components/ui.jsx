@@ -326,13 +326,7 @@ export async function attempt(fn, success, label) {
 /** The site's disclaimer, in the footer and beside the rules (the owner can replace it in Admin → Site). */
 export function Disclaimer() {
   const { brand } = useSession();
-  if (brand.disclaimer) return <Linkify text={brand.disclaimer} />;
-  return (
-    <>
-      A fan-made, community-maintained resource. Not affiliated with or endorsed by the game’s publishers.{' '}
-      <span className="nowrap">Rules text © its respective owners.</span>
-    </>
-  );
+  return <Linkify text={brand.disclaimer} />;
 }
 
 // Web addresses in plain text, e.g. a version's source; a trailing full stop or bracket isn't part of one.

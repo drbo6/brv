@@ -4793,3 +4793,14 @@ summary.primary-summary {
 .welcome-custom {
   margin-bottom: 16px;
 }
+
+.welcome-custom ul {
+  padding-left: 1.2em;
+  margin: 12px 0 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.welcome-custom li::marker {
+  color: var(--blood-2);
+}

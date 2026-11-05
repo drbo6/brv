@@ -55,7 +55,7 @@ export default function BrandAdmin() {
       'Site settings saved',
     );
   const resetAll = async () =>
-    (await confirmDialog({ title: 'Back to the defaults', message: 'Put every site setting back to how the site ships? Nothing is saved until you choose Save.', confirmLabel: 'Use the defaults' })) &&
+    (await confirmDialog({ title: 'Back to the defaults', message: 'Load the default values into every setting? You can then edit them; nothing is saved until you choose Save.', confirmLabel: 'Use the defaults' })) &&
     setB(brandOf(null));
 
   return (
@@ -74,7 +74,7 @@ export default function BrandAdmin() {
         <div className="panel-head">
           <h2>Site</h2>
           <div className="row gap">
-            <button className="small" onClick={resetAll} title="Put every setting back to how the site ships">
+            <button className="small" onClick={resetAll} title="Load the default values into every setting, to edit or save">
               Defaults
             </button>
             <button className="small" disabled={!dirty} onClick={() => setB(start)}>
@@ -193,7 +193,7 @@ export default function BrandAdmin() {
               <input id="br-button" value={b.welcomeButton} onChange={(e) => set({ welcomeButton: e.target.value })} maxLength={40} placeholder={DEFAULT_BRAND.welcomeButton} />
             </div>
           </div>
-          <TextWithPreview value={b.welcomeText} onChange={(v) => set({ welcomeText: v })} label="Text (empty: the site's built-in introduction)" rows={10} required={false} />
+          <TextWithPreview value={b.welcomeText} onChange={(v) => set({ welcomeText: v })} label="Text (empty: the default text)" rows={10} required={false} />
         </div>
       </section>
 
@@ -202,7 +202,7 @@ export default function BrandAdmin() {
         <div className="form">
           <div className="field">
             <label htmlFor="br-disclaimer">Footer disclaimer</label>
-            <textarea id="br-disclaimer" rows={2} value={b.disclaimer} onChange={(e) => set({ disclaimer: e.target.value })} maxLength={500} placeholder="Empty: the built-in fan-project disclaimer" />
+            <textarea id="br-disclaimer" rows={2} value={b.disclaimer} onChange={(e) => set({ disclaimer: e.target.value })} maxLength={500} placeholder="Empty: the default disclaimer" />
             <p className="hint">Shown at the bottom of every page and beside the rules. Plain text; web addresses become links.</p>
           </div>
         </div>
