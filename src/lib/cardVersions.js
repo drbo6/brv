@@ -50,6 +50,10 @@ export function reactToCard(compId, version, metaExists, uid, type) {
   return metaExists ? updateDoc(ref, { [`reactions.${uid}`]: next }) : setDoc(ref, { reactions: { [uid]: type } });
 }
 
-/** Choose which version of a card a ruleset uses (null = the printed card). */
-export const setCardVersionIn = (setId, compId, versionId) =>
-  updateDoc(doc(db, 'rulesets', setId), { [`cards.${compId}`]: versionId && versionId !== PRINTED ? versionId : deleteField(), updatedAt: serverTimestamp() });
+/**
+ * The version of a card a ruleset uses: a version id (or "hb:<id>"), PRINTED, or null when the
+ * ruleset leaves the card out. Rulesets list every card they include, like rules; `cards` is their
+ * map with unsaved changes applied. Only the stand-in for a site without rulesets (builtIn)
+ * includes the cards it doesn't mention, as printed.
+ */
+export const cardChoiceOf = (set, cards, compId) => (cards && compId in cards ? cards[compId] || null : set?.builtIn ? PRINTED : null);

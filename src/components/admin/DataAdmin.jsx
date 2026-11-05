@@ -3,6 +3,7 @@ import { COLLECTIONS, downloadJson, exportDatabase, importDatabase, inspectBacku
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon } from '../ui.jsx';
 import { confirmDialog, promptDialog } from '../dialogs.jsx';
+import { findLeftovers, removeLeftovers } from '../../lib/cleanup.js';
 
 /** The owner's backup: download any set of collections as one JSON file, and load one back. */
 export default function DataAdmin() {
@@ -165,6 +166,72 @@ export default function DataAdmin() {
           </>
         )}
       </section>
+
+      <CleanUp />
     </div>
+  );
+}
+
+/** Finds data that points at things that no longer exist, and removes it when asked (undoable). */
+function CleanUp() {
+  const [found, setFound] = useState(null); // groups, once checked
+  const [busy, setBusy] = useState(false);
+  const total = (found || []).reduce((n, g) => n + g.items.reduce((m, i) => m + (i.count || 1), 0), 0);
+
+  const check = async () => {
+    setBusy(true);
+    const groups = await attempt(() => findLeftovers());
+    setBusy(false);
+    if (groups) setFound(groups);
+  };
+  const clean = async () => {
+    const ok = await confirmDialog({
+      title: 'Clean up',
+      message: `Remove ${total} leftover${total === 1 ? '' : 's'}? Download a backup first; you can undo this in this tab.`,
+      confirmLabel: 'Clean up',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    const done = await attempt(async () => {
+      await removeLeftovers(found);
+      return true;
+    }, `Removed ${total} leftover${total === 1 ? '' : 's'}`);
+    setBusy(false);
+    if (done) setFound([]);
+  };
+
+  return (
+    <section className="panel">
+      <h2>Clean up</h2>
+      <p className="small muted">
+        Finds data that points at something that no longer exists: versions, reactions, attached rules and comments of deleted rules or cards, ruleset entries for
+        deleted rules, versions, cards or homebrew (a card whose chosen version is gone stays in the ruleset, as printed), members' homebrew of deleted rules or cards,
+        and follows of deleted things. Nothing is removed until you confirm.
+      </p>
+      <button onClick={check} disabled={busy}>
+        <Icon name="search" />
+        {busy && !found ? 'Checking…' : 'Check for leftovers'}
+      </button>
+      {found &&
+        (found.length === 0 ? (
+          <p className="muted">Nothing left over. 🎉</p>
+        ) : (
+          <>
+            <ul className="cleanup-list">
+              {found.map((g) => (
+                <li key={g.key}>
+                  <b>{g.items.reduce((m, i) => m + (i.count || 1), 0)}</b> {g.label}
+                  {g.key === 'rulesets' && <span className="small muted"> ({g.items.map((i) => i.describe).join(', ')})</span>}
+                </li>
+              ))}
+            </ul>
+            <button className="danger" onClick={clean} disabled={busy}>
+              <Icon name="trash" />
+              Remove {total} leftover{total === 1 ? '' : 's'}
+            </button>
+          </>
+        ))}
+    </section>
   );
 }

@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, increment, serverTimestamp, setDoc as rawSetDoc } from 'firebase/firestore';
+import { collection, deleteField, doc, getDoc, getDocs, increment, query, serverTimestamp, setDoc as rawSetDoc, where } from 'firebase/firestore';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { db } from './firebase.js';
 import { commitInChunks, onRevert, setDoc } from './store.js';
@@ -205,7 +205,31 @@ export async function saveComponent(type, data, previousId) {
   return id;
 }
 
+/**
+ * Delete components with everything that belongs to them, so nothing is left behind: their
+ * versions, reactions, attached rules, discussion and followers, and their place in rulesets.
+ * One action, so Undo puts it all back. (Members' private homebrew of a card is cleared by the
+ * owner's Clean up, as only the owner can see it.)
+ */
 export async function deleteComponents(ids) {
-  await commitInChunks(ids.map((id) => (b) => b.delete(doc(db, 'components', id))));
+  const gone = new Set(ids);
+  const [versions, comments, sets] = await Promise.all([
+    getDocs(collection(db, 'componentVersions')),
+    getDocs(query(collection(db, 'comments'), where('componentId', '!=', null))),
+    getDocs(collection(db, 'rulesets')),
+  ]);
+  const ops = [];
+  for (const d of [...versions.docs, ...comments.docs]) if (gone.has(d.data().componentId)) ops.push((b) => b.delete(d.ref));
+  for (const s of sets.docs) {
+    const out = Object.keys(s.data().cards || {}).filter((id) => gone.has(id));
+    if (out.length) ops.push((b) => b.update(s.ref, Object.fromEntries(out.map((id) => [`cards.${id}`, deleteField()]))));
+  }
+  // Only what exists: reactions, attached rules and followers are kept per card id.
+  const extras = await Promise.all(
+    ids.flatMap((id) => [doc(db, 'componentMeta', id), doc(db, 'componentRules', id), doc(db, 'subscribers', `component_${id}`)].map((ref) => getDoc(ref).then((snap) => (snap.exists() ? ref : null)))),
+  );
+  for (const ref of extras.filter(Boolean)) ops.push((b) => b.delete(ref));
+  for (const id of ids) ops.push((b) => b.delete(doc(db, 'components', id)));
+  await commitInChunks(ops);
   await bumpComponentsVersion();
 }

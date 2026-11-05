@@ -182,7 +182,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `versions` | `ruleId`, `label`, `text` (HTML), `n` (version number), `note`, `reactions` {uid: `up` / `down` / `q`}, and `homebrewId` for shared homebrew |
 | `homebrew` | Private to its `ownerUid`: `kind` (`version` {ruleId, text} / `rule` {sectionId, title, text} / `card` {componentId, typeId, data}), `note`, `submitted` (shared with the admins, who can then list it), `sharedId` (its public suggestion, once the admins made one), `declineReason` once turned down. Rulesets refer to it as `hb:<id>`. In the backup (the owner can read it all) |
 | `comments` | `ruleId` or `componentId`, `versionId`, `text`, author, `reactions`, and `handled` once staff have dealt with it in the discussions queue |
-| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId} (a homebrew is `hb:<id>`), `ownerUid`, `visibility`, and `label` (`Official` / `Community` / `Experimental`, set by staff) |
+| `rulesets` | `name`, `description`, `entries` {ruleId: versionId}, `cards` {componentId: versionId or `printed`}: every rule and card the ruleset includes (anything not listed is left out; a homebrew is `hb:<id>`), `cardsListed` (true once cards are listed like rules; older rulesets get it from **Upgrade rulesets** in Admin → Rulesets), `ownerUid`, `visibility`, and `label` (`Official` / `Community` / `Experimental`, set by staff) |
 | `componentTypes` | Field definitions, layout and colors |
 | `components` | `typeId` and `data` {fieldKey: value}: the printed card |
 | `componentVersions` | `componentId`, `label`, `data` (only the changed fields), `note`, `reactions`, and `homebrewId` for shared homebrew |

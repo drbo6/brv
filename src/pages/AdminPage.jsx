@@ -7,6 +7,8 @@ import { useLive, useLocalStorage } from '../lib/hooks.js';
 import { href } from '../lib/router.js';
 import { commitInChunks, createRuleset, DEFAULT_KINDS, noteStylesOf, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
+import { loadComponents } from '../lib/components.js';
+import { PRINTED } from '../lib/cardVersions.js';
 import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
 import { fold, plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
@@ -780,6 +782,24 @@ function RulesetsAdmin() {
   // Public sets first (Official, Community, Experimental), then everyone's private sets, newest first.
   const list = [...sortSets(all.filter((s) => s.visibility === 'public')), ...all.filter((s) => s.visibility !== 'public').sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt))];
   const hasPublic = all.some((s) => s.visibility === 'public');
+  // Rulesets from before cards were listed like rules: until upgraded, they'd show no cards at all.
+  const unlisted = all.filter((s) => !s.cardsListed);
+  const upgrade = async () => {
+    const ok = await confirmDialog({
+      title: 'Upgrade rulesets',
+      message: `Rulesets now list every card they include, like rules; a card they don't list is left out. ${unlisted.length} ruleset${
+        unlisted.length === 1 ? '' : 's'
+      } from before (everyone's, private ones too) will get every current card added as printed, keeping the versions they already chose. Nothing disappears; leave cards out afterwards. You can undo this.`,
+      confirmLabel: 'Upgrade',
+    });
+    if (!ok) return;
+    attempt(async () => {
+      const { components } = await loadComponents({ force: true });
+      const printed = Object.fromEntries(components.map((c) => [c.id, PRINTED]));
+      await commitInChunks(unlisted.map((s) => (b) => b.update(doc(db, 'rulesets', s.id), { cards: { ...printed, ...(s.cards || {}) }, cardsListed: true })));
+      return true;
+    }, `Upgraded ${unlisted.length} ruleset${unlisted.length === 1 ? '' : 's'}`);
+  };
   const setDefault = (id) => attempt(() => setDoc(doc(db, 'config', 'site'), { defaultRulesetId: id }, { merge: true }), 'Default ruleset updated');
 
   // The ruleset whose name and description are being edited.
@@ -802,6 +822,15 @@ function RulesetsAdmin() {
         <i>Community</i> or <i>Experimental</i>). The default ruleset, whatever its label, is what visitors see until they pick another; only a public ruleset can be the
         default. Rename a ruleset or change its description with the pencil, or start a new one: empty, or a copy of any ruleset below.
       </p>
+      {unlisted.length > 0 && !sets.loading && (
+        <p className="callout small">
+          {unlisted.length} ruleset{unlisted.length === 1 ? '' : 's'} still {unlisted.length === 1 ? 'uses' : 'use'} the old way of choosing cards: once upgraded, a ruleset
+          lists every card it includes, and can leave cards out.{' '}
+          <button className="small primary" onClick={upgrade}>
+            Upgrade rulesets
+          </button>
+        </p>
+      )}
       {!hasPublic && !sets.loading && (
         <p className="callout small">
           The site has no public ruleset yet: readers see every rule in its main version (Rulebook, else Official Ruling, else Community), and the picker has nothing to

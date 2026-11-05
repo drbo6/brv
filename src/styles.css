@@ -4747,3 +4747,13 @@ summary.primary-summary {
 .attached-rule.closed header {
   margin-bottom: 0;
 }
+
+/* A card the active ruleset leaves out (shown with "Show inactive" or while changing the ruleset). */
+.ccard.is-out {
+  opacity: 0.45;
+}
+
+.cleanup-list {
+  margin: 12px 0;
+  padding-left: 18px;
+}

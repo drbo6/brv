@@ -3,7 +3,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { compareValues, displayTitle, idField, isEmptyValue, loadComponents, stateField } from '../lib/components.js';
-import { dataIn } from '../lib/cardVersions.js';
+import { cardChoiceOf, dataIn, PRINTED } from '../lib/cardVersions.js';
 import { findVersion, LABEL_CLASS } from '../lib/rules.js';
 import { withCardHomebrew } from '../lib/homebrew.js';
 import { fold, toPlainText } from '../lib/html.js';
@@ -99,15 +99,17 @@ export default function ComponentsPage({ route }) {
   }, [state.components, types]);
   const statesOf = useMemo(() => new Map(types.map((t) => [t.id, indexStates(t, printedOf.get(t.id) || [])])), [types, printedOf]);
 
-  // Each component as the selected ruleset shows it (a chosen card version replaces fields).
+  // Each component as the selected ruleset shows it (a chosen card version replaces fields), and
+  // whether the ruleset includes it at all.
   const comps = useMemo(() => {
     return (state.components || [])
       .filter((c) => typeById.has(c.typeId) && (!filterType || c.typeId === filterType))
       .map((c) => {
-        const v = findVersion(versionsByComp.get(c.id) || [], cardChoices[c.id]);
-        return v ? { ...c, data: dataIn(c, v), version: v } : c;
+        const choice = cardChoiceOf(rs.selectedSet, cardChoices, c.id);
+        const v = choice ? findVersion(versionsByComp.get(c.id) || [], choice) : null;
+        return { ...c, ...(v ? { data: dataIn(c, v), version: v } : {}), inSet: Boolean(choice) };
       });
-  }, [state.components, typeById, filterType, cardChoices, versionsByComp]);
+  }, [state.components, typeById, filterType, cardChoices, versionsByComp, rs.selectedSet]);
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
@@ -117,6 +119,10 @@ export default function ComponentsPage({ route }) {
   const [sortDir, setSortDir] = useState(1);
   const [cardWidth, setCardWidth] = useLocalStorage('brv-card-width', 210);
   const [showStates, setShowStates] = useState(false);
+  // Cards the ruleset leaves out are hidden, unless asked for (or while changing the ruleset).
+  const [showInactive, setShowInactive] = useLocalStorage('brv-cards-show-inactive', false);
+  const changing = rs.unsaved || rs.customizing;
+  const showOut = showInactive || changing;
   const [adding, setAdding] = useState(null); // type to add a component of
   useEffect(() => {
     setFilters({});
@@ -158,7 +164,7 @@ export default function ComponentsPage({ route }) {
   const visible = useMemo(() => {
     const tokens = q.split(/\s+/).filter(Boolean);
     const active = Object.entries(filters).filter(([, v]) => v);
-    const list = comps.filter((c) => (showStates || !isState(c)) && active.every(([k, v]) => String(c.data[k] ?? '') === v) && tokens.every((t) => searchIndex.get(c.id).includes(t)));
+    const list = comps.filter((c) => (showOut || c.inSet) && (showStates || !isState(c)) && active.every(([k, v]) => String(c.data[k] ?? '') === v) && tokens.every((t) => searchIndex.get(c.id).includes(t)));
     if (activeType) {
       const key = sortKey || idf?.key;
       if (key) list.sort((a, b) => sortDir * compareValues(a.data[key], b.data[key], activeType) || compareValues(a.data[idf?.key], b.data[idf?.key], activeType));
@@ -168,7 +174,13 @@ export default function ComponentsPage({ route }) {
       list.sort((a, b) => sortDir * ((sortKey === 'title' ? 0 : typeById.get(a.typeId).order - typeById.get(b.typeId).order) || title(a).localeCompare(title(b), undefined, { numeric: true })));
     }
     return list;
-  }, [comps, activeType, typeById, q, filters, sortKey, sortDir, showStates, statesOf, searchIndex, idf]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [comps, activeType, typeById, q, filters, sortKey, sortDir, showStates, showOut, statesOf, searchIndex, idf]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outCount = comps.filter((c) => !c.inSet).length;
+
+  // While changing the ruleset: include or leave out every card shown, in one step.
+  const savedChoiceOf = (id) => cardChoiceOf(rs.selectedSet, rs.selectedSet.cards, id);
+  const addAll = () => rs.setCards(visible.filter((c) => !c.inSet).map((c) => [c.id, PRINTED, savedChoiceOf(c.id)]));
+  const leaveAllOut = () => rs.setCards(visible.filter((c) => c.inSet).map((c) => [c.id, null, savedChoiceOf(c.id)]));
 
   const backParams = filterType ? { type: filterType } : {};
   const open = useCallback((c) => navigate('components', [c.typeId, c.id], backParams), [filterType]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -203,6 +215,7 @@ export default function ComponentsPage({ route }) {
         <div className="page-head-side">
           <p className="muted small">
             {visible.length} of {comps.length - (showStates ? 0 : stateCount)} shown
+            {outCount > 0 && !showOut && ` · ${outCount} left out of “${rs.selectedSet.name}”`}
           </p>
         </div>
       </div>
@@ -255,6 +268,25 @@ export default function ComponentsPage({ route }) {
             <Icon name={sortDir > 0 ? 'arrowUp' : 'arrowDown'} />
           </button>
         </div>
+        {outCount > 0 && !changing && (
+          <label className="switch" title={`Show the cards “${rs.selectedSet.name}” leaves out`}>
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+            <span className="switch-track" aria-hidden="true" />
+            <span>Show inactive</span>
+          </label>
+        )}
+        {changing && (
+          <span className="row gap">
+            <button className="small" onClick={addAll} disabled={!visible.some((c) => !c.inSet)} title="Add every card shown to the ruleset, as printed">
+              <Icon name="plus" />
+              Add all shown
+            </button>
+            <button className="small" onClick={leaveAllOut} disabled={!visible.some((c) => c.inSet)} title="Leave every card shown out of the ruleset">
+              <Icon name="eyeOff" />
+              Leave all shown out
+            </button>
+          </span>
+        )}
         {types.some((t) => statesOf.get(t.id)?.sf) && (
           <label className="switch">
             <input type="checkbox" checked={showStates} onChange={(e) => setShowStates(e.target.checked)} />
@@ -312,7 +344,7 @@ export default function ComponentsPage({ route }) {
             const t = typeById.get(c.typeId);
             const st = statesOf.get(c.typeId);
             return (
-              <ComponentCard key={c.id} type={t} comp={c} shorthands={shorthands} hasStates={st.statesOf.has(String(c.data[st.idf?.key]))} onClick={() => open(c)}>
+              <ComponentCard key={c.id} type={t} comp={c} shorthands={shorthands} className={c.inSet ? '' : 'is-out'} hasStates={st.statesOf.has(String(c.data[st.idf?.key]))} onClick={() => open(c)}>
                 <CardBadges version={c.version} versions={versionsByComp.get(c.id)?.length || 0} comments={commentsByComp.get(c.id) || 0} />
               </ComponentCard>
             );

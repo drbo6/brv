@@ -279,7 +279,9 @@ export async function createRuleset({ name, description, entries, cards }, user)
     name,
     description: description || '',
     entries,
-    ...(cards ? { cards } : {}),
+    // Every card the ruleset includes (version id or "printed"); cards it doesn't list are left out.
+    cards: cards || {},
+    cardsListed: true,
     visibility: 'private',
     ownerUid: user.uid,
     ownerName: user.displayName || 'Anonymous',

@@ -237,7 +237,8 @@ const TOPICS = [
     body: (
       <>
         <p>
-          A ruleset decides which rules are active and which version of each rule (and of each card) applies. No ruleset is <i>the</i> rulebook, since rulebooks get
+          A ruleset decides which rules and which cards are in play, and which version of each it uses: a card can be played as printed or in another version, or
+          left out, just like a rule. No ruleset is <i>the</i> rulebook, since rulebooks get
           editions too: public rulesets are labeled <span className="tag t-official">Official</span>, <span className="tag t-community">Community</span> or{' '}
           <span className="tag t-warn">Experimental</span>, and the site opens on the one admins chose as the default.
         </p>
@@ -285,7 +286,9 @@ const TOPICS = [
           </li>
           <li>
             Click a card for its <b>details</b>: the card itself, the <b>rules for this card</b> (rules staff attached because they explain or clarify it, each in the version
-            your ruleset uses), its versions, reactions and discussion.
+            your ruleset uses), its versions, reactions and discussion. Cards your ruleset leaves out are hidden; <b>Show inactive</b> shows them, dimmed. In a card's
+            details, <b>Leave out of</b> and <b>Add to</b> change whether your ruleset includes it; with <b>Customize</b>, <i>Add all shown</i> and <i>Leave all
+            shown out</i> do the same for every card the search and filters show.
           </li>
           <li>
             A <b>⟲</b> badge means the card has alternate states (flipped, upgraded…). Switch between them in the details.
@@ -464,7 +467,11 @@ const TOPICS = [
           </li>
         </ul>
         <h4>Rulesets</h4>
-        <p>Make rulesets public or private and choose the site default that new visitors see.</p>
+        <p>
+          Make rulesets public or private and choose the site default that new visitors see. Rulesets list every card they include, like rules; a ruleset from before
+          that change shows an <b>Upgrade rulesets</b> notice, which adds every current card to it as printed (keeping chosen versions). New cards are in no ruleset
+          until someone adds them. Deleting a card also removes its versions, reactions, attached rules, discussion and place in rulesets.
+        </p>
       </>
     ),
   },
@@ -576,6 +583,12 @@ const TOPICS = [
           content in <code>imports/</code>. <i>Merge</i> adds and overwrites documents; <i>Replace</i> makes the ticked collections match the file. Only the collections in
           the file are ticked; to empty one the file doesn't have (a clean start), tick it yourself under <i>Not in the file</i>. People (admins, profiles, usernames, roles and the moderation log) are only touched when you tick them, and your own owner,
           admin, role and profile entries are always kept. Replacing asks you to type REPLACE; download a backup first.
+        </p>
+        <h4>Clean up</h4>
+        <p>
+          Owner only. <b>Check for leftovers</b> finds data that points at something that no longer exists (versions, reactions, attached rules, comments and follows of
+          deleted rules or cards, ruleset entries for deleted things, homebrew of deleted rules or cards) and lists it; <b>Remove</b> deletes it, as one step you can
+          undo. Useful after imports that replaced only some collections.
         </p>
       </>
     ),

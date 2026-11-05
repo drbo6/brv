@@ -8,7 +8,7 @@ import { createRuleset, entryFor, findVersion, groupVersions, HB, kindInfo, note
 import { homebrewRefs, myHomebrewQuery, shareHomebrew, withCardHomebrew, withHomebrew } from '../lib/homebrew.js';
 import { useLive } from '../lib/hooks.js';
 import { compareValues, displayTitle, idField, loadComponents } from '../lib/components.js';
-import { dataIn } from '../lib/cardVersions.js';
+import { cardChoiceOf, dataIn, PRINTED } from '../lib/cardVersions.js';
 import { exportRulesetPdf } from '../lib/pdf.js';
 import PdfDialog from './PdfDialog.jsx';
 import { useSession } from '../lib/session.jsx';
@@ -58,31 +58,44 @@ export function ActiveRulesetProvider({ route, children }) {
   }, [selectedSet.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Change one rule or card; `base` is what the saved ruleset has, so going back to it isn't a change. */
-  const change = useCallback(
-    (kind, id, versionId, base) =>
+  // Several changes ([id, versionId, base], …) in one step, so one Undo takes them back.
+  const changeMany = useCallback(
+    (kind, items) =>
       setDraft((d) => {
         const cur = d || { ...EMPTY, customizing: false };
         const next = { ...cur[kind] };
-        if ((versionId || null) === (base || null)) delete next[id];
-        else next[id] = versionId || null;
+        for (const [id, versionId, base] of items) {
+          if ((versionId || null) === (base || null)) delete next[id];
+          else next[id] = versionId || null;
+        }
         const out = { ...cur, [kind]: next };
         return Object.keys(out.rules).length || Object.keys(out.cards).length || out.customizing ? out : null;
       }),
     [setDraft],
   );
+  const change = useCallback((kind, id, versionId, base) => changeMany(kind, [[id, versionId, base]]), [changeMany]);
   const setRule = useCallback((ruleId, versionId, base) => change('rules', ruleId, versionId, base), [change]);
   const setCard = useCallback((compId, versionId, base) => change('cards', compId, versionId, base), [change]);
+  const setCards = useCallback((items) => changeMany('cards', items), [changeMany]);
   const setCustomizing = (on) => setDraft((d) => (on ? { ...(d || EMPTY), customizing: true } : d && (Object.keys(d.rules).length || Object.keys(d.cards).length) ? { ...d, customizing: false } : null));
 
-  /** The saved map with the overrides applied (null = left out). */
-  const apply = useCallback((base, kind) => {
-    const out = { ...(base || {}) };
-    for (const [id, v] of Object.entries(overrides[kind])) {
-      if (v) out[id] = v;
-      else delete out[id];
-    }
-    return out;
-  }, [overrides]);
+  /**
+   * The saved map with the overrides applied (null = left out). The stand-in for a site without
+   * rulesets includes every card it doesn't mention, so a card left out of it is kept as null.
+   */
+  const apply = useCallback(
+    (base, kind) => {
+      const keepNull = kind === 'cards' && selectedSet.builtIn;
+      const out = { ...(base || {}) };
+      for (const [id, v] of Object.entries(overrides[kind])) {
+        if (v) out[id] = v;
+        else if (keepNull) out[id] = null;
+        else delete out[id];
+      }
+      return out;
+    },
+    [overrides, selectedSet.builtIn],
+  );
 
   const discard = async () => {
     if (unsaved && !(await confirmDialog({ title: 'Discard changes', message: `Discard your ${changeCount} unsaved change${changeCount === 1 ? '' : 's'}?`, confirmLabel: 'Discard', danger: true }))) return false;
@@ -138,8 +151,15 @@ export function ActiveRulesetProvider({ route, children }) {
           const [rules, versions] = await Promise.all([getDocs(collection(db, 'rules')), getDocs(collection(db, 'versions'))]);
           base = rulebookEntries(rules.docs.map((d) => ({ id: d.id, ...d.data() })), groupVersions(versions.docs.map((d) => ({ id: d.id, ...d.data() }))));
         }
-        const cards = apply(selectedSet.cards, 'cards');
-        return createRuleset({ name, description, entries: apply(base, 'rules'), ...(Object.keys(cards).length ? { cards } : {}) }, u);
+        // Rulesets list every card they include; the stand-in includes them all, as printed.
+        let cardBase = selectedSet.cards || {};
+        if (selectedSet.builtIn) cardBase = Object.fromEntries((await loadComponents()).components.map((c) => [c.id, PRINTED]));
+        const cards = { ...cardBase };
+        for (const [id, v] of Object.entries(overrides.cards)) {
+          if (v) cards[id] = v;
+          else delete cards[id];
+        }
+        return createRuleset({ name, description, entries: apply(base, 'rules'), cards }, u);
       }, 'Ruleset saved');
       if (id) {
         history.reset(null);
@@ -195,8 +215,10 @@ export function ActiveRulesetProvider({ route, children }) {
         const cardsOf = components.filter((c) => c.typeId === type.id).sort((a, b) => (idf ? compareValues(a.data[idf.key], b.data[idf.key], type) : 0) || a.id.localeCompare(b.id));
         return {
           type,
-          cards: cardsOf.map((comp) => {
-            const v = cards[comp.id] ? cvs.get(cards[comp.id]) : null;
+          // Only the cards the ruleset includes.
+          cards: cardsOf.filter((comp) => cardChoiceOf(selectedSet, cards, comp.id)).map((comp) => {
+            const choice = cardChoiceOf(selectedSet, cards, comp.id);
+            const v = choice !== PRINTED ? cvs.get(choice) : null;
             return { comp, data: dataIn(comp, v), label: v ? v.label : null, changed: v?.data || {} };
           }),
         };
@@ -291,6 +313,7 @@ export function ActiveRulesetProvider({ route, children }) {
     setCustomizing,
     setRule,
     setCard,
+    setCards,
     apply,
     setRulebook,
     selectSet,
@@ -360,7 +383,11 @@ export function RulesetBar({ page }) {
               </>
             )
           ) : customizing ? (
-            <>Choose rules and versions with the switches on each rule.</>
+            page === 'components' ? (
+              <>Add cards to the ruleset or leave them out in a card's details, or for all shown cards at once with the buttons above them.</>
+            ) : (
+              <>Choose rules and versions with the switches on each rule.</>
+            )
           ) : (
             <span className="muted">
               {(selectedSet.description && (
@@ -407,8 +434,8 @@ export function RulesetBar({ page }) {
                 <Icon name="download" />
                 PDF
               </button>
-              {page === 'rules' && (
-                <button className="small" onClick={() => rs.setCustomizing(true)} title="Show an “In ruleset” switch on every rule, to choose which rules and versions your ruleset uses">
+              {(page === 'rules' || page === 'components') && (
+                <button className="small" onClick={() => rs.setCustomizing(true)} title={page === 'components' ? 'Add cards to your ruleset or leave them out, one by one or all shown at once' : 'Show an “In ruleset” switch on every rule, to choose which rules and versions your ruleset uses'}>
                   <Icon name="layers" />
                   Customize
                 </button>

@@ -282,10 +282,12 @@ service cloud.firestore {
     // Rules attached to a card (shown beside it), in order. Editors manage them.
     match /componentRules/{id} {
       allow read: if true;
-      allow write: if isEditor()
+      allow create, update: if isEditor()
         && request.resource.data.keys().hasOnly(['rules', 'updatedBy', 'updatedAt'])
         && request.resource.data.rules is list
         && request.resource.data.rules.size() <= 100;
+      // Removed with its card.
+      allow delete: if isEditor();
     }
 
     // Reactions to the printed version of a card, kept apart from the admin-only component docs.

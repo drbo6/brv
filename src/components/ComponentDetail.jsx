@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CARD_LABELS, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
+import { CARD_LABELS, cardChoiceOf, cardVersions, changedFields, createCardVersion, dataIn, deleteCardVersion, PRINTED, reactToCard, updateCardVersion } from '../lib/cardVersions.js';
 import { deleteComponents, displayTitle } from '../lib/components.js';
 import ComponentForm from './ComponentForm.jsx';
 import AttachedRules from './AttachedRules.jsx';
@@ -36,14 +36,16 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
   // The version the active ruleset uses, including unsaved changes.
   const rs = useActiveRuleset();
   const { selectedSet } = rs;
-  const savedId = selectedSet.cards?.[current.id];
-  const chosenId = current.id in rs.overrides.cards ? rs.overrides.cards[current.id] : savedId;
-  const active = findVersion(vs, chosenId) || vs[0];
+  // The ruleset's choice for this card: a version, printed, or left out (null), saved and with changes.
+  const savedChoice = cardChoiceOf(selectedSet, selectedSet.cards, current.id);
+  const choice = cardChoiceOf(selectedSet, rs.apply(selectedSet.cards, 'cards'), current.id);
+  // A chosen version that no longer exists falls back to the printed card.
+  const active = choice ? findVersion(vs, choice) || vs[0] : null;
   const [shownId, setShownId] = useState(null);
   useEffect(() => {
     setShownId(null);
   }, [current.id]);
-  const shown = findVersion(vs, shownId) || active;
+  const shown = findVersion(vs, shownId) || active || vs[0];
   const idx = vs.indexOf(shown);
   const data = dataIn(current, shown);
   const [discuss, setDiscuss] = useState(false);
@@ -96,12 +98,17 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                   </button>
                 </>
               )}
-              {shown.id !== active.id && (
+              {active && shown.id !== active.id && (
                 <span className="tag t-warn" title={`${selectedSet.name} uses the ${active.label} version of this card`}>
                   Not in {selectedSet.name}
                 </span>
               )}
-              {shown.id === active.id && !active.printed && (
+              {!active && (
+                <span className="tag t-muted" title={`${selectedSet.name} leaves this card out`}>
+                  Left out of {selectedSet.name}
+                </span>
+              )}
+              {active && shown.id === active.id && !active.printed && (
                 <span className="tag t-community" title={`This is the version ${selectedSet.name} uses`}>
                   In {selectedSet.name}
                 </span>
@@ -158,7 +165,14 @@ export default function ComponentDetail({ type, comp, states, versionsOf, metaOf
                 </button>
               </div>
             {hb && <HomebrewBar hb={hb} pub={shown.homebrew ? null : shown} target={follow} onEdit={() => setDialog('brewEdit')} onDeleted={() => setShownId(PRINTED)} />}
-            <RulesetChoiceRow what="card" inSet={shown.id === active.id} active onUse={() => rs.setCard(current.id, shown.printed ? null : shown.id, savedId)} />
+            <RulesetChoiceRow
+              what="card"
+              inSet={Boolean(active) && shown.id === active.id}
+              active={Boolean(active)}
+              onUse={() => rs.setCard(current.id, shown.printed ? PRINTED : shown.id, savedChoice)}
+              onAdd={() => rs.setCard(current.id, shown.printed ? PRINTED : shown.id, savedChoice)}
+              onRemove={() => rs.setCard(current.id, null, savedChoice)}
+            />
 
           {isEditor && (
             <div className="admin-tools" role="group" aria-label="Admin tools">
