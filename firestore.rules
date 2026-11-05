@@ -72,7 +72,8 @@ service cloud.firestore {
     match /config/{id} {
       allow read: if true;
       // config/owner is set once and never changed from the site (only in the Firebase console).
-      allow write: if isEditor() && id != 'owner';
+      // config/brand (the site's name, welcome, colors and fonts) is the owner's alone (see the end).
+      allow write: if isEditor() && !(id in ['owner', 'brand']);
       // The components counter tells visitors to reload components. A member's change to their
       // suggested new card moves it on by one (nothing else).
       allow update: if id == 'componentsMeta' && signedIn()

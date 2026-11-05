@@ -80,7 +80,7 @@ function ImageForm({ onInsert, onCancel }) {
   );
 }
 
-function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
+export function TextWithPreview({ value, onChange, label = 'Text', rows = 7, required = true }) {
   const { site } = useSession();
   const [preview, setPreview] = useState(false);
   const [imageForm, setImageForm] = useState(false);
@@ -178,7 +178,7 @@ function TextWithPreview({ value, onChange, label = 'Text', rows = 7 }) {
               }}
             />
           )}
-          <textarea ref={ref} id="rule-text" value={value} onChange={(e) => onChange(e.target.value)} rows={rows} required />
+          <textarea ref={ref} id="rule-text" value={value} onChange={(e) => onChange(e.target.value)} rows={rows} required={required} />
         </>
       )}
       <p className="hint">

@@ -5,6 +5,7 @@ import { auth, db } from './firebase.js';
 import { useLive } from './hooks.js';
 import { clearHistory } from './store.js';
 import { DEFAULT_KINDS } from './rules.js';
+import { brandOf } from './brand.js';
 import { alertDialog } from '../components/dialogs.jsx';
 
 const SessionCtx = createContext(null);
@@ -95,6 +96,8 @@ export function SessionProvider({ children }) {
   const roleDoc = useLive(() => (user ? doc(db, 'roles', user.uid) : null), [user?.uid]);
   const ownerDoc = useLive(() => doc(db, 'config', 'owner'), []);
   const site = useLive(() => doc(db, 'config', 'site'), []);
+  // The site's name, welcome, colors and fonts (Admin → Site, owner only).
+  const brand = useLive(() => doc(db, 'config', 'brand'), []);
   const shorthands = useLive(() => doc(db, 'config', 'shorthands'), []);
 
   const signIn = useCallback(async () => {
@@ -171,6 +174,7 @@ export function SessionProvider({ children }) {
       previewing: role !== realRole,
       setViewAs,
       site: { ...DEFAULT_SITE, ...(site.data || {}) },
+      brand: brandOf(brand.data),
       kinds: site.data?.kinds?.length ? site.data.kinds : DEFAULT_KINDS,
       shorthands: shorthands.data?.items || {},
       signIn,
@@ -181,7 +185,7 @@ export function SessionProvider({ children }) {
       editProfile: () => setProfileOpen(true),
       closeProfile: () => setProfileOpen(false),
     }),
-    [shownUser, user, role, realRole, setViewAs, site.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen, ownerDoc.data, ownerDoc.loading, block, blockReason, roleDoc.data],
+    [shownUser, user, role, realRole, setViewAs, site.data, brand.data, shorthands.data, signIn, requireUser, needsProfile, profileOpen, ownerDoc.data, ownerDoc.loading, block, blockReason, roleDoc.data],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;

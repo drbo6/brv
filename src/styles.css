@@ -4771,3 +4771,25 @@ summary.primary-summary {
   margin: 12px 0;
   padding-left: 18px;
 }
+
+/* ---------- Admin → Site ---------- */
+
+.brand-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+
+.brand-mark-input {
+  width: 5em;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.welcome-custom {
+  margin-bottom: 16px;
+}

@@ -22,6 +22,7 @@ import { cardTarget, notify, notifyUser, ruleTarget, rulesetTarget, SUGGESTIONS 
 
 const ComponentsAdmin = lazy(() => import('../components/admin/ComponentsAdmin.jsx'));
 const DataAdmin = lazy(() => import('../components/admin/DataAdmin.jsx'));
+const BrandAdmin = lazy(() => import('../components/admin/BrandAdmin.jsx'));
 
 const TABS = [
   { id: 'chat', label: 'Staff chat' },
@@ -31,6 +32,7 @@ const TABS = [
   { id: 'rules', label: 'Rules' },
   { id: 'components', label: 'Components' },
   { id: 'people', label: 'People', adminOnly: true },
+  { id: 'site', label: 'Site', ownerOnly: true },
   { id: 'data', label: 'Backup', ownerOnly: true },
 ];
 
@@ -88,6 +90,11 @@ export default function AdminPage({ route }) {
         </Suspense>
       )}
       {tab === 'people' && isAdmin && <PeopleAdmin />}
+      {tab === 'site' && isOwner && (
+        <Suspense fallback={<Spinner />}>
+          <BrandAdmin />
+        </Suspense>
+      )}
       {tab === 'data' && isOwner && (
         <Suspense fallback={<Spinner />}>
           <DataAdmin />

@@ -323,8 +323,10 @@ export async function attempt(fn, success, label) {
   }
 }
 
-/** The site's disclaimer, in the footer and beside the rules. */
+/** The site's disclaimer, in the footer and beside the rules (the owner can replace it in Admin → Site). */
 export function Disclaimer() {
+  const { brand } = useSession();
+  if (brand.disclaimer) return <Linkify text={brand.disclaimer} />;
   return (
     <>
       A fan-made, community-maintained resource. Not affiliated with or endorsed by the publishers of Blood Rage or Blood Rage: Valhalla.{' '}

@@ -1,7 +1,15 @@
 import { useEffect } from 'react';
-import { Icon } from './ui.jsx';
+import { Icon, RichText } from './ui.jsx';
+import { useSession } from '../lib/session.jsx';
+import { DEFAULT_BRAND } from '../lib/brand.js';
 
-export default function WelcomeModal({ onClose }) {
+/**
+ * The opening (and "About this site") window. Its heading, kicker, text and button come from the
+ * owner's settings in Admin → Site; `brand` can be passed to preview unsaved settings.
+ */
+export default function WelcomeModal({ onClose, brand: preview }) {
+  const { brand: saved } = useSession();
+  const brand = preview || saved;
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -17,15 +25,33 @@ export default function WelcomeModal({ onClose }) {
       <div className="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
         <div className="welcome-hero">
           <span className="welcome-rune" aria-hidden="true">
-            ᚱ ᚨ ᚷ ᛖ
+            {brand.mark === DEFAULT_BRAND.mark ? 'ᚱ ᚨ ᚷ ᛖ' : brand.mark}
           </span>
-          <p className="welcome-kicker">Welcome, warrior, to the</p>
+          {brand.welcomeKicker && <p className="welcome-kicker">{brand.welcomeKicker}</p>}
           <h1 id="welcome-title">
-            Blood Rage Valhalla
-            <span>Unofficial Living Rulebook</span>
+            {brand.name}
+            {brand.tagline && <span>{brand.tagline}</span>}
           </h1>
         </div>
         <div className="welcome-body">
+          {brand.welcomeText ? (
+            <RichText html={brand.welcomeText} className="welcome-custom" />
+          ) : (
+            <BuiltInWelcome />
+          )}
+          <button className="primary big" onClick={onClose} autoFocus>
+            {brand.welcomeButton}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The introduction the site ships with, shown until the owner writes their own. */
+function BuiltInWelcome() {
+  return (
+    <>
           <p className="welcome-lead">
             <b>Blood Rage: Valhalla</b> is a fantastic game. Its rulebook, however, leaves a lot of questions unanswered.
           </p>
@@ -64,11 +90,6 @@ export default function WelcomeModal({ onClose }) {
             </li>
           </ul>
           <p className="welcome-fine">This is an unofficial fan project and is not affiliated with the game’s publishers.</p>
-          <button className="primary big" onClick={onClose} autoFocus>
-            Enter the hall
-          </button>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

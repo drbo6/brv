@@ -29,7 +29,7 @@ export const useActiveRuleset = () => useContext(Ctx);
 const EMPTY = { rules: {}, cards: {} };
 
 export function ActiveRulesetProvider({ route, children }) {
-  const { user, isEditor, requireUser, kinds, shorthands, site } = useSession();
+  const { user, isEditor, requireUser, kinds, shorthands, site, brand } = useSession();
   const choice = useRulesetChoice(route.params.get('set'));
   const { selectedSet, setStoredSetId } = choice;
   const ownsSet = Boolean(!selectedSet.builtIn && user && (selectedSet.ownerUid === user.uid || isEditor));
@@ -246,7 +246,7 @@ export function ActiveRulesetProvider({ route, children }) {
       const name = `${selectedSet.name}${unsaved ? ' (unsaved changes)' : ''}`;
       const count = groups.reduce((n, g) => n + (g.heading === 'Card changes' ? 0 : g.rules.length), 0);
       await exportRulesetPdf({
-        title: 'Blood Rage: Valhalla - Living Rulebook',
+        title: brand.tagline ? `${brand.name} - ${brand.tagline}` : brand.name,
         subtitle: `Ruleset: ${name} · ${count} rules · exported ${new Date().toLocaleDateString()}`,
         groups,
         cardTypes,

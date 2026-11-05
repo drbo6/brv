@@ -4,6 +4,7 @@ import { useLocalStorage } from './lib/hooks.js';
 import { href, useRoute } from './lib/router.js';
 import { ROLES, SessionProvider, useSession } from './lib/session.jsx';
 import { noteStylesOf } from './lib/rules.js';
+import { brandCss, fontUrls } from './lib/brand.js';
 import { useHistory, useUndoKeys } from './lib/history.js';
 import { Avatar, Disclaimer, Icon, redoWithToast, Spinner, toast, undoWithToast } from './components/ui.jsx';
 import WelcomeModal from './components/WelcomeModal.jsx';
@@ -35,7 +36,7 @@ export default function App() {
 
 function Shell() {
   const route = useRoute();
-  const { user, isEditor, realUser, realRole, role, previewing, setViewAs, profileOpen } = useSession();
+  const { user, isEditor, realUser, realRole, role, previewing, setViewAs, profileOpen, brand } = useSession();
   const history = useHistory();
   const theme = useTheme();
   useUndoKeys(useCallback((kind, label) => toast(`${kind === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'ok'), []));
@@ -47,8 +48,8 @@ function Shell() {
   useEffect(() => {
     const titles = { rules: 'Rules', components: 'Components', account: 'Account', admin: 'Admin', help: 'Help', inbox: 'Inbox' };
     // The unread count shows in the browser tab too.
-    document.title = `${unreadCount ? `(${unreadCount}) ` : ''}${titles[route.page] || 'Rules'} · Blood Rage Valhalla: Unofficial Living Rulebook`;
-  }, [route.page, unreadCount]);
+    document.title = `${unreadCount ? `(${unreadCount}) ` : ''}${titles[route.page] || 'Rules'} · ${brand.name}${brand.tagline ? `: ${brand.tagline}` : ''}`;
+  }, [route.page, unreadCount, brand.name, brand.tagline]);
 
   const closeWelcome = () => {
     setWelcomeSeen(true);
@@ -70,11 +71,11 @@ function Shell() {
       <header className="site-header">
         <a className="brand" href={href('rules')}>
           <span className="brand-mark" aria-hidden="true">
-            ᚱ
+            {brand.mark}
           </span>
           <span className="brand-text">
-            <span className="brand-title">Blood Rage Valhalla</span>
-            <span className="brand-sub">Unofficial Living Rulebook</span>
+            <span className="brand-title">{brand.name}</span>
+            {brand.tagline && <span className="brand-sub">{brand.tagline}</span>}
           </span>
         </a>
         <nav className="main-nav" aria-label="Main">
@@ -174,6 +175,21 @@ function Shell() {
       <DialogHost />
       <Tooltips />
       <BoxStyles />
+      <BrandStyles />
+    </>
+  );
+}
+
+/** The owner's colors and fonts (Admin → Site), over the stylesheet's defaults. */
+function BrandStyles() {
+  const { brand } = useSession();
+  const urls = fontUrls(brand.fonts);
+  return (
+    <>
+      {urls.map((u) => (
+        <link key={u} rel="stylesheet" href={u} />
+      ))}
+      <style>{brandCss(brand)}</style>
     </>
   );
 }
