@@ -4732,3 +4732,14 @@ summary.primary-summary {
 .attached-rule.is-out > :not(header) {
   opacity: 0.5;
 }
+
+.attached-toggle {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
+  align-self: center;
+}
+
+.attached-rule.closed header {
+  margin-bottom: 0;
+}

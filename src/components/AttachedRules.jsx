@@ -27,6 +27,8 @@ export default function AttachedRules({ compId, name }) {
   const sections = useLive(() => collection(db, 'sections'), []);
   const [picking, setPicking] = useState(false);
   const [creating, setCreating] = useState(false);
+  // Rules the reader opened or closed; otherwise rules in the ruleset start open, others closed.
+  const [toggled, setToggled] = useState({});
   const tree = useMemo(() => sectionTree(sections.data || []), [sections.data]);
 
   const ids = attached.data?.rules || [];
@@ -81,9 +83,20 @@ export default function AttachedRules({ compId, name }) {
         const vs = vByRule.get(r.id) || [];
         const v = findVersion(vs, entries[r.id]);
         const shown = v || vs.find((x) => x.label === 'Rulebook') || vs[0];
+        const isOpen = toggled[r.id] ?? Boolean(v);
         return (
-          <article key={r.id} className={`attached-rule ${v ? '' : 'is-out'}`}>
+          <article key={r.id} className={`attached-rule ${v ? '' : 'is-out'} ${isOpen ? 'open' : 'closed'}`}>
             <header>
+              <button
+                type="button"
+                className="icon-btn attached-toggle"
+                onClick={() => setToggled((t) => ({ ...t, [r.id]: !isOpen }))}
+                aria-expanded={isOpen}
+                aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${r.title}`}
+                title={isOpen ? 'Collapse' : 'Expand'}
+              >
+                <Icon name={isOpen ? 'chevronDown' : 'chevronRight'} size={16} />
+              </button>
               <a href={href('rules', [r.sid])} className="rule-code" title="Open on the Rules page">
                 {r.sid}
               </a>
@@ -110,7 +123,7 @@ export default function AttachedRules({ compId, name }) {
                 </span>
               )}
             </header>
-            {shown && <RichText html={shown.text} className="rule-text" />}
+            {isOpen && shown && <RichText html={shown.text} className="rule-text" />}
           </article>
         );
       })}
