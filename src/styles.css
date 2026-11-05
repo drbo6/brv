@@ -4727,3 +4727,8 @@ summary.primary-summary {
   border-radius: 3px;
   flex: none;
 }
+
+/* An attached rule the active ruleset doesn't use: only staff see it, dimmed. */
+.attached-rule.is-out > :not(header) {
+  opacity: 0.5;
+}

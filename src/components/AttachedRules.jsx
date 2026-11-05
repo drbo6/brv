@@ -53,7 +53,10 @@ export default function AttachedRules({ compId, name }) {
   };
 
   if (attached.loading || rules.loading || versions.loading) return null;
-  const list = ids.map((id) => byId.get(id)).filter(Boolean);
+  const attachedRules = ids.map((id) => byId.get(id)).filter(Boolean);
+  // Readers only see attached rules the active ruleset uses; staff see all, to manage them.
+  const inSet = (r) => Boolean(findVersion(vByRule.get(r.id) || [], entries[r.id]));
+  const list = isEditor ? attachedRules : attachedRules.filter(inSet);
   if (!list.length && !isEditor) return null;
 
   return (
@@ -79,7 +82,7 @@ export default function AttachedRules({ compId, name }) {
         const v = findVersion(vs, entries[r.id]);
         const shown = v || vs.find((x) => x.label === 'Rulebook') || vs[0];
         return (
-          <article key={r.id} className="attached-rule">
+          <article key={r.id} className={`attached-rule ${v ? '' : 'is-out'}`}>
             <header>
               <a href={href('rules', [r.sid])} className="rule-code" title="Open on the Rules page">
                 {r.sid}
@@ -88,7 +91,11 @@ export default function AttachedRules({ compId, name }) {
                 {r.title}
               </a>
               {shown && shown.label !== 'Rulebook' && <span className={`label l-${LABEL_CLASS[shown.label] || 'other'}`}>{shown.label}</span>}
-              {!v && <span className="tag t-muted" title={`Not part of “${selectedSet.name}”`}>Not in ruleset</span>}
+              {!v && (
+                <span className="tag t-muted" title={`Not part of “${selectedSet.name}”: readers don't see it here`}>
+                  Not in ruleset
+                </span>
+              )}
               {isEditor && (
                 <span className="attached-tools">
                   <button className="icon-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${r.sid} up`} title="Move up">
