@@ -5,7 +5,7 @@ import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { navigate } from '../lib/router.js';
 import { entryFor, findVersion, groupVersions, HB, LABELS, moveRule, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
 import { HOMEBREW, withHomebrew } from '../lib/homebrew.js';
-import { toPlainText } from '../lib/html.js';
+import { fold, toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import RuleCard from '../components/RuleCard.jsx';
 import { useActiveRuleset } from '../components/ActiveRuleset.jsx';
@@ -37,7 +37,7 @@ export default function RulesPage({ route }) {
     () =>
       allRules.map((rule) => {
         const vs = vByRule.get(rule.id) || [];
-        return { rule, vs, searchText: `${rule.sid} ${rule.title} ${vs.map((v) => `${rule.sid}.${v.num} ${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`.toLowerCase() };
+        return { rule, vs, searchText: fold(`${rule.sid} ${rule.title} ${vs.map((v) => `${rule.sid}.${v.num} ${v.label} ${toPlainText(v.text)} ${v.note || ''}`).join(' ')}`) };
       }),
     [allRules, vByRule],
   );
@@ -119,7 +119,7 @@ export default function RulesPage({ route }) {
 
   // ----- filters -----
   const [search, setSearch] = useState('');
-  const q = useDebounced(search.trim().toLowerCase(), 150);
+  const q = useDebounced(fold(search.trim()), 150);
   const [showInactive, setShowInactive] = useLocalStorage('brv-show-inactive', false);
   const [labelFilter, setLabelFilter] = useState('');
   const [kindFilter, setKindFilter] = useState('');

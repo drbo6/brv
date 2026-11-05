@@ -3,7 +3,7 @@ import { collection, deleteField, doc, limit, orderBy, query, serverTimestamp } 
 import { db } from '../../lib/firebase.js';
 import { useLive } from '../../lib/hooks.js';
 import { displayTitle, loadComponents } from '../../lib/components.js';
-import { plainToHtml } from '../../lib/html.js';
+import { fold, plainToHtml } from '../../lib/html.js';
 import { href } from '../../lib/router.js';
 import { deleteComment, shortIds } from '../../lib/rules.js';
 import { commitInChunks } from '../../lib/store.js';
@@ -52,8 +52,8 @@ export default function DiscussionsAdmin() {
   if (comments.loading || rules.loading || !cards) return <Spinner />;
   const all = comments.data || [];
   const open = all.filter((c) => !c.handled);
-  const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const list = (show === 'open' ? open : all).filter((c) => !tokens.length || tokens.every((t) => `${c.text} ${c.name} ${about(c).label}`.toLowerCase().includes(t)));
+  const tokens = fold(q.trim()).split(/\s+/).filter(Boolean);
+  const list = (show === 'open' ? open : all).filter((c) => !tokens.length || tokens.every((t) => fold(`${c.text} ${c.name} ${about(c).label}`).includes(t)));
 
   const setHandled = (items, on) =>
     attempt(

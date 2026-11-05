@@ -6,7 +6,7 @@ import { compareValues, displayTitle, idField, isEmptyValue, loadComponents, sta
 import { dataIn } from '../lib/cardVersions.js';
 import { findVersion, LABEL_CLASS } from '../lib/rules.js';
 import { withCardHomebrew } from '../lib/homebrew.js';
-import { toPlainText } from '../lib/html.js';
+import { fold, toPlainText } from '../lib/html.js';
 import { useDebounced, useLive, useLocalStorage } from '../lib/hooks.js';
 import { href, navigate } from '../lib/router.js';
 import { useSession } from '../lib/session.jsx';
@@ -111,7 +111,7 @@ export default function ComponentsPage({ route }) {
 
   // ----- toolbar state -----
   const [search, setSearch] = useState('');
-  const q = useDebounced(search.trim().toLowerCase(), 150);
+  const q = useDebounced(fold(search.trim()), 150);
   const [filters, setFilters] = useState({});
   const [sortKey, setSortKey] = useState('');
   const [sortDir, setSortDir] = useState(1);
@@ -142,10 +142,12 @@ export default function ComponentsPage({ route }) {
       const t = typeById.get(c.typeId);
       m.set(
         c.id,
-        `${t.name} ${t.fields
-          .filter((f) => f.kind !== 'image' && f.kind !== 'state')
-          .map((f) => toPlainText(String(c.data[f.key] ?? '')))
-          .join(' ')}`.toLowerCase(),
+        fold(
+          `${t.name} ${t.fields
+            .filter((f) => f.kind !== 'image' && f.kind !== 'state')
+            .map((f) => toPlainText(String(c.data[f.key] ?? '')))
+            .join(' ')}`,
+        ),
       );
     }
     return m;

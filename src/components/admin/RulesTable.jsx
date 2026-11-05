@@ -5,6 +5,7 @@ import { useLive, useLocalStorage } from '../../lib/hooks.js';
 import { href } from '../../lib/router.js';
 import { deleteRule, groupVersions, kindInfo, millis, shortIds, sortRules, updateRule } from '../../lib/rules.js';
 import { commitInChunks } from '../../lib/store.js';
+import { fold } from '../../lib/html.js';
 import { useSession } from '../../lib/session.jsx';
 import { attempt, Icon, Spinner, timeAgo } from '../ui.jsx';
 import { confirmDialog } from '../dialogs.jsx';
@@ -81,10 +82,10 @@ export default function RulesTable({ tree }) {
     })[key];
 
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = fold(search.trim());
     const out = rows.filter(
       (row) =>
-        (!q || `${row.sid} ${row.rule.title}`.toLowerCase().includes(q)) &&
+        (!q || fold(`${row.sid} ${row.rule.title}`).includes(q)) &&
         (!filter.section || row.rule.sectionId === filter.section) &&
         (!filter.kind || (row.rule.kind || 'rule') === filter.kind) &&
         (!filter.status || (row.rule.status || 'active') === filter.status),

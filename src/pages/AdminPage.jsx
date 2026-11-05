@@ -8,7 +8,7 @@ import { href } from '../lib/router.js';
 import { commitInChunks, createRuleset, DEFAULT_KINDS, noteStylesOf, deleteRuleset, HB, LABEL_CLASS, shortIds, millis, reactionCounts, sectionTree, SET_LABELS, updateRuleset } from '../lib/rules.js';
 import { sortSets } from '../components/RulesetSelect.jsx';
 import { SaveRulesetDialog } from '../components/RuleDialogs.jsx';
-import { plainToHtml, toPlainText } from '../lib/html.js';
+import { fold, plainToHtml, toPlainText } from '../lib/html.js';
 import { acceptSuggestion, declineSuggestion, privateHomebrewCount, publishHomebrew, submittedHomebrewQuery, turnDownHomebrew } from '../lib/homebrew.js';
 import { BLOCKS, ROLES, useSession } from '../lib/session.jsx';
 import { attempt, Avatar, Empty, Icon, Modal, Spinner, timeAgo, UserAvatar, UserName } from '../components/ui.jsx';
@@ -1102,7 +1102,7 @@ function PeopleAdmin() {
   const rank = { owner: 0, admin: 1, editor: 2, user: 3 };
   const list = [...(users.data || [])]
     .filter((u) => u.setup || u.name)
-    .filter((u) => !filter || u.name?.toLowerCase().includes(filter.toLowerCase()))
+    .filter((u) => !filter || fold(u.name).includes(fold(filter)))
     .filter((u) => show === 'all' || (show === 'staff' ? effectiveRole(u.id) !== 'user' : blockOf(u.id) !== 'none'))
     .sort((a, b) => rank[effectiveRole(a.id)] - rank[effectiveRole(b.id)] || millis(b.lastSeen) - millis(a.lastSeen));
 

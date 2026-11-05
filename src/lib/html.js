@@ -88,6 +88,21 @@ export function richHtml(value, shorthands) {
   return sanitize(expandShorthands(expandBoxes(sanitize(String(value))), shorthands));
 }
 
+// Letters that aren't an accent on a base letter, written the usual way without them.
+const LETTERS = { æ: 'ae', œ: 'oe', ø: 'o', ð: 'd', þ: 'th', ß: 'ss', ł: 'l', đ: 'd', ı: 'i' };
+
+/**
+ * Text for searching and filtering: lower case, without diacritics, so "mjolnir" finds Mjölnir and
+ * "skal" finds Skål. Used on both the text searched and what was typed.
+ */
+export function fold(s) {
+  return String(s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[æœøðþßłđı]/g, (c) => LETTERS[c]);
+}
+
 /** Plain text (for search, PDF export and previews). */
 export function toPlainText(html) {
   if (!html) return '';

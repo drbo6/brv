@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { compareValues, deleteComponents, displayTitle, FIELD_KINDS, idField } from '../../lib/components.js';
 import { navigate } from '../../lib/router.js';
 import { useLocalStorage } from '../../lib/hooks.js';
-import { toPlainText } from '../../lib/html.js';
+import { fold, toPlainText } from '../../lib/html.js';
 import ComponentForm from '../ComponentForm.jsx';
 import { attempt, Icon } from '../ui.jsx';
 import { confirmDialog } from '../dialogs.jsx';
@@ -34,8 +34,8 @@ export default function ComponentList({ type, comps, editId, onChanged }) {
 
   const sortKey = sort.key || idf?.key;
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const l = q ? comps.filter((c) => type.fields.some((f) => cellText(f, c.data[f.key]).toLowerCase().includes(q))) : [...comps];
+    const q = fold(search.trim());
+    const l = q ? comps.filter((c) => type.fields.some((f) => fold(cellText(f, c.data[f.key])).includes(q))) : [...comps];
     return l.sort((a, b) => sort.dir * compareValues(a.data[sortKey], b.data[sortKey], type));
   }, [comps, search, type, sort.dir, sortKey]);
 

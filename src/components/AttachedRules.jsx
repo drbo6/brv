@@ -6,7 +6,7 @@ import { href } from '../lib/router.js';
 import { findVersion, groupVersions, LABEL_CLASS, rulebookEntries, sectionTree, shortIds, sortRules } from '../lib/rules.js';
 import { withHomebrew } from '../lib/homebrew.js';
 import { setDoc } from '../lib/store.js';
-import { toPlainText } from '../lib/html.js';
+import { fold, toPlainText } from '../lib/html.js';
 import { useSession } from '../lib/session.jsx';
 import { useActiveRuleset } from './ActiveRuleset.jsx';
 import { RuleDialog } from './RuleDialogs.jsx';
@@ -145,11 +145,11 @@ function RulePicker({ rules, sections, vByRule, exclude, onPick, onClose }) {
         const sec = tree.byId.get(r.sectionId);
         const where = sec ? `${sec.number} ${sec.title}` : '';
         const text = (vByRule.get(r.id) || []).map((v) => toPlainText(v.text)).join(' ');
-        return { r, where, search: `${r.sid} ${r.title} ${where} ${text}`.toLowerCase() };
+        return { r, where, search: fold(`${r.sid} ${r.title} ${where} ${text}`) };
       }),
     [rules, exclude, tree, vByRule],
   );
-  const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = fold(q.trim()).split(/\s+/).filter(Boolean);
   const results = (tokens.length ? items.filter((it) => tokens.every((t) => it.search.includes(t))) : items).slice(0, 60);
   return (
     <Modal title="Attach a rule" onClose={onClose} className="rule-picker">
