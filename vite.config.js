@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => ({
             { find: /^firebase\/app$/, replacement: demo('app.js') },
             { find: /^firebase\/auth$/, replacement: demo('auth.js') },
             { find: /^firebase\/firestore$/, replacement: demo('firestore.js') },
+            { find: /^firebase\/app-check$/, replacement: demo('app-check.js') },
           ]
         : [],
   },

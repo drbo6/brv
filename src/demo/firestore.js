@@ -80,6 +80,9 @@ export const increment = (n) => ({ [SENTINEL]: 'inc', n });
 export function getFirestore() {
   return { type: 'demo-firestore' };
 }
+export const initializeFirestore = () => getFirestore();
+export const persistentLocalCache = () => ({});
+export const persistentMultipleTabManager = () => ({});
 
 const autoId = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]).join('');
 

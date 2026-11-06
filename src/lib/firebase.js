@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, ReCaptchaV3Provider } from 'firebase/app-check';
 import { firebaseConfig as fileConfig } from '../firebase-config.js';
 
 const env = import.meta.env;
@@ -22,8 +23,23 @@ let auth = null;
 let db = null;
 if (configured) {
   app = initializeApp(config);
+  // App Check: with a reCAPTCHA site key, the database only answers this website (once App Check is
+  // enforced in the Firebase console), not scripts that copied the project's settings.
+  const siteKey = env.VITE_RECAPTCHA_SITE_KEY;
+  if (siteKey && !isDemo) {
+    // Local development: a debug token, registered in the Firebase console, stands in for reCAPTCHA.
+    if (env.DEV) self.FIREBASE_APPCHECK_DEBUG_TOKEN = env.VITE_APPCHECK_DEBUG_TOKEN || true;
+    const Provider = env.VITE_RECAPTCHA_ENTERPRISE === 'true' ? ReCaptchaEnterpriseProvider : ReCaptchaV3Provider;
+    initializeAppCheck(app, { provider: new Provider(siteKey), isTokenAutoRefreshEnabled: true });
+  }
   auth = getAuth(app);
-  db = getFirestore(app);
+  // A cache in the browser: coming back to the site (or reloading) within half an hour only reads
+  // what changed, which keeps the free plan's daily reads for more visitors.
+  try {
+    db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    db = initializeFirestore(app, {});
+  }
 }
 
 export { app, auth, db };

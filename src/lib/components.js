@@ -170,6 +170,13 @@ export async function loadComponents({ force = false } = {}) {
   return { ...result, fromCache: false };
 }
 
+/**
+ * A member's change to their own suggested new card moves the counter in the same batch, naming the
+ * card in `lastChange`: the database rules only let a member move it alongside such a change.
+ */
+export const bumpComponentsIn = (batch, componentId) =>
+  batch.set(doc(db, 'config', 'componentsMeta'), { version: increment(1), updatedAt: serverTimestamp(), lastChange: componentId }, { merge: true });
+
 export const bumpComponentsVersion = () => rawSetDoc(doc(db, 'config', 'componentsMeta'), { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
 
 // Undoing a component change must also invalidate visitors' caches.

@@ -74,16 +74,28 @@ service cloud.firestore {
       // config/owner is set once and never changed from the site (only in the Firebase console).
       // config/brand (the site's name, welcome, colors and fonts) is the owner's alone (see the end).
       allow write: if isEditor() && !(id in ['owner', 'brand']);
-      // The components counter tells visitors to reload components. A member's change to their
-      // suggested new card moves it on by one (nothing else).
+      // The components counter tells visitors to reload components. A member moves it on by one,
+      // only in the same batch as a change to (or the withdrawal of) their own suggested new card,
+      // named in lastChange: nobody can make every visitor reload the components at will.
       allow update: if id == 'componentsMeta' && signedIn()
-        && onlyChanged(['version', 'updatedAt'])
-        && request.resource.data.version == resource.data.get('version', 0) + 1;
+        && onlyChanged(['version', 'updatedAt', 'lastChange'])
+        && request.resource.data.version == resource.data.get('version', 0) + 1
+        && request.resource.data.updatedAt == request.time
+        && ownSuggestedCardChanged(request.resource.data.get('lastChange', ''));
       // The first owner is claimed by an admin from the original setup.
       allow create: if id == 'owner' && signedIn()
         && exists(path('admins', request.auth.uid))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['uid', 'claimedAt']);
+    }
+
+    // A suggested new card of this member's, changed or removed in this very batch.
+    function ownSuggestedCardChanged(cid) {
+      return cid is string && cid.size() > 0
+        && exists(path('components', cid))
+        && get(path('components', cid)).data.get('createdBy', '') == request.auth.uid
+        && get(path('components', cid)).data.get('status', '') == 'suggested'
+        && (!existsAfter(path('components', cid)) || getAfter(path('components', cid)).data.get('updatedAt', null) == request.time);
     }
 
     // The original admin list; still honored, managed by admins.

@@ -107,6 +107,22 @@ node imports/build-blood-rage.mjs "Materials/Blood Rage Valhalla Data.xlsx"
 
 **Test data.** `imports/test-data.json` is the same content plus activity to test with: Official Rulings and Community versions (rules and cards), reactions, discussions (one handled), three rulesets (one public), follows, staff chat, and homebrew at every step (private, shared with the admins, turned down, public suggestion, accepted). It is credited to three existing accounts and holds no profiles or roles. Load it with **Admin → Backup → Import → Replace** (tick comments, rulesets and the rest under *Not in the file* too, to clear old test data); rebuild it with `node imports/build-test-data.mjs`.
 
+### 7. Before you invite people
+
+The site's Firebase settings are public by design (every visitor's browser has them), so anyone could write a script that talks to the database directly. The security rules decide what such a script may do. These steps limit what it can cost you.
+
+1. **Deploy the current [firestore.rules](firestore.rules)** (step 3) after every change to it.
+2. **App Check** (recommended). It lets the database answer only your website, not scripts:
+   1. Create a reCAPTCHA v3 key at <https://www.google.com/recaptcha/admin/create>. Add your site's domain, for example `<your-github-user>.github.io`, and copy the **site key** and **secret key**.
+   2. In the Firebase console, open **Build → App Check → Apps**, choose your web app, then **reCAPTCHA**, and paste the secret key. Raise the token time to live (for example to 1 day) so fewer reCAPTCHA checks are made.
+   3. In the GitHub repo, add the Actions variable `VITE_RECAPTCHA_SITE_KEY` with the site key, then push or re-run the deploy workflow. (With a reCAPTCHA Enterprise key instead, also add `VITE_RECAPTCHA_ENTERPRISE` = `true`.)
+   4. Wait a day or two and look at **App Check → APIs → Cloud Firestore**: almost all requests should be *verified*. Then choose **Enforce**. From then on, requests that don't come from the site are refused.
+
+   For local development against the real database once it's enforced, set `VITE_APPCHECK_DEBUG_TOKEN` in `.env.local` to a debug token registered under **App Check → Apps → Manage debug tokens**.
+3. **Restrict the API key.** In the Google Cloud console, open **APIs & Services → Credentials**, edit the *Browser key*, and under **Website restrictions** add `https://<your-github-user>.github.io/*` (and any custom domain).
+4. **Know the free plan's limits.** The Spark plan never bills you. When a daily quota runs out, the database stops answering until it resets at midnight Pacific time. The limits are 50,000 reads, 20,000 writes and 20,000 deletes a day. A first visit to the Rules page reads every section, rule and version (about 220 documents with the Blood Rage content). The components are kept in the browser and only re-read when they change. The site keeps a local cache too, so a visitor who reloads or comes back within half an hour only reads what changed. Watch **Firestore → Usage** in the first weeks.
+5. **Moderation.** Anyone with a Google account can sign in, comment and suggest. If someone misbehaves, restrict them (**No sharing** or **Silenced**) in **Admin → People**.
+
 ## How it works
 
 ### Rule ids
@@ -191,7 +207,7 @@ Writes go through [src/lib/store.js](src/lib/store.js). While an action runs, ev
 | `config/site` | `defaultRulesetId`, `kinds` [{id, label, color}], `noteStyles` [8 × {label, color}]: the note box styles used by `{box 1}…{/box}` in rule and card text |
 | `config/brand` | The owner's site settings (Admin → Site): `name`, `tagline`, `mark`, `welcomeKicker`, `welcomeText` (HTML), `welcomeButton`, `disclaimer`, `colors` {primary, accent}, `fonts` {display, text, ui} (Google font names). Empty values use the built-in defaults. Only the owner writes it |
 | `config/shorthands` | `items` {keyword: {type, value}} |
-| `config/componentsMeta` | `version` (cache counter) |
+| `config/componentsMeta` | `version` (cache counter), `updatedAt`, `lastChange` (the suggested card whose author last moved it: members may move it only in the same batch as a change to their own suggested card) |
 | `config/owner` | `uid` of the owner. Created once from the site, changed only in the Firebase console |
 | `roles/{uid}` | `role` (`editor` / `admin`), `block` (`suggest` / `silence`) and `reason`. Written by admins |
 | `modlog` | Role and restriction changes: who, whom, from, to, reason |

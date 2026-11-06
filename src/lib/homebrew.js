@@ -2,7 +2,7 @@ import { collection, deleteField, doc, getDoc, getDocs, query, serverTimestamp, 
 import { db } from './firebase.js';
 import { HB, nextVersionNumber } from './rules.js';
 import { PRINTED } from './cardVersions.js';
-import { bumpComponentsVersion, deleteComponents, docIdFor, idField } from './components.js';
+import { bumpComponentsIn, bumpComponentsVersion, deleteComponents, docIdFor, idField } from './components.js';
 import { deleteDoc, knownState, writeBatch } from './store.js';
 
 // Homebrew: anyone signed in can change any rule or card, or write a new rule, for themselves.
@@ -168,6 +168,7 @@ export async function updateHomebrew(h, patch) {
       const idKey = await idKeyOf(h.typeId);
       const data = { ...(patch.data ?? h.data), ...(idKey ? { [idKey]: copy.data?.[idKey] } : {}) };
       batch.update(doc(db, 'components', h.sharedId), { data, note: patch.note ?? h.note ?? '', ...now });
+      bumpComponentsIn(batch, h.sharedId);
     } else if (h.kind === 'card') batch.update(doc(db, 'componentVersions', h.sharedId), { data: patch.data ?? h.data, note: patch.note ?? h.note ?? '', ...now });
     else batch.update(doc(db, 'versions', h.kind === 'rule' ? h.sharedVersionId : h.sharedId), { text: patch.text ?? h.text, note: patch.note ?? h.note ?? '', ...now });
     if (h.kind === 'rule' && (patch.title !== undefined || patch.sectionId !== undefined)) {
@@ -175,7 +176,6 @@ export async function updateHomebrew(h, patch) {
     }
   }
   await batch.commit();
-  if (copy && h.kind === 'newCard') await bumpComponentsVersion();
 }
 
 const noDecline = { declineReason: deleteField(), declinedBy: deleteField(), declinedAt: deleteField() };
@@ -251,8 +251,8 @@ export async function withdrawHomebrew(h) {
   const batch = writeBatch();
   for (const [col, id] of publicDocs(h)) if (id) batch.delete(doc(db, col, id));
   batch.update(doc(db, 'homebrew', h.id), { submitted: false, sharedId: null, sharedVersionId: null, updatedAt: serverTimestamp() });
+  if (h.kind === 'newCard' && h.sharedId) bumpComponentsIn(batch, h.sharedId);
   await batch.commit();
-  if (h.kind === 'newCard' && h.sharedId) await bumpComponentsVersion();
 }
 
 /** Delete a homebrew. One under review is withdrawn too; an accepted one stays public. */
@@ -261,8 +261,8 @@ export async function deleteHomebrew(h) {
   const batch = writeBatch();
   for (const [col, id] of publicDocs(h)) if (id) batch.delete(doc(db, col, id));
   batch.delete(doc(db, 'homebrew', h.id));
+  if (h.kind === 'newCard' && h.sharedId) bumpComponentsIn(batch, h.sharedId);
   await batch.commit();
-  if (h.kind === 'newCard') await bumpComponentsVersion();
 }
 
 // ---------- review (editors) ----------
